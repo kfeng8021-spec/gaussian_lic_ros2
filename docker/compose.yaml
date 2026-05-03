@@ -1,0 +1,25 @@
+services:
+  gaussian_lic_ros2: &gaussian_lic_ros2
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.jazzy
+    image: gaussian_lic_ros2:jazzy
+    network_mode: host
+    ipc: host
+    gpus: all
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility
+      - GAUSSIAN_LIC_WS=/ws
+    volumes:
+      - ..:/ws
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../bags:/bags
+    working_dir: /ws
+    command: bash
+
+  smoke:
+    <<: *gaussian_lic_ros2
+    command: bash -lc "./scripts/build_jazzy.sh && ./scripts/smoke_test.sh --tf"

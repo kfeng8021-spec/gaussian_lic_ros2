@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include <gaussian_lic_mapping/mapper_dataset.hpp>
+
+#include <iomanip>
+#include <sstream>
+
+namespace gaussian_lic_mapping
+{
+
+const CameraFrameRecord & MapperDataset::add_frame(MapperFrameData && frame)
+{
+  CameraFrameRecord record;
+  record.frame_index = frame.frame_index;
+  record.is_keyframe = frame.is_keyframe;
+  record.image_name = make_image_name(frame.is_keyframe, frame.frame_index);
+  record.width = frame.width;
+  record.height = frame.height;
+  record.image_rgb_float = std::move(frame.image_rgb_float);
+  record.depth_m_float = std::move(frame.depth_m_float);
+  record.r_wc = frame.r_wc;
+  record.t_wc = frame.t_wc;
+  const bool is_keyframe = record.is_keyframe;
+
+  pending_points_world_.reserve(pending_points_world_.size() + frame.points.size());
+  pending_colors_rgb_.reserve(pending_colors_rgb_.size() + frame.points.size());
+  pending_depths_m_.reserve(pending_depths_m_.size() + frame.points.size());
+  map_points_world_.reserve(map_points_world_.size() + frame.points.size());
+  map_colors_rgb_.reserve(map_colors_rgb_.size() + frame.points.size());
+
+  for (const MapperPoint & point : frame.points) {
+    pending_points_world_.push_back(point.xyz_world);
+    pending_colors_rgb_.push_back(point.color_rgb);
+    pending_depths_m_.push_back(point.depth_m);
+    map_points_world_.push_back(point.xyz_world);
+    map_colors_rgb_.push_back(point.color_rgb);
+  }
+
+  total_point_count_ += frame.points.size();
+  skipped_nonpositive_depth_count_ += frame.skipped_points_nonpositive_depth;
+
+  if (is_keyframe) {
+    train_frames_.push_back(std::move(record));
+  } else {
+    test_frames_.push_back(std::move(record));
+  }
+  ++all_frame_count_;
+  return is_keyframe ? train_frames_.back() : test_frames_.back();
+}
+
+void MapperDataset::clear_pending_points()
+{
+  pending_points_world_.clear();
+  pending_colors_rgb_.clear();
+  pending_depths_m_.clear();
+}
+
+void MapperDataset::trim_map_points(const size_t max_points)
+{
+  if (max_points == 0 || map_points_world_.size() <= max_points) {
+    return;
+  }
+
+  const size_t overflow = map_points_world_.size() - max_points;
+  const auto erase_count =
+    static_cast<std::vector<Eigen::Vector3f>::difference_type>(overflow);
+  map_points_world_.erase(map_points_world_.begin(), map_points_world_.begin() + erase_count);
+  map_colors_rgb_.erase(map_colors_rgb_.begin(), map_colors_rgb_.begin() + erase_count);
+}
+
+std::string MapperDataset::make_image_name(const bool is_keyframe, const uint64_t frame_index)
+{
+  std::ostringstream out;
+  out << (is_keyframe ? "train_" : "test_")
+      << std::setw(4) << std::setfill('0') << frame_index
+      << ".jpg";
+  return out.str();
+}
+
+}  // namespace gaussian_lic_mapping

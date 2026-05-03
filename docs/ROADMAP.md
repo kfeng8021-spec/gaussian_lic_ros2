@@ -1,0 +1,108 @@
+# Roadmap
+
+The public release plan is milestone-based:
+
+- `v0.1.0` Baseline & Infrastructure
+- `v0.2.0` Coco-LIC ROS2 Native Tracking
+- `v0.3.0` Gaussian Mapping Full Backend
+- `v0.4.0` Strict FAST-LIVO2 Reproduction
+
+See `docs/RELEASE_MILESTONES.md` for release criteria and artifacts.
+
+## Immediate Next Step
+
+Blocker:
+
+```text
+FAST-LIVO2 bag data is required at /home/frank/data/fast_livo/
+```
+
+First concrete action:
+
+```bash
+docker pull ros:noetic-ros-base-focal
+```
+
+Then bring up Ubuntu 20.04 + ROS1 Noetic, run the upstream Gaussian-LIC/Coco-LIC baseline on FAST-LIVO2, and archive outputs under:
+
+```text
+baseline/fastlivo2/<sequence>/
+```
+
+Required baseline artifacts:
+
+```text
+trajectory.tum
+point_cloud.ply
+renders/
+metrics.json
+run.log
+```
+
+## Milestone 0: ROS2 Foundation
+
+- [x] Create a clean ROS2 workspace layout.
+- [x] Add public Gaussian/status messages.
+- [x] Add a launch entrypoint.
+- [x] Add topic probe and status stub nodes.
+- [x] Add native mapping-node scaffold.
+- [x] Add upstream fetch helper.
+- [x] Build successfully on local ROS2 Jazzy.
+
+## Milestone 1: Input Contract
+
+- [x] Add image, camera info, point cloud, IMU, and TF topic surfaces for local smoke tests.
+- [x] Add rosbag2 smoke-test instructions.
+- [x] Add calibration file schema.
+- [x] Add dataset-specific ROS2 mapping profiles for FAST-LIVO, FAST-LIVO2, M2DGR, MCD, and R3LIVE.
+- [ ] Add full real-dataset topic remaps/adapters once the native Coco-LIC tracking port is in place.
+
+## Milestone 2: Gaussian-LIC Mapping Port
+
+- [x] Inventory ROS1 APIs used by upstream Gaussian-LIC.
+- [x] Replace the four-topic ROS1 input synchronization surface with native ROS2.
+- [x] Convert aligned ROS2 frames into mapper-ready image/depth/pose/point data.
+- [x] Consume CameraInfo intrinsics with parameter fallback.
+- [x] Accumulate converted frames into a non-torch `MapperDataset`.
+- [x] Publish ROS2 odometry, path, and accumulated map-point topics from the native mapper.
+- [x] Add optional `map -> camera` TF broadcasting.
+- [ ] Replace remaining ROS1 parameters, node handles, publishers, and launch files.
+- [ ] Isolate CUDA/Gaussian map code from ROS middleware code.
+- [x] Add optional libtorch/CUDA build path.
+- [x] Add live `MapperDataset -> TorchCamera` conversion behind a build flag.
+- [x] Add foreground `MapperDataset -> TorchGaussianMap` initialization behind a build flag.
+- [x] Publish initialized foreground Gaussian map as chunked `GaussianArray`.
+- [x] Add save-map service for initialized Gaussian PLY export.
+- [x] Add save-map fallback for accumulated debug XYZRGB PLY export.
+- [x] Publish CPU projected-map preview on `/gaussian_lic/rendered_image`.
+- [x] Register `mapping_node` as an `rclcpp_components` composable node.
+- [x] Add configurable input sensor QoS for ROS2 driver/rosbag2 compatibility.
+- [x] Fill `MappingStatus` tracking/mapping rate fields from live frame counters.
+- [ ] Make TensorRT depth completion optional.
+- [ ] Port Gaussian rasterization, optimization, densification, and pruning.
+- [x] Publish mapper status.
+- [ ] Replace rendered-image preview with Gaussian rasterizer output.
+
+## Milestone 3: Coco-LIC Tracking Port
+
+- [ ] Inventory ROS1 APIs used by Coco-LIC.
+- [ ] Port Livox/custom point handling to ROS2.
+- [ ] Replace dynamic reconfigure/global parameters with ROS2 parameters.
+- [ ] Publish odometry, path, and TF natively.
+- [ ] Keep any ROS1 bridge mode clearly marked as temporary.
+
+## Milestone 4: Usability
+
+- [x] Docker image with NVIDIA runtime support for the non-torch ROS2 smoke-test path.
+- [x] Add RViz2 launch option and default visualization config.
+- [x] One-command synthetic smoke-test script.
+- [x] One-command synthetic rosbag2 generation and replay smoke test.
+- [ ] Screenshots and short demo video.
+- [x] Common errors page.
+- [x] Status schema page.
+- [x] Offline rosbag2 artifact extraction CLI skeleton.
+- [x] Performance regression comparison script.
+- [x] Jazzy/Humble build-only CI skeleton.
+- [ ] ROS1 upstream baseline archive for FAST-LIVO2.
+- [ ] ROS1 `.bag` to rosbag2 `.mcap` converter backend.
+- [ ] CI smoke tests with mini sequence and PR comparison report.

@@ -1,0 +1,174 @@
+# Porting Notes
+
+## Project Direction
+
+The port should be native ROS2, not only a ROS1 bridge wrapper. Bridge support can exist as a compatibility path, but the main README and launch flow should target native ROS2 nodes.
+
+## Initial ROS2 Topic Contract
+
+Inputs:
+
+```text
+/camera/image          sensor_msgs/msg/Image
+/camera/camera_info    sensor_msgs/msg/CameraInfo
+/livox/lidar           sensor_msgs/msg/PointCloud2
+/imu                   sensor_msgs/msg/Imu
+/tf                    tf2_msgs/msg/TFMessage
+/tf_static             tf2_msgs/msg/TFMessage
+```
+
+Outputs:
+
+```text
+/gaussian_lic/odometry        nav_msgs/msg/Odometry
+/gaussian_lic/path            nav_msgs/msg/Path
+/gaussian_lic/map_points      sensor_msgs/msg/PointCloud2
+/gaussian_lic/rendered_image  sensor_msgs/msg/Image
+/gaussian_lic/gaussian_map    gaussian_lic_msgs/msg/GaussianArray
+/gaussian_lic/status          gaussian_lic_msgs/msg/MappingStatus
+```
+
+## ROS2 Design Rules
+
+- Use configurable sensor-data QoS for image, point cloud, pose, camera info, depth, and IMU subscriptions. Defaults are `best_effort`, `keep_last`, depth `5`; `sensor_qos_reliability:=reliable` is available for reliable rosbag2 or driver outputs.
+- Use lifecycle nodes for long-running mapping/tracking components.
+- Keep GPU/CUDA code isolated from middleware glue.
+- `mapping_node` is available as both a standalone executable and an `rclcpp_components` plugin; launch with `use_composition:=true` to load it in `component_container_mt`.
+- Keep launch files dataset-agnostic; put dataset paths and remaps in config.
+
+## Known Hard Part
+
+Gaussian-LIC depends on Coco-LIC for tracking, and Coco-LIC is also ROS1. A true port needs to handle both. A bridge-only solution should not be marketed as the main ROS2 port.
+
+## Current Native Slice
+
+`gaussian_lic_mapping/mapping_node` now ports the ROS-facing frame synchronization and frame-conversion surface from upstream Gaussian-LIC. It buffers:
+
+```text
+/points_for_gs
+/pose_for_gs
+/image_for_gs
+/camera_info_for_gs
+/depth_for_gs
+```
+
+and aligns frames using `/points_for_gs` as the reference timestamp with `sync_tolerance_sec` defaulting to `0.01`, matching upstream's 10 ms tolerance. `CameraInfo` is not part of the four-way sync; the latest valid message updates the active `fx/fy/cx/cy` intrinsics, and parameter values remain the fallback.
+
+After alignment, the node converts ROS2 messages into `MapperFrameData`:
+
+```text
+Image       -> RGB float32 OpenCV matrix in [0, 1]
+CameraInfo  -> active fx/fy/cx/cy intrinsics for torch camera/Gaussian initialization
+Depth       -> metric float32 OpenCV matrix
+PoseStamped -> Eigen q_wc, t_wc, R_wc
+PointCloud2 -> world xyz, RGB color in [0, 1], camera-frame depth
+```
+
+Converted frames are then accumulated in `MapperDataset`, mirroring the non-torch state of upstream `Dataset`:
+
+```text
+train/test camera frame records
+R_wc / t_wc pose records
+pending world points
+pending RGB colors
+pending camera-frame depths
+```
+
+The native mapper also republishes converted tracking/map-point surfaces:
+
+```text
+PoseStamped -> nav_msgs/msg/Odometry on /gaussian_lic/odometry
+PoseStamped -> nav_msgs/msg/Path on /gaussian_lic/path
+Accumulated MapperPoint world cloud -> sensor_msgs/msg/PointCloud2 on /gaussian_lic/map_points
+render_mode:=debug_cpu CPU projected accumulated map preview -> sensor_msgs/msg/Image on /gaussian_lic/rendered_image
+Imu -> native ROS2 subscription/counting for the LIC input contract
+PoseStamped -> optional TF map -> camera when publish_tf:=true
+```
+
+The CUDA rasterizer, Gaussian optimizer, and Coco-LIC IMU fusion are not ported yet. `/gaussian_lic/rendered_image` currently projects accumulated debug map points back into the current camera with a CPU z-buffer, not the differentiable splat rasterizer. The current torch boundary covers `TorchCamera`, foreground Gaussian initialization, chunked Gaussian map publication, and PLY export.
+
+## Dataset Profiles
+
+`gaussian_lic_bringup/config` includes ROS2 mapping profiles derived from the upstream Gaussian-LIC YAML files:
+
+```text
+fastlivo.yaml
+fastlivo2.yaml
+m2dgr.yaml
+mcd.yaml
+r3live.yaml
+```
+
+These files currently cover the ROS2 native mapper surface: topic names, synchronization/QoS settings, upstream camera intrinsics, `select_every_k_frame`, SH degree, Gaussian scaling seed, output topics, and save-map service name. They are not complete tracking configs; upstream dataset rosbag paths, LiDAR/IMU/camera extrinsics, and LIC optimization weights still belong to Coco-LIC and need a native ROS2 tracking adapter before real bags can be launched as a full end-to-end Gaussian-LIC system.
+
+For parameter-file smoke testing with the synthetic `1x1` demo bag, skip the red-pixel preview assertion:
+
+```bash
+./scripts/smoke_test.sh \
+  --bag bags/synthetic_gs_demo \
+  --config src/gaussian_lic_bringup/config/fastlivo2.yaml \
+  --render-mode debug_cpu \
+  --skip-rendered-data-check \
+  --tf
+```
+
+## Local Dependency Probe
+
+Current machine state:
+
+```text
+libtorch:  /home/frank/Software/libtorch
+CUDA:      /usr/local/cuda-12.8
+TensorRT:  not found
+```
+
+This means the next build slice should make TensorRT/depth-completion optional. Upstream Gaussian-LIC links TensorRT unconditionally, but the ROS2 port should not require it when `depth_completion:=false`.
+
+The optional torch backend can be built with:
+
+```bash
+GAUSSIAN_LIC_ENABLE_TORCH=ON ./scripts/build_jazzy.sh --packages-select gaussian_lic_mapping
+```
+
+It currently provides:
+
+```text
+MapperDataset CameraFrameRecord -> TorchCamera
+OpenCV RGB/depth float matrices -> torch tensors
+Eigen pose/intrinsics -> world-view/projection/full-projection tensors
+MapperDataset pending points/colors/depth -> TorchGaussianMap initialization tensors
+```
+
+When `mapping_node` is built with `GAUSSIAN_LIC_ENABLE_TORCH=ON`, launch can enable live conversion with:
+
+```bash
+enable_torch_camera_conversion:=true
+enable_torch_gaussian_init:=true
+torch_gaussian_device:=cpu
+```
+
+The Gaussian initialization mirrors the foreground tensor boundary of upstream `GaussianModel::initialize()`:
+
+```text
+xyz:           [N, 3]
+features_dc:   [N, 1, 3]
+features_rest: [N, (sh_degree + 1)^2 - 1, 3]
+scaling:       [N, 3]
+rotation:      [N, 4]
+opacity:       [N, 1]
+```
+
+It is still an initialization skeleton, not the full mapper. Skybox points, differentiable rasterization, optimization, pruning/densification, rendered-image publishing, and map persistence remain separate porting steps. This keeps the heavy torch dependency compile-time optional while allowing the live ROS2 data path to exercise the same tensor boundaries that the full Gaussian core will need.
+
+After initialization, the node publishes the current foreground map as chunked `gaussian_lic_msgs/msg/GaussianArray` on `/gaussian_lic/gaussian_map` with reliable transient-local QoS. The message uses public transport values:
+
+```text
+rotation_xyzw: internal [w, x, y, z] tensor converted to [x, y, z, w]
+scale:         exp(internal log-scale tensor)
+opacity:       sigmoid(internal opacity-logit tensor)
+SH order:      DC RGB triplet followed by remaining coefficient RGB triplets
+```
+
+The `/gaussian_lic/save_map` service writes the initialized Gaussian map to `point_cloud.ply` when given a directory path, or directly to the requested `.ply` path. The Gaussian PLY properties follow upstream Gaussian-LIC naming: `f_dc_*`, `f_rest_*`, `opacity`, `scale_*`, and `rot_*`. These are raw optimization tensor values, not sigmoid/exp activated transport values.
+
+When the torch Gaussian map is not initialized, the same service falls back to the accumulated debug map points and writes a plain XYZRGB PLY with `red/green/blue` uchar fields. This keeps native ROS2 smoke tests useful without requiring libtorch.

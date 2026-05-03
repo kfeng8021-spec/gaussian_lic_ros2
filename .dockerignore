@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+build/
+install/
+log/
+.git/
+.gitignore
+external/Gaussian-LIC/
+external/Coco-LIC/
+bags/
+*.bag
+*.db3
+*.mcap
+__pycache__/
+*.pyc

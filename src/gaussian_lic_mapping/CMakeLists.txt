@@ -1,0 +1,131 @@
+cmake_minimum_required(VERSION 3.16)
+project(gaussian_lic_mapping)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(GAUSSIAN_LIC_ENABLE_TORCH "Build optional libtorch/CUDA mapper backend probes" OFF)
+
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(gaussian_lic_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+
+set(MAPPING_NODE_SOURCES
+  src/frame_data.cpp
+  src/mapper_dataset.cpp
+  src/mapping_node.cpp
+)
+
+set(MAPPING_NODE_DEPS
+  cv_bridge
+  gaussian_lic_msgs
+  geometry_msgs
+  nav_msgs
+  rclcpp
+  sensor_msgs
+  tf2_ros
+)
+
+add_executable(mapping_node
+  ${MAPPING_NODE_SOURCES}
+)
+target_include_directories(mapping_node PRIVATE
+  include
+)
+ament_target_dependencies(mapping_node
+  ${MAPPING_NODE_DEPS}
+)
+target_link_libraries(mapping_node
+  Eigen3::Eigen
+  ${OpenCV_LIBS}
+)
+
+add_library(mapping_node_component SHARED
+  ${MAPPING_NODE_SOURCES}
+)
+target_compile_definitions(mapping_node_component PRIVATE GAUSSIAN_LIC_MAPPING_COMPOSITION=1)
+target_include_directories(mapping_node_component PRIVATE
+  include
+)
+ament_target_dependencies(mapping_node_component
+  ${MAPPING_NODE_DEPS}
+  rclcpp_components
+)
+target_link_libraries(mapping_node_component
+  Eigen3::Eigen
+  ${OpenCV_LIBS}
+)
+rclcpp_components_register_nodes(mapping_node_component "MappingNode")
+
+install(TARGETS mapping_node
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS mapping_node_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+if(GAUSSIAN_LIC_ENABLE_TORCH)
+  if(NOT Torch_DIR AND EXISTS "$ENV{HOME}/Software/libtorch/share/cmake/Torch")
+    set(Torch_DIR "$ENV{HOME}/Software/libtorch/share/cmake/Torch" CACHE PATH "Path to TorchConfig.cmake")
+  endif()
+
+  find_package(Torch REQUIRED)
+
+  add_library(torch_backend src/torch_backend.cpp)
+  set_target_properties(torch_backend PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_include_directories(torch_backend PUBLIC include)
+  ament_target_dependencies(torch_backend
+    geometry_msgs
+    sensor_msgs
+  )
+  target_compile_options(torch_backend PRIVATE ${TORCH_CXX_FLAGS})
+  target_link_libraries(torch_backend
+    Eigen3::Eigen
+    ${OpenCV_LIBS}
+    ${TORCH_LIBRARIES}
+  )
+
+  add_executable(torch_backend_probe
+    src/mapper_dataset.cpp
+    src/torch_backend_probe.cpp
+  )
+  target_include_directories(torch_backend_probe PRIVATE include)
+  target_compile_options(torch_backend_probe PRIVATE ${TORCH_CXX_FLAGS})
+  target_link_libraries(torch_backend_probe
+    torch_backend
+    ${TORCH_LIBRARIES}
+  )
+
+  target_compile_definitions(mapping_node PRIVATE GAUSSIAN_LIC_ENABLE_TORCH=1)
+  target_compile_options(mapping_node PRIVATE ${TORCH_CXX_FLAGS})
+  target_link_libraries(mapping_node
+    torch_backend
+    ${TORCH_LIBRARIES}
+  )
+  target_compile_definitions(mapping_node_component PRIVATE GAUSSIAN_LIC_ENABLE_TORCH=1)
+  target_compile_options(mapping_node_component PRIVATE ${TORCH_CXX_FLAGS})
+  target_link_libraries(mapping_node_component
+    torch_backend
+    ${TORCH_LIBRARIES}
+  )
+
+  install(TARGETS torch_backend
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+  )
+  install(TARGETS torch_backend_probe
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
+
+ament_package()

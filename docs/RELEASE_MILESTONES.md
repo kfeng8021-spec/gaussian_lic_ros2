@@ -1,0 +1,49 @@
+# Release Milestones
+
+## v0.1.0 - Baseline & Infrastructure
+
+Goal: make strict reproduction measurable before the native algorithm port grows.
+
+- Run and archive ROS1 upstream Gaussian-LIC/Coco-LIC baseline artifacts for the selected FAST-LIVO2 sequence.
+- Add rosbag conversion tooling for ROS1 `.bag` to rosbag2 `.mcap`.
+- Keep Jazzy as the primary target and add Humble build-only CI scaffolding.
+- Keep `gaussian_lic_offline` available for non-launch rosbag2 artifact extraction.
+- Freeze `/gaussian_lic/status` and `metrics.json` schemas for later CI comparison.
+- Add performance regression gates for tracking FPS, mapping FPS, and iteration time.
+
+Release artifacts:
+
+```text
+baseline/fastlivo2/<sequence>/trajectory.tum
+baseline/fastlivo2/<sequence>/point_cloud.ply
+baseline/fastlivo2/<sequence>/renders/
+baseline/fastlivo2/<sequence>/metrics.json
+```
+
+## v0.2.0 - Coco-LIC ROS2 Native Tracking
+
+Goal: Coco-LIC runs natively in ROS2 without the Gaussian backend.
+
+- Refactor timestamp math to `int64_t` nanoseconds before ROS2 API replacement.
+- Port PointCloud2-first LiDAR input, IMU input, camera input, continuous-time trajectory, and odometry output.
+- Publish `/cocolic/odometry`, `/cocolic/path`, TF, and the four mapper bridge topics:
+  `/image_for_gs`, `/depth_for_gs`, `/pose_for_gs`, `/points_for_gs`.
+- Compare trajectory against the ROS1 baseline and fail CI when drift exceeds the accepted threshold.
+
+## v0.3.0 - Gaussian Mapping Full Backend
+
+Goal: replace the debug mapping slice with the real Gaussian-LIC backend.
+
+- Port CUDA rasterizer, simple-knn, fused-ssim, optimizer, densification, pruning, and upstream-compatible PLY persistence.
+- Change the default render path to `render_mode:=rasterizer`.
+- Keep `render_mode:=debug_cpu` only as a temporary diagnostic path and remove it after v0.3 stabilization.
+- Keep TensorRT/depth completion optional; `depth_completion:=false` must run without TensorRT installed.
+
+## v0.4.0 - Strict FAST-LIVO2 Reproduction
+
+Goal: one-command paper-level reproduction on the selected FAST-LIVO2 sequence.
+
+- Run full Coco-LIC tracking plus Gaussian mapping end to end from rosbag2.
+- Generate `metrics.json`, trajectory, Gaussian PLY, rendered images, and comparison report.
+- Compare ROS2 outputs against archived ROS1 baseline artifacts.
+- Publish release artifacts and expected screenshots/video for README and GitHub release notes.
