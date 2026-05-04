@@ -206,6 +206,8 @@ The non-torch smoke path also calls `/gaussian_lic/save_map` and checks that a d
 
 The offline artifact extraction check writes `point_cloud_debug.ply`, verifies the synthetic PointCloud2 packed `rgb` value is preserved as `255 32 16`, and checks that `metrics.json` includes topic rates, trajectory path length, point-cloud bounds, and color coverage.
 
+`gaussian_lic_offline` also accepts `--bag-format ros1` for direct ROS1 `.bag` artifact extraction when the optional `rosbags` package is available. This path writes the same artifact files as rosbag2 extraction and records `bag_format: ros1` plus `storage_identifier: rosbag1` in `metrics.json`.
+
 Reliable input-QoS rosbag2 check:
 
 ```bash

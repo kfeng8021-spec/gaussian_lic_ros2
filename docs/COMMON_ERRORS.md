@@ -117,15 +117,16 @@ Current mapper smoke tests do not require TensorRT:
 ./scripts/smoke_test.sh --tf
 ```
 
-## ROS1 Bag Converter Missing `rosbags`
+## ROS1 Bag Tool Missing `rosbags`
 
 Symptom:
 
 ```text
 ROS1 bag conversion requires the optional Python package 'rosbags'.
+offline extraction failed: ROS1 offline extraction requires the optional Python package 'rosbags'.
 ```
 
-Install it only in the conversion environment:
+Install it only in the conversion or extraction environment:
 
 ```bash
 /usr/bin/python3 -m pip install --user rosbags
@@ -147,6 +148,16 @@ The bag contract checker uses the same optional dependency when inspecting ROS1 
 
 ```bash
 gaussian_lic_bag_check --bag /path/to/input.bag --bag-format ros1 --json
+```
+
+The offline extractor also uses it for direct ROS1 `.bag` artifact extraction:
+
+```bash
+PYTHONPATH=src/gaussian_lic_tools \
+  python3 -m gaussian_lic_tools.offline \
+  --bag /path/to/input.bag \
+  --bag-format ros1 \
+  --output /tmp/gaussian_lic_ros1_offline
 ```
 
 For intermediate mapper bags without CameraInfo, depth, or IMU, use the minimal replay contract:

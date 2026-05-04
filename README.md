@@ -117,6 +117,19 @@ metrics.json
 
 This is the seed for the future `gaussian_lic_offline` reproduction binary. The current implementation reads mapper contract topics, preserves PointCloud2 `rgb`/`rgba` or `r/g/b` colors in the debug PLY when available, and writes metrics for topic rates, trajectory path length, point-cloud bounds, and color coverage. It does not yet run the full Coco-LIC/Gaussian-LIC algorithm offline.
 
+The same artifact extractor can read ROS1 `.bag` inputs directly when the optional `rosbags` package is installed in that Python environment:
+
+```bash
+/usr/bin/python3 -m pip install --user rosbags
+PYTHONPATH=src/gaussian_lic_tools \
+  python3 -m gaussian_lic_tools.offline \
+  --bag /path/to/input.bag \
+  --bag-format ros1 \
+  --output /tmp/gaussian_lic_ros1_offline_demo
+```
+
+Direct ROS1 extraction writes the same `trajectory.tum`, `point_cloud_debug.ply`, and `metrics.json` files, including `bag_format` and `storage_identifier` fields, so converted and original bags can be compared with the same scripts.
+
 Validate that a rosbag2 directory has the mapper input contract before replaying it:
 
 ```bash
