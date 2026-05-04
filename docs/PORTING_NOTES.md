@@ -64,6 +64,8 @@ PoseStamped -> Eigen q_wc, t_wc, R_wc
 PointCloud2 -> world xyz, RGB color in [0, 1], camera-frame depth
 ```
 
+PointCloud2 color uses packed `rgb/rgba` or scalar `r/g/b` fields when present. For uncolored clouds, the ROS2 port now projects each positive-depth point into the synchronized image with the active pinhole intrinsics and samples the image color, keeping a white fallback for points outside the image. This preserves the LiDAR-camera color boundary needed by Gaussian initialization without requiring a pre-colored cloud topic.
+
 Converted frames are then accumulated in `MapperDataset`, mirroring the non-torch state of upstream `Dataset`:
 
 ```text

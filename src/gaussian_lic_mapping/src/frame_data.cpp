@@ -3,6 +3,7 @@
 #include <gaussian_lic_mapping/frame_data.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 
@@ -82,6 +83,44 @@ uint32_t read_rgb_bits(const uint8_t * base, const sensor_msgs::msg::PointField 
   throw std::runtime_error("rgb/rgba PointCloud2 field must be FLOAT32 or UINT32");
 }
 
+bool has_valid_projection_intrinsics(const CameraIntrinsics & intrinsics)
+{
+  return std::isfinite(intrinsics.fx) && std::isfinite(intrinsics.fy) &&
+    std::isfinite(intrinsics.cx) && std::isfinite(intrinsics.cy) &&
+    intrinsics.fx > 0.0 && intrinsics.fy > 0.0;
+}
+
+bool sample_projected_image_color(
+  const cv::Mat & image_rgb_float,
+  const CameraIntrinsics & intrinsics,
+  const Eigen::Vector3d & xyz_cam,
+  Eigen::Vector3f & color_rgb)
+{
+  if (image_rgb_float.empty() || image_rgb_float.type() != CV_32FC3 ||
+    !has_valid_projection_intrinsics(intrinsics) || xyz_cam.z() <= 0.0)
+  {
+    return false;
+  }
+
+  const double u_float = intrinsics.fx * xyz_cam.x() / xyz_cam.z() + intrinsics.cx;
+  const double v_float = intrinsics.fy * xyz_cam.y() / xyz_cam.z() + intrinsics.cy;
+  if (!std::isfinite(u_float) || !std::isfinite(v_float)) {
+    return false;
+  }
+
+  const int u = static_cast<int>(std::floor(u_float));
+  const int v = static_cast<int>(std::floor(v_float));
+  if (u < 0 || v < 0 || u >= image_rgb_float.cols || v >= image_rgb_float.rows) {
+    return false;
+  }
+
+  const cv::Vec3f & rgb = image_rgb_float.at<cv::Vec3f>(v, u);
+  color_rgb.x() = std::clamp(rgb[0], 0.0F, 1.0F);
+  color_rgb.y() = std::clamp(rgb[1], 0.0F, 1.0F);
+  color_rgb.z() = std::clamp(rgb[2], 0.0F, 1.0F);
+  return true;
+}
+
 cv::Mat convert_image_to_rgb_float(const sensor_msgs::msg::Image & image_msg)
 {
   namespace enc = sensor_msgs::image_encodings;
@@ -135,6 +174,8 @@ std::vector<MapperPoint> convert_pointcloud(
   const sensor_msgs::msg::PointCloud2 & cloud,
   const Eigen::Quaterniond & q_wc,
   const Eigen::Vector3d & t_wc,
+  const cv::Mat & image_rgb_float,
+  const CameraIntrinsics & intrinsics,
   size_t & skipped_nonpositive_depth)
 {
   skipped_nonpositive_depth = 0;
@@ -188,6 +229,8 @@ std::vector<MapperPoint> convert_pointcloud(
       color_rgb.x() = static_cast<float>(read_numeric_field(base, *r_field)) / 255.0F;
       color_rgb.y() = static_cast<float>(read_numeric_field(base, *g_field)) / 255.0F;
       color_rgb.z() = static_cast<float>(read_numeric_field(base, *b_field)) / 255.0F;
+    } else {
+      (void)sample_projected_image_color(image_rgb_float, intrinsics, xyz_cam, color_rgb);
     }
 
     points.push_back(MapperPoint{
@@ -204,7 +247,8 @@ std::vector<MapperPoint> convert_pointcloud(
 MapperFrameData convert_aligned_frame(
   const AlignedRosFrame & frame,
   const uint64_t frame_index,
-  const int select_every_k_frame)
+  const int select_every_k_frame,
+  const CameraIntrinsics & intrinsics)
 {
   if (!frame.pointcloud || !frame.pose || !frame.image || !frame.depth) {
     throw std::runtime_error("cannot convert incomplete aligned ROS frame");
@@ -235,7 +279,8 @@ MapperFrameData convert_aligned_frame(
   out.r_wc = out.q_wc.toRotationMatrix();
 
   out.points = convert_pointcloud(
-    *frame.pointcloud, out.q_wc, out.t_wc, out.skipped_points_nonpositive_depth);
+    *frame.pointcloud, out.q_wc, out.t_wc, out.image_rgb_float, intrinsics,
+    out.skipped_points_nonpositive_depth);
 
   return out;
 }

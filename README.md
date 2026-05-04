@@ -199,6 +199,8 @@ Current mapper contract:
 /imu_for_gs          sensor_msgs/msg/Imu
 ```
 
+When `/points_for_gs` has no `rgb`, `rgba`, or `r/g/b` fields, the mapper projects each valid camera-frame point into `/image_for_gs` using the active `CameraInfo` intrinsics and samples RGB from the image. Points outside the image keep the white fallback color.
+
 Current outputs:
 
 ```text

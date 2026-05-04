@@ -485,8 +485,11 @@ private:
 
       try {
         const auto iteration_start = std::chrono::steady_clock::now();
+        const auto intrinsics = current_intrinsics();
+        const gaussian_lic_mapping::CameraIntrinsics frame_intrinsics{
+          intrinsics.fx, intrinsics.fy, intrinsics.cx, intrinsics.cy};
         MapperFrameData frame_data = gaussian_lic_mapping::convert_aligned_frame(
-          frame, dataset_.all_frame_count(), select_every_k_frame_);
+          frame, dataset_.all_frame_count(), select_every_k_frame_, frame_intrinsics);
         record_converted_frame(std::move(frame_data));
         record_iteration_timing(iteration_start);
       } catch (const std::exception & ex) {

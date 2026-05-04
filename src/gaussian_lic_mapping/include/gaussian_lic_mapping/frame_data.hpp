@@ -34,6 +34,14 @@ struct MapperPoint
   float depth_m{0.0F};
 };
 
+struct CameraIntrinsics
+{
+  double fx{1.0};
+  double fy{1.0};
+  double cx{0.5};
+  double cy{0.5};
+};
+
 struct MapperFrameData
 {
   builtin_interfaces::msg::Time stamp;
@@ -53,6 +61,7 @@ struct MapperFrameData
 MapperFrameData convert_aligned_frame(
   const AlignedRosFrame & frame,
   uint64_t frame_index,
-  int select_every_k_frame);
+  int select_every_k_frame,
+  const CameraIntrinsics & intrinsics = CameraIntrinsics{});
 
 }  // namespace gaussian_lic_mapping
