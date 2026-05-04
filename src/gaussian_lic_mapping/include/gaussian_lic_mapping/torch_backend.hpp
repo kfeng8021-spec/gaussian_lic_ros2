@@ -41,6 +41,18 @@ struct TorchGaussianMap
   torch::Tensor scaling;
   torch::Tensor rotation;
   torch::Tensor opacity;
+  torch::Tensor xyz_exp_avg;
+  torch::Tensor xyz_exp_avg_sq;
+  torch::Tensor features_dc_exp_avg;
+  torch::Tensor features_dc_exp_avg_sq;
+  torch::Tensor features_rest_exp_avg;
+  torch::Tensor features_rest_exp_avg_sq;
+  torch::Tensor scaling_exp_avg;
+  torch::Tensor scaling_exp_avg_sq;
+  torch::Tensor rotation_exp_avg;
+  torch::Tensor rotation_exp_avg_sq;
+  torch::Tensor opacity_exp_avg;
+  torch::Tensor opacity_exp_avg_sq;
   int sh_degree{0};
   size_t foreground_count{0};
   size_t skybox_count{0};

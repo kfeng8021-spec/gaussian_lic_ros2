@@ -141,6 +141,9 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
     )
 
     target_compile_definitions(torch_backend PUBLIC GAUSSIAN_LIC_ENABLE_CUDA=1)
+    target_include_directories(torch_backend PRIVATE
+      cuda/rasterizer
+    )
     target_link_libraries(torch_backend gaussian_lic_cuda_ops CUDA::cudart)
   endif()
 
@@ -196,6 +199,18 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
       ${TORCH_LIBRARIES}
       CUDA::cudart
     )
+
+    add_executable(torch_cuda_backend_probe
+      src/mapper_dataset.cpp
+      src/torch_cuda_backend_probe.cpp
+    )
+    target_include_directories(torch_cuda_backend_probe PRIVATE include)
+    target_compile_options(torch_cuda_backend_probe PRIVATE ${TORCH_CXX_FLAGS})
+    target_link_libraries(torch_cuda_backend_probe
+      torch_backend
+      ${TORCH_LIBRARIES}
+      CUDA::cudart
+    )
   endif()
 
   target_compile_definitions(mapping_node PRIVATE GAUSSIAN_LIC_ENABLE_TORCH=1)
@@ -232,6 +247,9 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
       RUNTIME DESTINATION lib/${PROJECT_NAME}
     )
     install(TARGETS rasterizer_probe
+      RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
+    install(TARGETS torch_cuda_backend_probe
       RUNTIME DESTINATION lib/${PROJECT_NAME}
     )
   endif()

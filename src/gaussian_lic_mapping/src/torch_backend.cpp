@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <gaussian_lic_mapping/torch_backend.hpp>
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+#include <gaussian_lic_mapping/cuda/fused_ssim.hpp>
+#include <gaussian_lic_mapping/cuda/sparse_adam.hpp>
+#include "rasterizer.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -381,6 +386,218 @@ torch::Tensor gather_camera_targets(
     .detach();
 }
 
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+void ensure_adam_pair(
+  const torch::Tensor & parameter,
+  torch::Tensor & exp_avg,
+  torch::Tensor & exp_avg_sq)
+{
+  if (
+    !exp_avg.defined() || !exp_avg_sq.defined() ||
+    exp_avg.sizes() != parameter.sizes() || exp_avg_sq.sizes() != parameter.sizes() ||
+    exp_avg.device() != parameter.device() || exp_avg_sq.device() != parameter.device())
+  {
+    exp_avg = torch::zeros_like(parameter).contiguous();
+    exp_avg_sq = torch::zeros_like(parameter).contiguous();
+  }
+}
+
+void ensure_sparse_adam_state(TorchGaussianMap & map)
+{
+  ensure_adam_pair(map.xyz, map.xyz_exp_avg, map.xyz_exp_avg_sq);
+  ensure_adam_pair(map.features_dc, map.features_dc_exp_avg, map.features_dc_exp_avg_sq);
+  ensure_adam_pair(map.features_rest, map.features_rest_exp_avg, map.features_rest_exp_avg_sq);
+  ensure_adam_pair(map.scaling, map.scaling_exp_avg, map.scaling_exp_avg_sq);
+  ensure_adam_pair(map.rotation, map.rotation_exp_avg, map.rotation_exp_avg_sq);
+  ensure_adam_pair(map.opacity, map.opacity_exp_avg, map.opacity_exp_avg_sq);
+}
+
+void sparse_adam_step_if_enabled(
+  torch::Tensor & parameter,
+  torch::Tensor & exp_avg,
+  torch::Tensor & exp_avg_sq,
+  const torch::Tensor & visible_mask,
+  const double learning_rate)
+{
+  if (learning_rate <= 0.0 || !parameter.grad().defined()) {
+    return;
+  }
+  auto gradient = parameter.grad().contiguous();
+  cuda_ops::sparse_adam_step(
+    parameter,
+    gradient,
+    exp_avg,
+    exp_avg_sq,
+    visible_mask,
+    static_cast<float>(learning_rate),
+    0.9F,
+    0.999F,
+    1.0e-15F);
+}
+
+torch::Tensor make_raster_background(
+  const GaussianBackendConfig & config,
+  torch::Device device)
+{
+  const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+  if (config.random_background) {
+    return torch::rand({3}, options).contiguous();
+  }
+  if (config.white_background) {
+    return torch::ones({3}, options).contiguous();
+  }
+  return torch::zeros({3}, options).contiguous();
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+rasterize_gaussian_map(
+  TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  torch::Device device)
+{
+  auto background = make_raster_background(config, device);
+  auto viewmatrix = camera.world_view_transform.to(device).contiguous();
+  auto projmatrix = camera.full_proj_transform.to(device).contiguous();
+  auto campos = camera.camera_center.to(device).contiguous();
+  const float tanfovx = std::tan(camera.fov_x * 0.5F);
+  const float tanfovy = std::tan(camera.fov_y * 0.5F);
+  const float limx_neg = -0.15F * static_cast<float>(camera.image_width) / camera.fx -
+    camera.cx / camera.fx;
+  const float limx_pos = 1.15F * static_cast<float>(camera.image_width) / camera.fx -
+    camera.cx / camera.fx;
+  const float limy_neg = -0.15F * static_cast<float>(camera.image_height) / camera.fy -
+    camera.cy / camera.fy;
+  const float limy_pos = 1.15F * static_cast<float>(camera.image_height) / camera.fy -
+    camera.cy / camera.fy;
+
+  GaussianRasterizationSettings raster_settings(
+    camera.image_height,
+    camera.image_width,
+    tanfovx,
+    tanfovy,
+    limx_neg,
+    limx_pos,
+    limy_neg,
+    limy_pos,
+    background,
+    1.0F,
+    viewmatrix,
+    projmatrix,
+    map.sh_degree,
+    campos,
+    false,
+    false,
+    false,
+    static_cast<float>(config.lambda_erank));
+  GaussianRasterizer rasterizer(raster_settings);
+
+  auto means2d = torch::zeros_like(map.xyz).to(device).contiguous();
+  means2d.set_requires_grad(true);
+  torch::Tensor colors_precomp;
+  torch::Tensor cov3d_precomp;
+  const auto opacity = torch::sigmoid(map.opacity).contiguous();
+  const auto scaling = torch::exp(map.scaling).contiguous();
+  const auto rotation = torch::nn::functional::normalize(
+    map.rotation,
+    torch::nn::functional::NormalizeFuncOptions().p(2.0).dim(1)).contiguous();
+  return rasterizer.forward(
+    map.xyz,
+    means2d,
+    opacity,
+    map.features_dc,
+    map.features_rest,
+    colors_precomp,
+    scaling,
+    rotation,
+    cov3d_precomp);
+}
+
+TorchOptimizationResult optimize_gaussian_map_with_cuda_rasterizer(
+  TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  const int steps,
+  torch::Device device)
+{
+  TorchOptimizationResult result;
+  require_grad_for_map(map);
+  ensure_sparse_adam_state(map);
+
+  const auto gt_image = camera.original_image.to(device).contiguous();
+  const auto gt_depth = camera.original_depth.to(device).contiguous();
+  if (gt_image.dim() != 3 || gt_image.size(0) != 3) {
+    throw std::runtime_error("TorchCamera original_image must have shape [3, H, W]");
+  }
+  if (gt_image.size(1) != camera.image_height || gt_image.size(2) != camera.image_width) {
+    throw std::runtime_error("TorchCamera image tensor shape does not match camera dimensions");
+  }
+
+  for (int step = 0; step < steps; ++step) {
+    zero_gaussian_gradients(map);
+    auto render_result = rasterize_gaussian_map(map, camera, config, device);
+    const auto rendered_image = std::get<0>(render_result);
+    const auto radii = std::get<1>(render_result);
+    const auto rendered_depth = std::get<2>(render_result);
+    const auto visible_mask = radii.gt(0).to(torch::kBool).contiguous();
+    result.supervised_count = static_cast<size_t>(visible_mask.sum().item<int64_t>());
+    if (result.supervised_count == 0) {
+      break;
+    }
+
+    auto l1 = torch::mean(torch::abs(rendered_image - gt_image));
+    auto loss = (1.0F - static_cast<float>(config.lambda_dssim)) * l1 +
+      static_cast<float>(config.lambda_dssim) *
+      (1.0F - cuda_ops::fused_ssim(rendered_image.unsqueeze(0), gt_image.unsqueeze(0)));
+
+    if (config.optimize_depth && config.lambda_depth > 0.0 && gt_depth.defined() && gt_depth.numel() > 0) {
+      auto depth_target = gt_depth;
+      if (depth_target.dim() == 3 && depth_target.size(0) == 1) {
+        depth_target = depth_target.squeeze(0);
+      }
+      if (depth_target.dim() == 2 && depth_target.sizes() == rendered_depth.sizes()) {
+        const auto depth_mask = torch::logical_and(depth_target.gt(0.0F), rendered_depth.gt(0.0F));
+        if (depth_mask.sum().item<int64_t>() > 0) {
+          loss = loss + static_cast<float>(config.lambda_depth) *
+            torch::mean(torch::abs(rendered_depth.masked_select(depth_mask) - depth_target.masked_select(depth_mask)));
+        }
+      }
+    }
+
+    loss.backward();
+    {
+      torch::NoGradGuard no_grad;
+      sparse_adam_step_if_enabled(
+        map.xyz, map.xyz_exp_avg, map.xyz_exp_avg_sq, visible_mask, config.position_lr);
+      sparse_adam_step_if_enabled(
+        map.features_dc,
+        map.features_dc_exp_avg,
+        map.features_dc_exp_avg_sq,
+        visible_mask,
+        config.feature_lr);
+      sparse_adam_step_if_enabled(
+        map.features_rest,
+        map.features_rest_exp_avg,
+        map.features_rest_exp_avg_sq,
+        visible_mask,
+        config.feature_lr / 20.0);
+      sparse_adam_step_if_enabled(
+        map.opacity, map.opacity_exp_avg, map.opacity_exp_avg_sq, visible_mask, config.opacity_lr);
+      sparse_adam_step_if_enabled(
+        map.scaling, map.scaling_exp_avg, map.scaling_exp_avg_sq, visible_mask, config.scaling_lr);
+      sparse_adam_step_if_enabled(
+        map.rotation, map.rotation_exp_avg, map.rotation_exp_avg_sq, visible_mask, config.rotation_lr);
+      result.photometric_l1 = l1.detach().to(torch::kCPU).item<float>();
+    }
+    ++result.steps;
+  }
+
+  zero_gaussian_gradients(map);
+  require_grad_for_map(map);
+  return result;
+}
+#endif
+
 }  // namespace
 
 torch::Tensor cv_mat_to_torch_tensor_float32(
@@ -568,9 +785,18 @@ TorchOptimizationResult optimize_gaussian_map_from_camera(
   if (map.xyz.defined() && map.xyz.numel() > 0) {
     device = map.xyz.device();
   }
-  if (config.feature_lr <= 0.0 && config.opacity_lr <= 0.0) {
-    throw std::runtime_error("photometric optimization requires a positive feature_lr or opacity_lr");
+  if (
+    config.position_lr <= 0.0 && config.feature_lr <= 0.0 && config.opacity_lr <= 0.0 &&
+    config.scaling_lr <= 0.0 && config.rotation_lr <= 0.0)
+  {
+    throw std::runtime_error("photometric optimization requires at least one positive Gaussian learning rate");
   }
+
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+  if (device.is_cuda()) {
+    return optimize_gaussian_map_with_cuda_rasterizer(map, camera, config, steps, device);
+  }
+#endif
 
   require_grad_for_map(map);
   zero_gaussian_gradients(map);
