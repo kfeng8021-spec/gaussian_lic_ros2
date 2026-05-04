@@ -11,6 +11,7 @@ ENABLE_TORCH=false
 TORCH_OPTIMIZATION_STEPS=0
 FRONTEND_ADAPTER=false
 IDENTITY_POSE_FALLBACK=false
+IMU_POSE_FALLBACK=false
 PUBLISH_TF=false
 REQUIRE_DEPTH_TOPIC=true
 RENDER_MODE="debug_cpu"
@@ -40,6 +41,7 @@ Options:
   --torch-optimization-steps N Enable Torch photometric Gaussian tensor updates with N steps per keyframe.
   --frontend-adapter           Route raw frontend topics through lic2_contract_adapter.
   --identity-pose-fallback     Let the frontend adapter publish identity poses from point-cloud stamps.
+  --imu-pose-fallback          Let the frontend adapter integrate IMU gyro orientation for pose fallback.
   --optional-depth             Allow mapper replay without a depth image topic.
   --tf                         Enable TF publication.
   --render-mode MODE           debug_cpu, debug_input, rasterizer, or off. Default: debug_cpu.
@@ -78,6 +80,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --identity-pose-fallback)
       IDENTITY_POSE_FALLBACK=true
+      shift
+      ;;
+    --imu-pose-fallback)
+      IMU_POSE_FALLBACK=true
       shift
       ;;
     --optional-depth)
@@ -147,6 +153,7 @@ launch_args=(
   stub_mode:=false
   frontend_adapter:="${FRONTEND_ADAPTER}"
   adapter_identity_pose_fallback:="${IDENTITY_POSE_FALLBACK}"
+  adapter_imu_pose_fallback:="${IMU_POSE_FALLBACK}"
   publish_tf:="${PUBLISH_TF}"
   require_depth_topic:="${REQUIRE_DEPTH_TOPIC}"
   render_mode:="${RENDER_MODE}"
@@ -258,7 +265,7 @@ ros2 run gaussian_lic_tools gaussian_lic_offline \
 cp "${OUTPUT_DIR}/offline/trajectory.tum" "${OUTPUT_DIR}/trajectory.tum"
 cp "${SAVED_MAP_DIR}/point_cloud.ply" "${OUTPUT_DIR}/point_cloud.ply"
 
-python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" "${TORCH_OPTIMIZATION_STEPS}" <<'PY'
+python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" "${TORCH_OPTIMIZATION_STEPS}" "${IMU_POSE_FALLBACK}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -276,6 +283,7 @@ metrics.update(
         "frontend_adapter": sys.argv[5] == "true",
         "record_sec": float(sys.argv[6]),
         "torch_optimization_steps": int(sys.argv[7]),
+        "imu_pose_fallback": sys.argv[8] == "true",
         "saved_map": str((output / "saved_map" / "point_cloud.ply").resolve()),
         "outputs": {
             **metrics.get("outputs", {}),

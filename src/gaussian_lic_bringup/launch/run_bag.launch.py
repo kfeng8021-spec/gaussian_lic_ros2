@@ -19,6 +19,7 @@ def generate_launch_description():
     synthetic_input = LaunchConfiguration("synthetic_input")
     frontend_adapter = LaunchConfiguration("frontend_adapter")
     adapter_identity_pose_fallback = LaunchConfiguration("adapter_identity_pose_fallback")
+    adapter_imu_pose_fallback = LaunchConfiguration("adapter_imu_pose_fallback")
     synthetic_pose_output_mode = LaunchConfiguration("synthetic_pose_output_mode")
     synthetic_pointcloud_color_mode = LaunchConfiguration("synthetic_pointcloud_color_mode")
     synthetic_point_color_rgb = LaunchConfiguration("synthetic_point_color_rgb")
@@ -110,6 +111,7 @@ def generate_launch_description():
             "sensor_qos_history": sensor_qos_history,
             "sensor_qos_depth": sensor_qos_depth,
             "identity_pose_fallback": adapter_identity_pose_fallback,
+            "imu_pose_fallback": adapter_imu_pose_fallback,
             "publish_tf": publish_tf,
         },
     ]
@@ -149,6 +151,11 @@ def generate_launch_description():
             "adapter_identity_pose_fallback",
             default_value="false",
             description="Let the adapter publish identity poses from point-cloud stamps when no odometry is available",
+        ),
+        DeclareLaunchArgument(
+            "adapter_imu_pose_fallback",
+            default_value="false",
+            description="Let the adapter integrate IMU gyro orientation for pose fallback when no odometry is available",
         ),
         DeclareLaunchArgument(
             "synthetic_pose_output_mode",

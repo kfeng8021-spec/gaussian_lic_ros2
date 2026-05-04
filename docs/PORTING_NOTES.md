@@ -65,7 +65,7 @@ and republishes into the mapper contract:
 /imu_for_gs
 ```
 
-Odometry messages are converted into `PoseStamped` for `/pose_for_gs`. The adapter also publishes `/gaussian_lic/frontend/odometry`, `/gaussian_lic/frontend/path`, and optional TF from any incoming pose or odometry so downstream visualization and regression tools can use the same frontend surface before the full continuous-time odometry algorithm is ported. This adapter is intentionally a boundary node; it does not replace the full Gaussian-LIC2 continuous-time odometry/frontend algorithm.
+Odometry messages are converted into `PoseStamped` for `/pose_for_gs`. The adapter also publishes `/gaussian_lic/frontend/odometry`, `/gaussian_lic/frontend/path`, and optional TF from any incoming pose or odometry so downstream visualization and regression tools can use the same frontend surface before the full continuous-time odometry algorithm is ported. For raw bags without odometry, `imu_pose_fallback:=true` integrates IMU angular velocity into a non-identity orientation fallback at point-cloud timestamps; this is an executable fallback for current artifact generation, not a replacement for the full Gaussian-LIC2 continuous-time frontend.
 
 `gaussian_lic_mapping/mapping_node` now ports the ROS-facing frame synchronization and frame-conversion surface from upstream Gaussian-LIC. It buffers:
 

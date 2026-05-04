@@ -75,6 +75,7 @@ baseline_manifest.json
 - [x] Add a native ROS2 frontend contract adapter from raw sensor/pose topics to mapper topics.
 - [x] Add a `frontend_raw` bag contract for raw camera/LiDAR/IMU/pose validation before adapter replay.
 - [x] Add a `frontend_sensor_raw` contract and FAST-LIVO2 ROS1-to-ROS2 converter for real camera/LiDAR/IMU bags without pose.
+- [x] Add IMU gyro orientation fallback for raw frontend bags without odometry.
 - [ ] Add full real-dataset topic remaps/adapters once the native Gaussian-LIC2 frontend/tracking port is in place.
 
 ## Milestone 2: Gaussian-LIC Mapping Port

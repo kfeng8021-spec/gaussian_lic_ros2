@@ -9,6 +9,7 @@
 - Added a `frontend_sensor_raw` bag contract for true LIC2 camera/LiDAR/IMU input without requiring a pose source.
 - Extended CI replay smoke to replay raw frontend bags through the LIC2 adapter and report the `frontend_raw` contract.
 - Added synthetic raw odometry input coverage for the LIC2 adapter and `frontend_raw` bag contract.
+- Added IMU gyro orientation fallback in the LIC2 contract adapter so pose fallback can publish non-identity orientation from raw IMU when odometry is unavailable.
 - Added keyframe-gated Torch Gaussian initialization and incremental foreground insertion for the ROS2 mapping node.
 - Added optional skybox tensor seeding, Gaussian map republishing after extension, and mapping latency/mean iteration status fields.
 - Added a Torch GaussianMap CPU splat preview for `render_mode:=rasterizer` and smoke coverage for the rasterizer status mode.

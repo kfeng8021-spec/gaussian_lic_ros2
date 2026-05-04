@@ -51,6 +51,8 @@ lic2_contract_adapter:
     enable_depth_passthrough: true
     enable_imu_passthrough: true
     identity_pose_fallback: false
+    imu_pose_fallback: false
+    imu_integration_max_dt_sec: 0.05
     world_frame: map
     frontend_child_frame: base_link
     publish_tf: false

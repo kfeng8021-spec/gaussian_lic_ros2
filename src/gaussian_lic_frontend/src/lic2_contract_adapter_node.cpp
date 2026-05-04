@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -27,6 +29,61 @@ std::string lowercase(std::string value)
     return static_cast<char>(std::tolower(c));
   });
   return value;
+}
+
+double stamp_to_sec(const builtin_interfaces::msg::Time & stamp)
+{
+  return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1.0e-9;
+}
+
+struct UnitQuaternion
+{
+  double w{1.0};
+  double x{0.0};
+  double y{0.0};
+  double z{0.0};
+};
+
+UnitQuaternion multiply(const UnitQuaternion & lhs, const UnitQuaternion & rhs)
+{
+  UnitQuaternion out;
+  out.w = lhs.w * rhs.w - lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z;
+  out.x = lhs.w * rhs.x + lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y;
+  out.y = lhs.w * rhs.y - lhs.x * rhs.z + lhs.y * rhs.w + lhs.z * rhs.x;
+  out.z = lhs.w * rhs.z + lhs.x * rhs.y - lhs.y * rhs.x + lhs.z * rhs.w;
+  return out;
+}
+
+void normalize(UnitQuaternion & q)
+{
+  const double norm = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+  if (!std::isfinite(norm) || norm <= std::numeric_limits<double>::epsilon()) {
+    q = UnitQuaternion{};
+    return;
+  }
+  q.w /= norm;
+  q.x /= norm;
+  q.y /= norm;
+  q.z /= norm;
+}
+
+UnitQuaternion delta_quaternion(
+  const double wx, const double wy, const double wz, const double dt)
+{
+  const double omega = std::sqrt(wx * wx + wy * wy + wz * wz);
+  if (!std::isfinite(omega) || omega <= std::numeric_limits<double>::epsilon() || dt <= 0.0) {
+    return UnitQuaternion{};
+  }
+
+  const double half_angle = 0.5 * omega * dt;
+  const double scale = std::sin(half_angle) / omega;
+  UnitQuaternion dq;
+  dq.w = std::cos(half_angle);
+  dq.x = wx * scale;
+  dq.y = wy * scale;
+  dq.z = wz * scale;
+  normalize(dq);
+  return dq;
 }
 
 }  // namespace
@@ -63,6 +120,8 @@ public:
     enable_depth_passthrough_ = declare_parameter<bool>("enable_depth_passthrough", true);
     enable_imu_passthrough_ = declare_parameter<bool>("enable_imu_passthrough", true);
     identity_pose_fallback_ = declare_parameter<bool>("identity_pose_fallback", false);
+    imu_pose_fallback_ = declare_parameter<bool>("imu_pose_fallback", false);
+    imu_integration_max_dt_sec_ = declare_parameter<double>("imu_integration_max_dt_sec", 0.05);
     world_frame_ = declare_parameter<std::string>("world_frame", "map");
     frontend_child_frame_ = declare_parameter<std::string>("frontend_child_frame", "base_link");
     publish_tf_ = declare_parameter<bool>("publish_tf", false);
@@ -106,7 +165,9 @@ public:
       [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
         pointcloud_pub_->publish(*msg);
         ++pointcloud_count_;
-        if (identity_pose_fallback_) {
+        if (imu_pose_fallback_) {
+          publish_imu_pose_fallback(msg->header.stamp);
+        } else if (identity_pose_fallback_) {
           publish_identity_pose(msg->header.stamp);
         }
       });
@@ -139,6 +200,9 @@ public:
         [this](sensor_msgs::msg::Imu::ConstSharedPtr msg) {
           imu_pub_->publish(*msg);
           ++imu_count_;
+          if (imu_pose_fallback_) {
+            integrate_imu_orientation(*msg);
+          }
         });
     }
 
@@ -152,10 +216,11 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "LIC2 contract adapter: raw image=%s pointcloud=%s pose=%s raw_odom=%s -> mapper "
-      "image=%s pointcloud=%s pose=%s frontend_odom=%s frontend_path=%s",
+      "image=%s pointcloud=%s pose=%s frontend_odom=%s frontend_path=%s fallback(identity=%s imu=%s)",
       raw_image_topic_.c_str(), raw_pointcloud_topic_.c_str(), pose_stamped_topic_.c_str(),
       raw_odometry_topic_.c_str(), image_topic_.c_str(), pointcloud_topic_.c_str(),
-      pose_topic_.c_str(), frontend_odometry_topic_.c_str(), frontend_path_topic_.c_str());
+      pose_topic_.c_str(), frontend_odometry_topic_.c_str(), frontend_path_topic_.c_str(),
+      identity_pose_fallback_ ? "true" : "false", imu_pose_fallback_ ? "true" : "false");
   }
 
 private:
@@ -203,6 +268,46 @@ private:
     ++identity_pose_count_;
   }
 
+  void publish_imu_pose_fallback(const builtin_interfaces::msg::Time & stamp)
+  {
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header.stamp = stamp;
+    pose.header.frame_id = world_frame_;
+    pose.pose.orientation.w = imu_orientation_.w;
+    pose.pose.orientation.x = imu_orientation_.x;
+    pose.pose.orientation.y = imu_orientation_.y;
+    pose.pose.orientation.z = imu_orientation_.z;
+    publish_frontend_pose(pose, false, false);
+    ++imu_pose_fallback_count_;
+  }
+
+  void integrate_imu_orientation(const sensor_msgs::msg::Imu & imu)
+  {
+    const double stamp_sec = stamp_to_sec(imu.header.stamp);
+    if (!have_last_imu_stamp_) {
+      last_imu_stamp_sec_ = stamp_sec;
+      have_last_imu_stamp_ = true;
+      return;
+    }
+
+    const double dt = stamp_sec - last_imu_stamp_sec_;
+    last_imu_stamp_sec_ = stamp_sec;
+    if (dt <= 0.0 || dt > imu_integration_max_dt_sec_) {
+      return;
+    }
+
+    const double wx = imu.angular_velocity.x;
+    const double wy = imu.angular_velocity.y;
+    const double wz = imu.angular_velocity.z;
+    if (!std::isfinite(wx) || !std::isfinite(wy) || !std::isfinite(wz)) {
+      return;
+    }
+
+    imu_orientation_ = multiply(imu_orientation_, delta_quaternion(wx, wy, wz, dt));
+    normalize(imu_orientation_);
+    ++imu_integration_count_;
+  }
+
   void publish_frontend_pose(
     const geometry_msgs::msg::PoseStamped & pose, bool from_odometry, bool count_pose_input)
   {
@@ -243,9 +348,10 @@ private:
     RCLCPP_INFO(
       get_logger(),
       "forwarded image=%zu camera_info=%zu depth=%zu points=%zu pose=%zu pose_input=%zu odom=%zu "
-      "identity_pose=%zu imu=%zu",
+      "identity_pose=%zu imu_pose=%zu imu=%zu imu_integrations=%zu",
       image_count_, camera_info_count_, depth_count_, pointcloud_count_, pose_count_,
-      pose_stamped_count_, odometry_count_, identity_pose_count_, imu_count_);
+      pose_stamped_count_, odometry_count_, identity_pose_count_, imu_pose_fallback_count_,
+      imu_count_, imu_integration_count_);
   }
 
   std::string raw_image_topic_;
@@ -268,9 +374,14 @@ private:
   bool enable_depth_passthrough_{true};
   bool enable_imu_passthrough_{true};
   bool identity_pose_fallback_{false};
+  bool imu_pose_fallback_{false};
   bool publish_tf_{false};
   int max_path_length_{5000};
   double report_period_sec_{2.0};
+  double imu_integration_max_dt_sec_{0.05};
+  bool have_last_imu_stamp_{false};
+  double last_imu_stamp_sec_{0.0};
+  UnitQuaternion imu_orientation_;
 
   size_t image_count_{0};
   size_t camera_info_count_{0};
@@ -280,6 +391,8 @@ private:
   size_t pose_stamped_count_{0};
   size_t odometry_count_{0};
   size_t identity_pose_count_{0};
+  size_t imu_pose_fallback_count_{0};
+  size_t imu_integration_count_{0};
   size_t imu_count_{0};
 
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;

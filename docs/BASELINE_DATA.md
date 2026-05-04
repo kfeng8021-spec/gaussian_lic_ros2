@@ -34,6 +34,7 @@ Collect ROS2 current artifacts from a rosbag2 replay after the mapper is built:
 ./scripts/collect_current_results.sh \
   --bag /home/frank/data/fast_livo/<sequence>_frontend_raw \
   --frontend-adapter \
+  --imu-pose-fallback \
   --optional-depth \
   --output results/fastlivo2/current
 ```
