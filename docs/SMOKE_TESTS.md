@@ -238,6 +238,11 @@ The workspace verification script calls `scripts/verify_artifact_gates.sh`, whic
 
 The Jazzy CI leg also builds the workspace, records short synthetic mapper and raw frontend rosbag2 sequences, replays the mapper bag through the non-torch mapper smoke path in both full-contract and `--minimal-inputs` modes, and replays the raw frontend odometry bag through `lic2_contract_adapter`. Humble remains build-only until the replay smoke path is validated there.
 
+Strict current-result collection uses `scripts/strict_rosbag2_play.sh`, which
+runs the timing audit first and then calls `ros2 bag play --clock
+--read-ahead-queue-size 1`. The launch replay path uses the same read-ahead
+queue setting.
+
 Run the same mini replay smoke locally with:
 
 ```bash

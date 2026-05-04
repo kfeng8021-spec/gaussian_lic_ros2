@@ -315,13 +315,13 @@ def generate_launch_description():
         DeclareLaunchArgument("rviz_config", default_value=default_rviz_config, description="RViz2 config file"),
 
         ExecuteProcess(
-            cmd=["ros2", "bag", "play", bag, "--clock"],
+            cmd=["ros2", "bag", "play", bag, "--clock", "--read-ahead-queue-size", "1"],
             output="screen",
             condition=play_bag_once_condition,
         ),
 
         ExecuteProcess(
-            cmd=["ros2", "bag", "play", bag, "--clock", "--loop"],
+            cmd=["ros2", "bag", "play", bag, "--clock", "--read-ahead-queue-size", "1", "--loop"],
             output="screen",
             condition=play_bag_loop_condition,
         ),

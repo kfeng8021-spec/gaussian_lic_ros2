@@ -326,7 +326,7 @@ if [[ -n "${BAG_PATH}" ]]; then
   start_recording
   sleep 0.5
   echo "[current] replaying input bag: ${BAG_PATH}"
-  setsid ros2 bag play "${BAG_PATH}" --clock --loop >"${OUTPUT_DIR}/play.log" 2>&1 &
+  setsid ./scripts/strict_rosbag2_play.sh --loop "${BAG_PATH}" >"${OUTPUT_DIR}/play.log" 2>&1 &
   PLAY_PID=$!
   echo "[current] waiting for mapper status"
   ros2 topic echo --once --timeout "${TIMEOUT_SEC}" \
