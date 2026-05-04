@@ -15,6 +15,7 @@ find_package(tf2_ros REQUIRED)
 
 add_library(trajectory_manager
   src/imu_propagator.cpp
+  src/lidar_factor.cpp
   src/trajectory_manager.cpp
 )
 target_include_directories(trajectory_manager PUBLIC
@@ -46,6 +47,16 @@ target_link_libraries(imu_propagator_probe
 )
 ament_target_dependencies(imu_propagator_probe builtin_interfaces)
 
+add_executable(lidar_factor_probe
+  test/lidar_factor_probe.cpp
+)
+target_include_directories(lidar_factor_probe PRIVATE include)
+target_link_libraries(lidar_factor_probe
+  trajectory_manager
+  Eigen3::Eigen
+)
+ament_target_dependencies(lidar_factor_probe builtin_interfaces)
+
 add_executable(tracking_node
   src/tracking_node.cpp
 )
@@ -62,7 +73,7 @@ ament_target_dependencies(tracking_node
   tf2_ros
 )
 
-install(TARGETS trajectory_manager trajectory_manager_probe imu_propagator_probe tracking_node
+install(TARGETS trajectory_manager trajectory_manager_probe imu_propagator_probe lidar_factor_probe tracking_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

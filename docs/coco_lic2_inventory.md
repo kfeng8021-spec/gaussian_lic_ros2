@@ -52,5 +52,8 @@ Current ROS2 implementation status:
 - `gaussian_lic_tracking::TrajectoryManager` provides the first native
   timestamp-safe cubic B-spline trajectory primitive with a constant-velocity
   probe and negative-time roundtrip coverage.
-- LIO factors, VIO factors, sliding-window BA, and native odometry publishers
-  still need to be ported from the audited Coco-LIC modules.
+- `gaussian_lic_tracking::LidarFactor` provides the first native LIO residual
+  foundation: bounded local map insertion, sampled nearest-neighbor residuals,
+  translation correction, and a deterministic probe.
+- VIO factors, full sliding-window BA, and Coco-LIC2-grade IMU/LiDAR/camera
+  joint optimization still need to be ported from the audited Coco-LIC modules.
