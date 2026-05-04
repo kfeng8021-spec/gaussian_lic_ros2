@@ -220,6 +220,8 @@ Run the same mini replay smoke locally with:
 ./scripts/ci_replay_smoke.sh --bag bags/ci_synthetic_gs_demo --duration 4 --timeout 20
 ```
 
+Use `--artifact-dir /path/to/reports` or `GAUSSIAN_LIC_CI_REPLAY_ARTIFACT_DIR=/path/to/reports` to persist the generated bag contract reports, offline metrics, TUM trajectory, and debug PLY. CI uploads that directory as `jazzy-replay-artifacts`.
+
 Reliable input-QoS rosbag2 check:
 
 ```bash

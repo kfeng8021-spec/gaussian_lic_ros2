@@ -109,8 +109,17 @@ jobs:
           set -u
           ./scripts/ci_replay_smoke.sh \
             --bag bags/ci_synthetic_gs_demo \
+            --artifact-dir ci_replay_artifacts \
             --duration 4 \
             --timeout 20
+
+      - name: Upload Jazzy replay artifacts
+        if: always() && matrix.ros_distro == 'jazzy'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jazzy-replay-artifacts
+          path: ci_replay_artifacts
+          if-no-files-found: ignore
 
       - name: Upload Jazzy smoke logs
         if: always() && matrix.ros_distro == 'jazzy'

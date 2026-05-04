@@ -26,6 +26,7 @@
 - Made synthetic bag, smoke, and workspace verification helpers respect `ROS_DISTRO` with a Jazzy default.
 - Added `scripts/build_ros2.sh` and kept `scripts/build_jazzy.sh` as a compatibility wrapper.
 - Added `scripts/ci_replay_smoke.sh` so CI and local generated-bag replay smoke share one entrypoint.
+- Added CI replay smoke artifact export for bag contracts and offline extraction outputs.
 
 ## v0.1.0-m1-infra - 2026-05-03
 
