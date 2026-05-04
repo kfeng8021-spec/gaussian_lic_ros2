@@ -42,7 +42,8 @@
 - Switched mapper frame synchronization and LIC2 adapter IMU fallback from double-second stamp deltas to signed int64 nanosecond arithmetic.
 - Made composable strict replay use the single-threaded ROS2 component container by default to preserve ROS1 callback ordering assumptions.
 - Wired the strict CUDA rasterizer into the Torch Gaussian backend with L1 + fused-SSIM + optional depth supervision and visibility-masked SparseGaussianAdam updates for xyz, SH features, opacity, scaling, and rotation.
-- Added `torch_cuda_backend_probe` to verify the public optimization path produces supervised rasterizer loss, initializes all SparseAdam state tensors, and updates all Gaussian parameter groups on CUDA.
+- Added `render_gaussian_map_from_camera` and wired `render_mode:=rasterizer` to publish CUDA rasterizer RGB output from the Torch Gaussian map in strict CUDA builds.
+- Added `torch_cuda_backend_probe` to verify the public optimization/render path produces supervised rasterizer loss, initializes all SparseAdam state tensors, renders a nonblank preview, and updates all Gaussian parameter groups on CUDA.
 - Added upstream Gaussian-LIC backend parameter coverage for image size, depth completion, optimizer, loss, exposure, Gaussian extension, and skybox control.
 - Implemented the dependency-gated ROS1 `.bag` to rosbag2 converter backend using `rosbags`.
 - Added `gaussian_lic_bag_check` to validate rosbag2 mapper-contract topics before replay.

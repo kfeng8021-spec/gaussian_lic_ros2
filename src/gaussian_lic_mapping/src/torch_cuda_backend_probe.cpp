@@ -149,6 +149,8 @@ int main()
   config.white_background = false;
   const auto result = gaussian_lic_mapping::optimize_gaussian_map_from_camera(
     map, camera, config, 2, torch::kCUDA);
+  const auto render_result = gaussian_lic_mapping::render_gaussian_map_from_camera(
+    map, camera, config, torch::kCUDA);
   cudaDeviceSynchronize();
 
   const double xyz_delta = max_delta(xyz_before, map.xyz);
@@ -165,10 +167,13 @@ int main()
     map.rotation_exp_avg.defined() &&
     map.opacity_exp_avg.defined();
   const bool finite_loss = std::isfinite(result.photometric_l1);
+  const auto max_render = render_result.rendered_image.max().to(torch::kCPU).item<float>();
 
   std::cout << "torch_cuda_backend_probe steps=" << result.steps
             << " supervised=" << result.supervised_count
             << " l1=" << result.photometric_l1
+            << " render_visible=" << render_result.visible_count
+            << " max_render=" << max_render
             << " xyz_delta=" << xyz_delta
             << " dc_delta=" << dc_delta
             << " rest_delta=" << rest_delta
@@ -180,6 +185,10 @@ int main()
 
   if (result.steps != 2 || result.supervised_count == 0 || !finite_loss) {
     std::cerr << "CUDA backend optimization did not produce a valid supervised loss\n";
+    return 1;
+  }
+  if (render_result.visible_count == 0 || !std::isfinite(max_render) || max_render <= 0.0F) {
+    std::cerr << "CUDA backend public render path produced a blank preview\n";
     return 1;
   }
   if (!adam_state_defined) {

@@ -17,7 +17,7 @@ Completed proof/evidence scope:
 
 - ROS2 workspace, messages, launch, composable mapper node, dataset profiles, bag contracts, artifact extraction, and CI artifact gates.
 - Native mapper input contract and `lic2_contract_adapter` boundary for raw camera/LiDAR/IMU plus pose/odometry.
-- Optional Torch Gaussian tensor path with keyframe initialization, skybox seeding, foreground append, bounded pruning, CPU splat preview, CUDA rasterizer/fused-SSIM/depth loss, and visibility-masked SparseGaussianAdam updates for the full Gaussian parameter set.
+- Optional Torch Gaussian tensor path with keyframe initialization, skybox seeding, foreground append, bounded pruning, CUDA rasterizer preview, CUDA rasterizer/fused-SSIM/depth loss, and visibility-masked SparseGaussianAdam updates for the full Gaussian parameter set.
 - Official FAST-LIVO2 `Bright_Screen_Wall` substitute report with `metrics`, `trajectory`, `point_cloud`, and `gaussian_color` gates passing.
 
 Incomplete paper-algorithm scope:
@@ -134,7 +134,7 @@ baseline_manifest.json
 - [x] Replace the CUDA Torch backend manual SGD path with visibility-masked SparseGaussianAdam updates for xyz/features/scaling/rotation/opacity.
 - [ ] Port gradient-aware densification split/clone scheduling.
 - [x] Publish mapper status.
-- [ ] Replace CPU Gaussian splat preview with upstream CUDA Gaussian rasterizer output.
+- [x] Replace CPU Gaussian splat preview with upstream CUDA Gaussian rasterizer output in the strict CUDA path.
 
 ## Milestone 3: Gaussian-LIC2 Frontend/Tracking Port
 

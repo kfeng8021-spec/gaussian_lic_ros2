@@ -65,6 +65,15 @@ struct TorchOptimizationResult
   float photometric_l1{0.0F};
 };
 
+struct TorchRenderResult
+{
+  torch::Tensor rendered_image;
+  torch::Tensor rendered_depth;
+  torch::Tensor radii;
+  torch::Tensor final_transmittance;
+  size_t visible_count{0};
+};
+
 struct TorchPruneResult
 {
   size_t before_count{0};
@@ -125,6 +134,12 @@ TorchOptimizationResult optimize_gaussian_map_from_camera(
   const TorchCamera & camera,
   const GaussianBackendConfig & config,
   int steps,
+  torch::Device device = torch::kCPU);
+
+TorchRenderResult render_gaussian_map_from_camera(
+  const TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
   torch::Device device = torch::kCPU);
 
 TorchPruneResult prune_gaussian_map(

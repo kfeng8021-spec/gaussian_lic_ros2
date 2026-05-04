@@ -451,7 +451,7 @@ torch::Tensor make_raster_background(
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 rasterize_gaussian_map(
-  TorchGaussianMap & map,
+  const TorchGaussianMap & map,
   const TorchCamera & camera,
   const GaussianBackendConfig & config,
   torch::Device device)
@@ -837,6 +837,37 @@ TorchOptimizationResult optimize_gaussian_map_from_camera(
   zero_gaussian_gradients(map);
   require_grad_for_map(map);
   return result;
+}
+
+TorchRenderResult render_gaussian_map_from_camera(
+  const TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  torch::Device device)
+{
+  validate_gaussian_map_for_optimization(map);
+  if (map.xyz.defined() && map.xyz.numel() > 0) {
+    device = map.xyz.device();
+  }
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+  if (!device.is_cuda()) {
+    throw std::runtime_error("CUDA Gaussian rasterizer rendering requires a CUDA Gaussian map");
+  }
+
+  auto render_result = rasterize_gaussian_map(map, camera, config, device);
+  TorchRenderResult result;
+  result.rendered_image = std::get<0>(render_result);
+  result.radii = std::get<1>(render_result);
+  result.rendered_depth = std::get<2>(render_result);
+  result.final_transmittance = std::get<3>(render_result);
+  result.visible_count = static_cast<size_t>(result.radii.gt(0).sum().item<int64_t>());
+  return result;
+#else
+  (void)camera;
+  (void)config;
+  (void)device;
+  throw std::runtime_error("CUDA Gaussian rasterizer rendering is not enabled in this build");
+#endif
 }
 
 TorchPruneResult prune_gaussian_map(

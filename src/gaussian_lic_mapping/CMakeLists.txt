@@ -145,6 +145,8 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
       cuda/rasterizer
     )
     target_link_libraries(torch_backend gaussian_lic_cuda_ops CUDA::cudart)
+    target_compile_definitions(mapping_node PRIVATE GAUSSIAN_LIC_ENABLE_CUDA=1)
+    target_compile_definitions(mapping_node_component PRIVATE GAUSSIAN_LIC_ENABLE_CUDA=1)
   endif()
 
   add_executable(torch_backend_probe

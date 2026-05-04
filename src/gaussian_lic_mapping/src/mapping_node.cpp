@@ -595,6 +595,7 @@ private:
     last_image_height_ = frame_data.height;
     last_points_in_frame_ = frame_data.points.size();
     last_image_rgb_float_ = frame_data.image_rgb_float.clone();
+    last_depth_m_float_ = frame_data.depth_m_float.clone();
     last_q_wc_ = frame_data.q_wc;
     last_t_wc_ = frame_data.t_wc;
     const auto frame_stamp = frame_data.stamp;
@@ -1198,6 +1199,20 @@ private:
   sensor_msgs::msg::Image make_torch_gaussian_preview_message(
     const builtin_interfaces::msg::Time & stamp) const
   {
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+    if (torch_gaussian_initialized_ && torch_gaussian_count_ > 0) {
+      const auto device = resolve_torch_gaussian_device();
+      if (device.is_cuda()) {
+        return make_cuda_torch_gaussian_preview_message(stamp, device);
+      }
+    }
+#endif
+    return make_torch_gaussian_splat_preview_message(stamp);
+  }
+
+  sensor_msgs::msg::Image make_torch_gaussian_splat_preview_message(
+    const builtin_interfaces::msg::Time & stamp) const
+  {
     sensor_msgs::msg::Image image = make_input_preview_message(stamp);
     if (
       image.width == 0 || image.height == 0 || !torch_gaussian_initialized_ ||
@@ -1294,6 +1309,68 @@ private:
     }
     return image;
   }
+
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+  sensor_msgs::msg::Image make_cuda_torch_gaussian_preview_message(
+    const builtin_interfaces::msg::Time & stamp,
+    const torch::Device & device) const
+  {
+    if (
+      last_image_width_ <= 0 || last_image_height_ <= 0 || last_image_rgb_float_.empty() ||
+      !torch_gaussian_initialized_ || torch_gaussian_count_ == 0)
+    {
+      return make_torch_gaussian_splat_preview_message(stamp);
+    }
+
+    cv::Mat depth = last_depth_m_float_;
+    if (depth.empty()) {
+      depth = cv::Mat(last_image_height_, last_image_width_, CV_32FC1, cv::Scalar(0.0F));
+    }
+
+    gaussian_lic_mapping::CameraFrameRecord frame;
+    frame.frame_index = converted_frame_count_;
+    frame.is_keyframe = true;
+    frame.image_name = "rendered_preview";
+    frame.width = last_image_width_;
+    frame.height = last_image_height_;
+    frame.image_rgb_float = last_image_rgb_float_.clone();
+    frame.depth_m_float = depth.clone();
+    frame.r_wc = last_q_wc_.toRotationMatrix();
+    frame.t_wc = last_t_wc_;
+
+    const auto intrinsics = current_intrinsics();
+    torch::NoGradGuard no_grad;
+    const auto camera = gaussian_lic_mapping::make_torch_camera(
+      frame, intrinsics.fx, intrinsics.fy, intrinsics.cx, intrinsics.cy, device, device);
+    const auto render_result = gaussian_lic_mapping::render_gaussian_map_from_camera(
+      torch_gaussian_map_, camera, backend_config_, device);
+    if (render_result.visible_count == 0 || !render_result.rendered_image.defined()) {
+      return make_torch_gaussian_splat_preview_message(stamp);
+    }
+
+    const auto rendered = torch::clamp(render_result.rendered_image.detach(), 0.0F, 1.0F)
+      .to(torch::kCPU)
+      .contiguous();
+    if (
+      rendered.dim() != 3 || rendered.size(0) != 3 ||
+      rendered.size(1) != last_image_height_ || rendered.size(2) != last_image_width_)
+    {
+      throw std::runtime_error("CUDA Gaussian rasterizer returned an unexpected image shape");
+    }
+
+    sensor_msgs::msg::Image image = make_blank_rendered_image_message(stamp);
+    const auto rendered_a = rendered.accessor<float, 3>();
+    for (uint32_t row = 0; row < image.height; ++row) {
+      uint8_t * dst = image.data.data() + static_cast<size_t>(row) * image.step;
+      for (uint32_t col = 0; col < image.width; ++col) {
+        dst[col * 3U + 0U] = color_channel_to_u8(rendered_a[0][row][col]);
+        dst[col * 3U + 1U] = color_channel_to_u8(rendered_a[1][row][col]);
+        dst[col * 3U + 2U] = color_channel_to_u8(rendered_a[2][row][col]);
+      }
+    }
+    return image;
+  }
+#endif
 #endif
 
   sensor_msgs::msg::Image make_rendered_preview_message(
@@ -1589,6 +1666,7 @@ private:
   int last_image_width_{0};
   int last_image_height_{0};
   cv::Mat last_image_rgb_float_;
+  cv::Mat last_depth_m_float_;
   Eigen::Quaterniond last_q_wc_{Eigen::Quaterniond::Identity()};
   Eigen::Vector3d last_t_wc_{Eigen::Vector3d::Zero()};
   size_t last_points_in_frame_{0};
