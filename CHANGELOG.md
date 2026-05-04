@@ -36,6 +36,7 @@
 - Added P0 strict-porting groundwork: upstream/toolchain lock docs, LIC2 surface inventory, sm_120 CUDA/libtorch probe, and a strict CUDA/Torch build wrapper.
 - Ported the upstream simple-knn CUDA `distCUDA2` operator into the strict CUDA build profile with a brute-force CPU reference probe.
 - Ported the upstream SparseGaussianAdam visibility-masked CUDA update into the strict CUDA build profile with a CPU reference/performance probe.
+- Ported the upstream fused-ssim CUDA forward/backward operator into the strict CUDA build profile with scalar and gradient reference probes.
 - Added an enforced ROS2 semantic contract for timestamp math, sensor QoS, executor choice, tf2 usage, and rosbag2 replay before the continuous-time frontend port proceeds.
 - Switched mapper frame synchronization and LIC2 adapter IMU fallback from double-second stamp deltas to signed int64 nanosecond arithmetic.
 - Made composable strict replay use the single-threaded ROS2 component container by default to preserve ROS1 callback ordering assumptions.

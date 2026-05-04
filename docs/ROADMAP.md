@@ -129,6 +129,9 @@ baseline_manifest.json
 - [x] Add configurable input sensor QoS for ROS2 driver/rosbag2 compatibility.
 - [x] Fill `MappingStatus` tracking/mapping rate fields from live frame counters.
 - [x] Make TensorRT depth completion optional at the ROS2 mapper input boundary.
+- [x] Port upstream CUDA simple-knn `distCUDA2` with a strict probe.
+- [x] Port upstream fused-ssim CUDA forward/backward with scalar and gradient probes.
+- [x] Port upstream visibility-masked SparseGaussianAdam CUDA update with a strict probe.
 - [ ] Port upstream CUDA Gaussian rasterization, full loss schedule, and gradient-aware densification.
 - [x] Publish mapper status.
 - [ ] Replace CPU Gaussian splat preview with upstream CUDA Gaussian rasterizer output.

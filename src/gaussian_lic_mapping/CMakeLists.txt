@@ -110,6 +110,8 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
   )
   if(GAUSSIAN_LIC_ENABLE_CUDA)
     add_library(gaussian_lic_cuda_ops
+      cuda/fused_ssim/fused_ssim.cu
+      cuda/fused_ssim/fused_ssim_autograd.cpp
       cuda/simple_knn/simple_knn.cu
       cuda/simple_knn/spatial.cu
       cuda/sparse_adam/sparse_adam.cu
@@ -120,6 +122,7 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
     )
     target_include_directories(gaussian_lic_cuda_ops PUBLIC
       include
+      cuda/fused_ssim
       cuda/simple_knn
     )
     target_compile_options(gaussian_lic_cuda_ops PRIVATE ${TORCH_CXX_FLAGS})
@@ -163,6 +166,15 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
       ${TORCH_LIBRARIES}
       CUDA::cudart
     )
+
+    add_executable(fused_ssim_probe src/fused_ssim_probe.cpp)
+    target_include_directories(fused_ssim_probe PRIVATE include)
+    target_compile_options(fused_ssim_probe PRIVATE ${TORCH_CXX_FLAGS})
+    target_link_libraries(fused_ssim_probe
+      gaussian_lic_cuda_ops
+      ${TORCH_LIBRARIES}
+      CUDA::cudart
+    )
   endif()
 
   target_compile_definitions(mapping_node PRIVATE GAUSSIAN_LIC_ENABLE_TORCH=1)
@@ -193,6 +205,9 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
       RUNTIME DESTINATION lib/${PROJECT_NAME}
     )
     install(TARGETS sparse_adam_probe
+      RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
+    install(TARGETS fused_ssim_probe
       RUNTIME DESTINATION lib/${PROJECT_NAME}
     )
   endif()
