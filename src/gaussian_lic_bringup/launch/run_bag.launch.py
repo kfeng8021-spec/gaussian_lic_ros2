@@ -38,9 +38,11 @@ def generate_launch_description():
     torch_gaussian_optimization_steps = LaunchConfiguration("torch_gaussian_optimization_steps")
     torch_gaussian_optimization_max_samples = LaunchConfiguration("torch_gaussian_optimization_max_samples")
     enable_torch_gaussian_pruning = LaunchConfiguration("enable_torch_gaussian_pruning")
+    enable_torch_gaussian_densification = LaunchConfiguration("enable_torch_gaussian_densification")
     torch_gaussian_prune_min_opacity = LaunchConfiguration("torch_gaussian_prune_min_opacity")
     torch_gaussian_max_foreground = LaunchConfiguration("torch_gaussian_max_foreground")
     torch_gaussian_device = LaunchConfiguration("torch_gaussian_device")
+    save_map_render_evaluation = LaunchConfiguration("save_map_render_evaluation")
     sensor_qos_reliability = LaunchConfiguration("sensor_qos_reliability")
     sensor_qos_history = LaunchConfiguration("sensor_qos_history")
     sensor_qos_depth = LaunchConfiguration("sensor_qos_depth")
@@ -74,9 +76,11 @@ def generate_launch_description():
             "torch_gaussian_optimization_steps": torch_gaussian_optimization_steps,
             "torch_gaussian_optimization_max_samples": torch_gaussian_optimization_max_samples,
             "enable_torch_gaussian_pruning": enable_torch_gaussian_pruning,
+            "enable_torch_gaussian_densification": enable_torch_gaussian_densification,
             "torch_gaussian_prune_min_opacity": torch_gaussian_prune_min_opacity,
             "torch_gaussian_max_foreground": torch_gaussian_max_foreground,
             "torch_gaussian_device": torch_gaussian_device,
+            "save_map_render_evaluation": save_map_render_evaluation,
             "sensor_qos_reliability": sensor_qos_reliability,
             "sensor_qos_history": sensor_qos_history,
             "sensor_qos_depth": sensor_qos_depth,
@@ -250,7 +254,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "torch_gaussian_optimization_steps",
             default_value="0",
-            description="Photometric optimizer steps per keyframe when enabled",
+            description="Max accumulated train-frame optimizer samples per keyframe when enabled",
         ),
         DeclareLaunchArgument(
             "torch_gaussian_optimization_max_samples",
@@ -261,6 +265,11 @@ def generate_launch_description():
             "enable_torch_gaussian_pruning",
             default_value="false",
             description="Prune low-opacity or excess foreground Gaussians after keyframe updates",
+        ),
+        DeclareLaunchArgument(
+            "enable_torch_gaussian_densification",
+            default_value="false",
+            description="Enable gradient-aware Gaussian densification after keyframe updates",
         ),
         DeclareLaunchArgument(
             "torch_gaussian_prune_min_opacity",
@@ -276,6 +285,11 @@ def generate_launch_description():
             "torch_gaussian_device",
             default_value="cpu",
             description="Torch device for Gaussian initialization: cpu, cuda, cuda:0, or auto",
+        ),
+        DeclareLaunchArgument(
+            "save_map_render_evaluation",
+            default_value="false",
+            description="When SaveMap is called, render final train/test camera records to renders/, gt/, and render_depth/.",
         ),
         DeclareLaunchArgument(
             "sensor_qos_reliability",

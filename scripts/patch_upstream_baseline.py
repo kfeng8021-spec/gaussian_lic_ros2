@@ -111,6 +111,37 @@ def patch_mapping_eval_guard(root: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def patch_visual_quality_lpips_guard(root: Path) -> None:
+    path = root / "src" / "gaussian.cpp"
+    text = path.read_text(encoding="utf-8")
+    if "lpips forward failed; continuing visual dump:" in text:
+        return
+
+    old = "            double lpips = m_lpips.forward(inputs).toTensor().item<double>();\n"
+    new = """            double lpips = 0.0;
+            try
+            {
+                lpips = m_lpips.forward(inputs).toTensor().item<double>();
+            }
+            catch (const c10::Error& e)
+            {
+                std::cerr << "lpips forward failed; continuing visual dump: " << e.what() << std::endl;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "lpips forward failed; continuing visual dump: " << e.what() << std::endl;
+            }
+            catch (...)
+            {
+                std::cerr << "lpips forward failed; continuing visual dump: unknown error" << std::endl;
+            }
+"""
+    if old not in text:
+        raise RuntimeError(f"LPIPS forward block not found in {path}")
+    text = text.replace(old, new)
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Patch copied upstream Gaussian-LIC for reproducible baseline runs.")
     parser.add_argument("upstream_root", help="Path to copied upstream Gaussian-LIC root")
@@ -118,6 +149,7 @@ def main() -> int:
     root = Path(args.upstream_root).resolve()
     patch_depth_completion(root)
     patch_save_map_fallback(root)
+    patch_visual_quality_lpips_guard(root)
     patch_mapping_eval_guard(root)
     print(f"patched upstream baseline workspace: {root}")
     return 0

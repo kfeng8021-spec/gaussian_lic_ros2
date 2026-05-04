@@ -272,6 +272,15 @@ if [[ ! -x /baseline_ws/devel/lib/gaussian_lic/gs_mapping ]]; then
     -DCMAKE_BUILD_TYPE=Release \
     -DCUDA_TOOLKIT_ROOT_DIR=${CONTAINER_CUDA} \
     -DCMAKE_CUDA_ARCHITECTURES=86
+elif [[ '${skip_build_flag}' != '1' && -d /baseline_ws/src/Gaussian-LIC ]]; then
+  if ! grep -q 'lpips forward failed; continuing visual dump:' /baseline_ws/src/Gaussian-LIC/src/gaussian.cpp; then
+    python3 /work/scripts/patch_upstream_baseline.py /baseline_ws/src/Gaussian-LIC
+    cd /baseline_ws
+    catkin_make \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCUDA_TOOLKIT_ROOT_DIR=${CONTAINER_CUDA} \
+      -DCMAKE_CUDA_ARCHITECTURES=86
+  fi
 fi
 
 source /baseline_ws/devel/setup.bash

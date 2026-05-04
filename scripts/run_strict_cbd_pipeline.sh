@@ -10,16 +10,18 @@ FRONTEND_RAW=""
 MAPPER_CONTRACT=""
 BASELINE_DIR=""
 CURRENT_DIR=""
-RENDER_MODE="debug_cpu"
+CURRENT_CONFIG=""
+RENDER_MODE="rasterizer"
 UPSTREAM_RUNTIME_SEC=0
-CURRENT_RECORD_SEC=12
-CURRENT_PLAY_RATE=1
+CURRENT_RECORD_SEC=600
+CURRENT_PLAY_RATE=0.25
 CURRENT_POST_PLAY_SETTLE=8
-CURRENT_TORCH_DEVICE=cpu
-CURRENT_TORCH_OPTIMIZATION_STEPS=1
+CURRENT_TORCH_DEVICE=cuda
+CURRENT_TORCH_OPTIMIZATION_STEPS=100
 CURRENT_TORCH_MAX_FOREGROUND=800000
 CURRENT_TORCH_PRUNE_MIN_OPACITY=0.005
 TIMEOUT_SEC=30
+SAVE_TIMEOUT_SEC=600
 OVERWRITE=false
 SKIP_CONVERT=false
 SKIP_BASELINE=false
@@ -42,21 +44,24 @@ Options:
   --mapper-contract FILE   Default: <dataset-root>/<sequence>_mapper_contract_fastlivo2_color.bag
   --baseline-dir DIR       Default: baseline/fastlivo2/<sequence>
   --current-dir DIR        Default: results/fastlivo2/<sequence>_current
-  --render-mode MODE       debug_cpu, debug_input, rasterizer, or off. Default: debug_cpu
+  --current-config FILE    Current ROS2 parameter YAML. Default: bringup fastlivo2.yaml
+  --render-mode MODE       debug_cpu, debug_input, rasterizer, or off. Default: rasterizer
   --upstream-runtime-sec N Pass to run_upstream_baseline.sh. Default: 0
-  --current-record-sec N   Pass to collect_current_results.sh. Default: 12
-  --current-play-rate R    Pass to collect_current_results.sh. Default: 1
+  --current-record-sec N   Pass to collect_current_results.sh. Default: 600
+  --current-play-rate R    Pass to collect_current_results.sh. Default: 0.25
   --current-post-play-settle SEC
                             Pass to collect_current_results.sh. Default: 8
   --current-torch-device DEVICE
                             Pass to collect_current_results.sh when --render-mode rasterizer is used.
   --current-torch-optimization-steps N
-                            Torch optimization steps per keyframe in rasterizer mode. Default: 1
+                            Max accumulated train-frame optimizer samples per keyframe in rasterizer mode.
+                            Default: 100, matching upstream Gaussian-LIC optimize() max_iters.
   --current-torch-max-foreground N
                             Foreground Gaussian cap in rasterizer mode. Default: 800000
   --current-torch-prune-min-opacity X
                             Foreground opacity pruning threshold in rasterizer mode. Default: 0.005
   --timeout N              Current-result wait timeout. Default: 30
+  --save-timeout N         SaveMap/final-render timeout. Default: 600
   --overwrite              Recreate converted frontend/mapper-contract outputs.
   --skip-convert           Reuse existing converted bags.
   --skip-baseline          Reuse existing ROS1 baseline artifacts.
@@ -93,6 +98,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --current-dir)
       CURRENT_DIR="$2"
+      shift 2
+      ;;
+    --current-config)
+      CURRENT_CONFIG="$2"
       shift 2
       ;;
     --render-mode)
@@ -135,6 +144,10 @@ while [[ $# -gt 0 ]]; do
       TIMEOUT_SEC="$2"
       shift 2
       ;;
+    --save-timeout)
+      SAVE_TIMEOUT_SEC="$2"
+      shift 2
+      ;;
     --overwrite)
       OVERWRITE=true
       shift
@@ -174,11 +187,13 @@ FRONTEND_RAW="${FRONTEND_RAW:-${DATASET_ROOT}/${SEQUENCE}_frontend_raw}"
 MAPPER_CONTRACT="${MAPPER_CONTRACT:-${DATASET_ROOT}/${SEQUENCE}_mapper_contract_fastlivo2_color.bag}"
 BASELINE_DIR="${BASELINE_DIR:-${ROOT_DIR}/baseline/fastlivo2/${SEQUENCE}}"
 CURRENT_DIR="${CURRENT_DIR:-${ROOT_DIR}/results/fastlivo2/${SEQUENCE}_current}"
+CURRENT_CONFIG="${CURRENT_CONFIG:-${ROOT_DIR}/src/gaussian_lic_bringup/config/fastlivo2.yaml}"
 BAG_PATH="$(realpath -m "${BAG_PATH}")"
 FRONTEND_RAW="$(realpath -m "${FRONTEND_RAW}")"
 MAPPER_CONTRACT="$(realpath -m "${MAPPER_CONTRACT}")"
 BASELINE_DIR="$(realpath -m "${BASELINE_DIR}")"
 CURRENT_DIR="$(realpath -m "${CURRENT_DIR}")"
+CURRENT_CONFIG="$(realpath -m "${CURRENT_CONFIG}")"
 
 if [[ ! -f "${BAG_PATH}" ]]; then
   echo "missing strict sequence bag: ${BAG_PATH}" >&2
@@ -236,11 +251,14 @@ if [[ "${SKIP_CURRENT}" != "true" ]]; then
       --torch-optimization-steps "${CURRENT_TORCH_OPTIMIZATION_STEPS}"
       --torch-max-foreground "${CURRENT_TORCH_MAX_FOREGROUND}"
       --torch-prune-min-opacity "${CURRENT_TORCH_PRUNE_MIN_OPACITY}"
+      --torch-densification
+      --final-render-eval
     )
   fi
   ./scripts/collect_current_results.sh \
     --bag "${FRONTEND_RAW}" \
     --output "${CURRENT_DIR}" \
+    --config "${CURRENT_CONFIG}" \
     "${current_torch_args[@]}" \
     --frontend-adapter \
     --imu-pose-fallback \
@@ -252,7 +270,8 @@ if [[ "${SKIP_CURRENT}" != "true" ]]; then
     --post-play-settle "${CURRENT_POST_PLAY_SETTLE}" \
     --render-mode "${RENDER_MODE}" \
     --record-sec "${CURRENT_RECORD_SEC}" \
-    --timeout "${TIMEOUT_SEC}"
+    --timeout "${TIMEOUT_SEC}" \
+    --save-timeout "${SAVE_TIMEOUT_SEC}"
 fi
 
 if [[ "${SKIP_REPORT}" != "true" ]]; then

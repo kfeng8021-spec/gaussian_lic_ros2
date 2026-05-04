@@ -11,6 +11,7 @@ namespace gaussian_lic_mapping
 const CameraFrameRecord & MapperDataset::add_frame(MapperFrameData && frame)
 {
   CameraFrameRecord record;
+  record.stamp = frame.stamp;
   record.frame_index = frame.frame_index;
   record.is_keyframe = frame.is_keyframe;
   record.image_name = make_image_name(frame.is_keyframe, frame.frame_index);

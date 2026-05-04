@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <builtin_interfaces/msg/time.hpp>
 #include <Eigen/Core>
 #include <opencv2/core.hpp>
 
@@ -17,6 +18,7 @@ namespace gaussian_lic_mapping
 
 struct CameraFrameRecord
 {
+  builtin_interfaces::msg::Time stamp;
   uint64_t frame_index{0};
   bool is_keyframe{false};
   std::string image_name;

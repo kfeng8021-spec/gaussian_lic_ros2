@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -17,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <builtin_interfaces/msg/time.hpp>
 #include <gaussian_lic_msgs/msg/gaussian.hpp>
@@ -36,6 +38,8 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
 #ifdef GAUSSIAN_LIC_MAPPING_COMPOSITION
 #include <rclcpp_components/register_node_macro.hpp>
@@ -165,6 +169,7 @@ public:
     max_path_length_ = declare_parameter<int>("max_path_length", 5000);
     max_map_points_ = declare_parameter<int>("max_map_points", 200000);
     publish_rendered_preview_ = declare_parameter<bool>("publish_rendered_preview", true);
+    save_map_render_evaluation_ = declare_parameter<bool>("save_map_render_evaluation", false);
     active_profile_ = declare_parameter<std::string>("active_profile", "default");
     render_mode_ = declare_parameter<std::string>("render_mode", "debug_cpu");
     rendered_image_mode_ = declare_parameter<std::string>("rendered_image_mode", "");
@@ -774,11 +779,7 @@ private:
     }
 
     try {
-      const auto camera = gaussian_lic_mapping::make_torch_camera(
-        record, intrinsics.fx, intrinsics.fy, intrinsics.cx, intrinsics.cy, device, device);
-      const auto result = gaussian_lic_mapping::optimize_gaussian_map_from_camera(
-        torch_gaussian_map_, camera, backend_config_,
-        backend_config_.optimization_steps_per_keyframe, device);
+      const auto result = optimize_torch_gaussian_training_set(record, intrinsics, device);
       last_torch_optimization_supervised_ = result.supervised_count;
       last_torch_optimization_loss_ = result.photometric_l1;
       if (result.steps > 0) {
@@ -792,6 +793,76 @@ private:
         get_logger(), *get_clock(), 2000,
         "failed to optimize Torch Gaussian map: %s", ex.what());
     }
+  }
+
+  gaussian_lic_mapping::TorchOptimizationResult optimize_torch_gaussian_training_set(
+    const gaussian_lic_mapping::CameraFrameRecord & latest_record,
+    const Intrinsics & intrinsics,
+    const torch::Device & device)
+  {
+    gaussian_lic_mapping::TorchOptimizationResult total;
+    const auto & train_frames = dataset_.train_frames();
+    if (train_frames.empty()) {
+      return total;
+    }
+
+    const size_t sample_count = std::min(
+      static_cast<size_t>(std::max(backend_config_.optimization_steps_per_keyframe, 1)),
+      train_frames.size());
+    std::vector<size_t> sample_indices;
+    sample_indices.reserve(sample_count);
+    if (sample_count == train_frames.size()) {
+      for (size_t index = 0; index < train_frames.size(); ++index) {
+        sample_indices.push_back(index);
+      }
+    } else {
+      const double stride = static_cast<double>(train_frames.size()) /
+        static_cast<double>(sample_count);
+      for (size_t sample = 0; sample < sample_count; ++sample) {
+        const auto index = static_cast<size_t>(
+          std::min<double>(
+            std::floor((static_cast<double>(sample) + 0.5) * stride),
+            static_cast<double>(train_frames.size() - 1U)));
+        if (sample_indices.empty() || sample_indices.back() != index) {
+          sample_indices.push_back(index);
+        }
+      }
+    }
+
+    const auto latest_it = std::find_if(
+      train_frames.begin(), train_frames.end(),
+      [&latest_record](const gaussian_lic_mapping::CameraFrameRecord & frame) {
+        return frame.frame_index == latest_record.frame_index;
+      });
+    if (latest_it != train_frames.end()) {
+      const auto latest_index =
+        static_cast<size_t>(std::distance(train_frames.begin(), latest_it));
+      if (std::find(sample_indices.begin(), sample_indices.end(), latest_index) ==
+        sample_indices.end())
+      {
+        if (sample_indices.size() >= sample_count && !sample_indices.empty()) {
+          sample_indices.back() = latest_index;
+        } else {
+          sample_indices.push_back(latest_index);
+        }
+      }
+    }
+
+    std::sort(sample_indices.begin(), sample_indices.end());
+    sample_indices.erase(std::unique(sample_indices.begin(), sample_indices.end()), sample_indices.end());
+
+    for (const size_t index : sample_indices) {
+      const auto camera = gaussian_lic_mapping::make_torch_camera(
+        train_frames[index], intrinsics.fx, intrinsics.fy, intrinsics.cx, intrinsics.cy, device, device);
+      const auto result = gaussian_lic_mapping::optimize_gaussian_map_from_camera(
+        torch_gaussian_map_, camera, backend_config_, 1, device);
+      total.steps += result.steps;
+      total.supervised_count += result.supervised_count;
+      if (result.steps > 0) {
+        total.photometric_l1 = result.photometric_l1;
+      }
+    }
+    return total;
   }
 
   void maybe_prune_torch_gaussians(const torch::Device & device)
@@ -1113,6 +1184,166 @@ private:
       out << "\n";
     }
   }
+
+  static cv::Mat torch_rgb_image_to_bgr8(torch::Tensor image)
+  {
+    image = torch::clamp(image.detach(), 0.0F, 1.0F).to(torch::kCPU).contiguous();
+    if (image.dim() != 3 || image.size(0) != 3) {
+      throw std::runtime_error("rendered image must have shape [3, H, W]");
+    }
+
+    const int height = static_cast<int>(image.size(1));
+    const int width = static_cast<int>(image.size(2));
+    image = image.permute({1, 2, 0})
+      .mul(255.0F)
+      .clamp(0.0F, 255.0F)
+      .to(torch::kU8)
+      .contiguous();
+    cv::Mat rgb(height, width, CV_8UC3, image.data_ptr<uint8_t>());
+    cv::Mat bgr;
+    cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+    return bgr.clone();
+  }
+
+  static cv::Mat rgb_float_image_to_bgr8(const cv::Mat & image_rgb_float)
+  {
+    if (image_rgb_float.empty() || image_rgb_float.type() != CV_32FC3) {
+      throw std::runtime_error("GT image must be CV_32FC3 RGB float");
+    }
+
+    cv::Mat rgb8;
+    image_rgb_float.convertTo(rgb8, CV_8UC3, 255.0);
+    cv::Mat bgr;
+    cv::cvtColor(rgb8, bgr, cv::COLOR_RGB2BGR);
+    return bgr;
+  }
+
+  static cv::Mat torch_depth_to_colormap(torch::Tensor depth)
+  {
+    depth = depth.detach().to(torch::kCPU).contiguous();
+    if (depth.dim() == 3 && depth.size(0) == 1) {
+      depth = depth.squeeze(0).contiguous();
+    }
+    if (depth.dim() != 2) {
+      throw std::runtime_error("rendered depth must have shape [H, W]");
+    }
+
+    const auto finite = torch::isfinite(depth);
+    const auto valid = torch::logical_and(finite, depth.gt(0.0F));
+    torch::Tensor normalized;
+    if (valid.sum().item<int64_t>() > 0) {
+      const auto selected = depth.masked_select(valid);
+      const auto min_depth = selected.min();
+      const auto max_depth = selected.max();
+      normalized = (depth - min_depth) / torch::clamp_min(max_depth - min_depth, 1.0e-6F);
+    } else {
+      normalized = torch::zeros_like(depth);
+    }
+    normalized = torch::where(finite, normalized, torch::zeros_like(normalized));
+    normalized = normalized.mul(255.0F).clamp(0.0F, 255.0F).to(torch::kU8).contiguous();
+
+    cv::Mat gray(
+      static_cast<int>(normalized.size(0)),
+      static_cast<int>(normalized.size(1)),
+      CV_8UC1,
+      normalized.data_ptr<uint8_t>());
+    cv::Mat colored;
+    cv::applyColorMap(gray, colored, cv::COLORMAP_JET);
+    return colored.clone();
+  }
+
+  void write_final_render_evaluation(const std::filesystem::path & output_dir) const
+  {
+#ifdef GAUSSIAN_LIC_ENABLE_CUDA
+    if (!save_map_render_evaluation_) {
+      return;
+    }
+    if (!torch_gaussian_initialized_ || torch_gaussian_count_ == 0) {
+      return;
+    }
+
+    const auto render_dir = output_dir / "renders";
+    const auto gt_dir = output_dir / "gt";
+    const auto depth_dir = output_dir / "render_depth";
+    std::filesystem::create_directories(render_dir);
+    std::filesystem::create_directories(gt_dir);
+    std::filesystem::create_directories(depth_dir);
+
+    const auto intrinsics = current_intrinsics();
+    const auto device = resolve_torch_gaussian_device();
+    if (!device.is_cuda()) {
+      throw std::runtime_error(
+        "final render evaluation requires torch_gaussian_device=cuda or auto resolving to CUDA");
+    }
+
+    std::ofstream manifest(output_dir / "render_manifest.json");
+    if (!manifest.is_open()) {
+      throw std::runtime_error("failed to open final render manifest");
+    }
+    manifest << "{\n";
+    manifest << "  \"schema\": \"gaussian_lic_ros2_final_render/v1\",\n";
+    manifest << "  \"device\": \"" << device.str() << "\",\n";
+    manifest << "  \"train_frame_count\": " << dataset_.train_frame_count() << ",\n";
+    manifest << "  \"test_frame_count\": " << dataset_.test_frame_count() << ",\n";
+    manifest << "  \"frames\": [\n";
+
+    size_t written = 0;
+    auto render_frame = [&](const gaussian_lic_mapping::CameraFrameRecord & frame) {
+      torch::NoGradGuard no_grad;
+      const auto camera = gaussian_lic_mapping::make_torch_camera(
+        frame, intrinsics.fx, intrinsics.fy, intrinsics.cx, intrinsics.cy, device, device);
+      const auto render_result = gaussian_lic_mapping::render_gaussian_map_from_camera(
+        torch_gaussian_map_, camera, backend_config_, device);
+      if (!render_result.rendered_image.defined()) {
+        throw std::runtime_error("CUDA rasterizer did not return an RGB image for " + frame.image_name);
+      }
+
+      const auto render_path = render_dir / frame.image_name;
+      const auto gt_path = gt_dir / frame.image_name;
+      const auto depth_path = depth_dir / frame.image_name;
+      if (!cv::imwrite(render_path.string(), torch_rgb_image_to_bgr8(render_result.rendered_image))) {
+        throw std::runtime_error("failed to write " + render_path.string());
+      }
+      if (!cv::imwrite(gt_path.string(), rgb_float_image_to_bgr8(frame.image_rgb_float))) {
+        throw std::runtime_error("failed to write " + gt_path.string());
+      }
+      if (render_result.rendered_depth.defined() &&
+        !cv::imwrite(depth_path.string(), torch_depth_to_colormap(render_result.rendered_depth)))
+      {
+        throw std::runtime_error("failed to write " + depth_path.string());
+      }
+
+      if (written > 0) {
+        manifest << ",\n";
+      }
+      manifest << "    {\"name\": \"" << frame.image_name << "\", "
+               << "\"frame_index\": " << frame.frame_index << ", "
+               << "\"is_keyframe\": " << (frame.is_keyframe ? "true" : "false") << ", "
+               << "\"stamp_sec\": " << frame.stamp.sec << ", "
+               << "\"stamp_nanosec\": " << frame.stamp.nanosec << ", "
+               << "\"visible_count\": " << render_result.visible_count << "}";
+      ++written;
+    };
+
+    for (const auto & frame : dataset_.train_frames()) {
+      render_frame(frame);
+    }
+    for (const auto & frame : dataset_.test_frames()) {
+      render_frame(frame);
+    }
+    manifest << "\n  ],\n";
+    manifest << "  \"written\": " << written << "\n";
+    manifest << "}\n";
+    RCLCPP_INFO(
+      get_logger(), "Wrote final Gaussian render evaluation frames: %zu to %s",
+      written, output_dir.string().c_str());
+#else
+    (void)output_dir;
+    if (save_map_render_evaluation_) {
+      throw std::runtime_error("save_map_render_evaluation requires GAUSSIAN_LIC_ENABLE_CUDA=ON");
+    }
+#endif
+  }
 #endif
 
   std::filesystem::path resolve_debug_map_path(const std::string & request_path) const
@@ -1178,6 +1409,7 @@ private:
       const auto output_path = resolve_debug_map_path(request->path);
       if (torch_gaussian_initialized_ && torch_gaussian_count_ > 0) {
         write_torch_gaussian_ply(output_path, request->include_skybox);
+        write_final_render_evaluation(output_path.parent_path());
         response->success = true;
         response->message = "saved Gaussian map to " + output_path.string();
         return;
@@ -1757,6 +1989,7 @@ private:
   bool enable_torch_gaussian_init_{false};
   bool enable_torch_gaussian_extend_{true};
   bool publish_rendered_preview_{true};
+  bool save_map_render_evaluation_{false};
   std::string active_profile_{"default"};
   std::string render_mode_{"debug_cpu"};
   std::string rendered_image_mode_;

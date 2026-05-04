@@ -186,4 +186,10 @@ baseline_manifest.json
 - [x] Strict `CBD_Building_01` ROS1 upstream baseline archive from the official local bag.
 - [x] Strict report quality extraction fills PSNR/SSIM/LPIPS from render/GT pairs, with lpipsPyTorch fallback for CPU report environments.
 - [x] Strict rasterizer current collection forwards CUDA optimization and pruning controls so runtime does not silently run zero optimizer steps.
+- [x] Strict ROS1 baseline visual dump continues after LPIPS runtime failures, so render/GT pairs are not capped at the first frame.
+- [x] Strict ROS2 current collection saves final-map train/test re-renders from `SaveMap` instead of judging the live preview topic.
+- [x] Strict `CBD_Building_01` current collection uses the FAST-LIVO2 profile cadence (`select_every_k_frame=5`) so ROS2 train/test render names align with the ROS1 upstream baseline.
 - [ ] Strict `CBD_Building_01` ROS2 current report with trajectory coverage, render pairs, PSNR/SSIM/LPIPS, and Chamfer within the paper gate.
+  - 2026-05-05 local strict run: trajectory gate passes with 965/1186 matched poses and 81.4% coverage.
+  - 2026-05-05 local strict run: full-frame quality now has real data, but still fails paper parity: ROS2 novel PSNR 10.24 dB vs ROS1 12.70 dB and ROS2 novel SSIM 0.0475 vs ROS1 0.3644.
+  - 2026-05-05 local strict run: point-cloud parity still fails with centroid drift 4.92 m, nearest RMSE 0.438 m, and unmatched ratio 67.94%.

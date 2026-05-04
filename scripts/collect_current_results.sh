@@ -12,6 +12,8 @@ TORCH_OPTIMIZATION_STEPS=0
 TORCH_MAX_FOREGROUND=0
 TORCH_PRUNE_MIN_OPACITY=0.005
 TORCH_DEVICE="cpu"
+ENABLE_TORCH_DENSIFICATION=false
+FINAL_RENDER_EVAL=false
 FRONTEND_ADAPTER=false
 IDENTITY_POSE_FALLBACK=false
 IMU_POSE_FALLBACK=false
@@ -25,6 +27,7 @@ REQUIRE_DEPTH_TOPIC=true
 RENDER_MODE="debug_cpu"
 RECORD_SEC=12
 TIMEOUT_SEC=20
+SAVE_TIMEOUT_SEC=600
 SENSOR_QOS_RELIABILITY=""
 PLAY_RATE="1"
 LOOP_PLAYBACK=false
@@ -49,10 +52,12 @@ Options:
   --output DIR                 Output directory. Default: results/fastlivo2/current.
   --config FILE                Override bringup parameter YAML.
   --torch                      Enable Torch Gaussian map init/extend and save Gaussian PLY output.
-  --torch-optimization-steps N Enable Torch photometric Gaussian tensor updates with N steps per keyframe.
+  --torch-optimization-steps N Enable Torch photometric updates with up to N accumulated train-frame samples per keyframe.
   --torch-max-foreground N     Enable Torch pruning and retain at most N foreground Gaussians.
   --torch-prune-min-opacity X  Enable Torch pruning and drop foreground Gaussians below opacity X.
   --torch-device DEVICE        Torch Gaussian device: cpu, cuda, or auto. Default: cpu.
+  --torch-densification        Enable gradient-aware Gaussian densification in the Torch backend.
+  --final-render-eval          Save final-map train/test renders during SaveMap instead of using live preview frames.
   --frontend-adapter           Route raw frontend topics through lic2_contract_adapter.
   --identity-pose-fallback     Let the frontend adapter publish identity poses from point-cloud stamps.
   --imu-pose-fallback          Let the frontend adapter integrate IMU gyro orientation for pose fallback.
@@ -69,6 +74,7 @@ Options:
   --post-play-settle SEC       Seconds to keep mapper alive after finite playback. Default: 8.
   --record-sec SEC             Output recording duration. Default: 12.
   --timeout SEC                Topic/service wait timeout. Default: 20.
+  --save-timeout SEC           SaveMap/final-render timeout. Default: 600.
 EOF
 }
 
@@ -108,6 +114,15 @@ while [[ $# -gt 0 ]]; do
     --torch-device)
       TORCH_DEVICE="$2"
       shift 2
+      ;;
+    --torch-densification)
+      ENABLE_TORCH=true
+      ENABLE_TORCH_DENSIFICATION=true
+      shift
+      ;;
+    --final-render-eval)
+      FINAL_RENDER_EVAL=true
+      shift
       ;;
     --frontend-adapter)
       FRONTEND_ADAPTER=true
@@ -167,6 +182,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --timeout)
       TIMEOUT_SEC="$2"
+      shift 2
+      ;;
+    --save-timeout)
+      SAVE_TIMEOUT_SEC="$2"
       shift 2
       ;;
     -h|--help)
@@ -264,9 +283,11 @@ if [[ "${ENABLE_TORCH}" == "true" ]]; then
     enable_torch_gaussian_optimization:="${torch_opt_enabled}"
     torch_gaussian_optimization_steps:="${TORCH_OPTIMIZATION_STEPS}"
     enable_torch_gaussian_pruning:="${torch_prune_enabled}"
+    enable_torch_gaussian_densification:="${ENABLE_TORCH_DENSIFICATION}"
     torch_gaussian_prune_min_opacity:="${TORCH_PRUNE_MIN_OPACITY}"
     torch_gaussian_max_foreground:="${TORCH_MAX_FOREGROUND}"
     torch_gaussian_device:="${TORCH_DEVICE}"
+    save_map_render_evaluation:="${FINAL_RENDER_EVAL}"
   )
 fi
 
@@ -416,7 +437,7 @@ fi
 
 echo "[current] saving mapper point cloud"
 rm -rf "${SAVED_MAP_DIR}"
-timeout "${TIMEOUT_SEC}" \
+timeout "${SAVE_TIMEOUT_SEC}" \
   ros2 service call /gaussian_lic/save_map gaussian_lic_msgs/srv/SaveMap \
     "{path: ${SAVED_MAP_DIR}, include_skybox: false}" \
     >"${OUTPUT_DIR}/save_map.log"
@@ -434,18 +455,35 @@ ros2 run gaussian_lic_tools gaussian_lic_offline \
   >"${OUTPUT_DIR}/offline_stdout.json"
 
 echo "[current] extracting rendered image pairs"
-/usr/bin/python3 "${ROOT_DIR}/scripts/extract_ros2_rendered_images.py" \
-  --bag "${RECORDED_BAG}" \
-  --output "${OUTPUT_DIR}/renders" \
-  --topic /gaussian_lic/rendered_image \
-  --first-name train_0004.jpg \
-  --max-images 1 \
-  >"${OUTPUT_DIR}/render_extract.json"
+if [[ -d "${SAVED_MAP_DIR}/renders" ]]; then
+  rm -rf "${OUTPUT_DIR}/renders" "${OUTPUT_DIR}/gt" "${OUTPUT_DIR}/render_depth"
+  cp -a "${SAVED_MAP_DIR}/renders" "${OUTPUT_DIR}/renders"
+  if [[ -d "${SAVED_MAP_DIR}/gt" ]]; then
+    cp -a "${SAVED_MAP_DIR}/gt" "${OUTPUT_DIR}/gt"
+  fi
+  if [[ -d "${SAVED_MAP_DIR}/render_depth" ]]; then
+    cp -a "${SAVED_MAP_DIR}/render_depth" "${OUTPUT_DIR}/render_depth"
+  fi
+  if [[ -f "${SAVED_MAP_DIR}/render_manifest.json" ]]; then
+    cp "${SAVED_MAP_DIR}/render_manifest.json" "${OUTPUT_DIR}/render_extract.json"
+  else
+    printf '{"schema":"gaussian_lic_ros2_final_render/v1","source":"save_map","written":0}\n' \
+      >"${OUTPUT_DIR}/render_extract.json"
+  fi
+else
+  /usr/bin/python3 "${ROOT_DIR}/scripts/extract_ros2_rendered_images.py" \
+    --bag "${RECORDED_BAG}" \
+    --output "${OUTPUT_DIR}/renders" \
+    --topic /gaussian_lic/rendered_image \
+    --first-name train_0004.jpg \
+    --max-images 1 \
+    >"${OUTPUT_DIR}/render_extract.json"
+fi
 
 cp "${OUTPUT_DIR}/offline/trajectory.tum" "${OUTPUT_DIR}/trajectory.tum"
 cp "${SAVED_MAP_DIR}/point_cloud.ply" "${OUTPUT_DIR}/point_cloud.ply"
 
-python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" "${TORCH_OPTIMIZATION_STEPS}" "${IMU_POSE_FALLBACK}" "${TORCH_MAX_FOREGROUND}" "${TORCH_PRUNE_MIN_OPACITY}" "${POINTCLOUD_TRANSFORM_PROFILE}" "${SYNC_IMAGE_TO_POINTCLOUD}" "${PLAY_RATE}" "${LOOP_PLAYBACK}" "${POST_PLAY_SETTLE_SEC}" "${TORCH_DEVICE}" <<'PY'
+python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" "${TORCH_OPTIMIZATION_STEPS}" "${IMU_POSE_FALLBACK}" "${TORCH_MAX_FOREGROUND}" "${TORCH_PRUNE_MIN_OPACITY}" "${POINTCLOUD_TRANSFORM_PROFILE}" "${SYNC_IMAGE_TO_POINTCLOUD}" "${PLAY_RATE}" "${LOOP_PLAYBACK}" "${POST_PLAY_SETTLE_SEC}" "${TORCH_DEVICE}" "${FINAL_RENDER_EVAL}" "${ENABLE_TORCH_DENSIFICATION}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -476,6 +514,8 @@ metrics.update(
         "loop_playback": sys.argv[14] == "true",
         "post_play_settle_sec": float(sys.argv[15]),
         "torch_device": sys.argv[16],
+        "final_render_eval": sys.argv[17] == "true",
+        "torch_densification": sys.argv[18] == "true",
         "render_extract": render_extract,
         "saved_map": str((output / "saved_map" / "point_cloud.ply").resolve()),
         "outputs": {

@@ -89,7 +89,7 @@ The mapper backend now has the major CUDA/Torch surfaces in tree, but the full p
 - The native tracker has timestamp-safe trajectory/IMU primitives plus initial LiDAR/visual/Gaussian snapshot factors, but it is not yet the full continuous-time Coco-LIC2 sliding-window optimizer.
 - LiDAR deskew, VIO residual Jacobians, IMU bias optimization, and joint BA remain to be ported.
 - TensorRT/SPNet depth completion has a native optional wrapper, but no SPNet `.engine` artifact is checked in or benchmarked locally.
-- Strict paper reproduction now has the local `CBD_Building_01` bag and ROS1 upstream baseline artifacts, but the ROS2 current path remains below the strict gate until native Coco-LIC2 tracking and full CUDA/Torch Gaussian optimization produce PSNR/SSIM/LPIPS/Chamfer parity.
+- Strict paper reproduction now has the local `CBD_Building_01` bag, ROS1 upstream baseline artifacts, strict CUDA current collection, and final-map render-pair extraction. The ROS2 current path remains below the strict paper gate until the native tracker and Gaussian optimization reach PSNR/SSIM/LPIPS/Chamfer parity.
 
 ## Platform
 
@@ -400,7 +400,7 @@ Current outputs:
 render_mode:=debug_cpu
 ```
 
-That mode is a CPU projected-map preview for debugging. The v0.3 milestone will switch the default to `render_mode:=rasterizer` after the CUDA rasterizer is ported. `rendered_image_mode` is kept only as a deprecated compatibility alias.
+That mode is a CPU projected-map preview for normal lightweight launches. The strict CBD reproduction entrypoint overrides this to `render_mode:=rasterizer`, `torch_gaussian_device:=cuda`, Torch pruning/densification, and final-map render evaluation. `rendered_image_mode` is kept only as a deprecated compatibility alias.
 
 See [docs/STATUS_SCHEMA.md](docs/STATUS_SCHEMA.md) for the status topic schema.
 
@@ -543,11 +543,17 @@ Run or resume the strict chain from the local `CBD_Building_01` bag:
 ```bash
 ./scripts/run_strict_cbd_pipeline.sh \
   --overwrite \
-  --render-mode rasterizer \
-  --current-torch-device cuda \
-  --current-torch-optimization-steps 1 \
   --current-torch-max-foreground 800000
 ```
+
+The strict script defaults to CUDA rasterizer mode, `torch_gaussian_device=cuda`,
+`--current-torch-optimization-steps 100`, and a slowed current playback rate of
+`0.25`. In this path the step count means up to 100 accumulated train-frame
+optimizer samples per keyframe, matching the upstream Gaussian-LIC `optimize()`
+scheduler instead of repeating 100 steps on only the newest frame. The slowed
+playback is deliberate: the strict CUDA path is heavier than the live preview
+path, so 1x rosbag2 replay can underfeed the final-map metric gate by dropping
+unprocessed frames.
 
 That command converts the official ROS1 bag to a sqlite-backed ROS2
 `frontend_raw` bag, audits replay timing, writes the ROS1 mapper-contract bag,
@@ -557,6 +563,17 @@ fills `metrics.json::quality` from same-name render/GT image pairs. If
 `${HOME}/.cache/gaussian_lic_ros2/quality-venv/bin/python` exists, it is used for
 CPU LPIPS evaluation; otherwise set `QUALITY_PYTHON` to a Python environment with
 `torch`, `torchvision`, `numpy`, and `Pillow`.
+
+Latest local strict run, 2026-05-05:
+
+- ROS1 baseline visual dump: 1186 render/GT pairs, 237 train and 949 novel frames.
+- ROS2 current strict path: CUDA rasterizer, final-map evaluation, 965 render/GT pairs, 193 train and 772 novel frames, trajectory coverage 81.4%.
+- Current vs ROS1 quality remains below the paper gate: novel PSNR 10.24 dB vs 12.70 dB, novel SSIM 0.0475 vs 0.3644; LPIPS is not regressed in this local CPU fallback run.
+- Chamfer/point-cloud parity still fails: centroid drift 4.92 m, bidirectional nearest RMSE 0.438 m, unmatched ratio 67.94%.
+
+So the strict chain now produces full-frame, same-cadence numbers, but the
+remaining blocker is algorithmic parity in the native tracking/mapping path, not
+missing render pairs or a disabled CUDA runtime.
 
 ## Release Roadmap
 
