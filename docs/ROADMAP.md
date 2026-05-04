@@ -24,6 +24,7 @@ Incomplete paper-algorithm scope:
 
 - `lic2_contract_adapter` is not the native continuous-time Gaussian-LIC/Coco-LIC tracker.
 - TensorRT/SPNet depth completion requires a generated SPNet TensorRT engine path at runtime; no `.engine` artifact is checked into this repository.
+- The public LIC2 upstream surface does not currently expose separate 2D Gaussian primitive or skybox patches beyond the checked mapper backend.
 - Strict `CBD_Building_01` paper reproduction is blocked until the official bag is available locally and the native algorithm path is complete.
 
 ## Immediate Next Step

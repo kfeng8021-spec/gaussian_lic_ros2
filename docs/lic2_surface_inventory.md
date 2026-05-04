@@ -56,20 +56,21 @@ src/rasterizer/cuda_rasterizer/backward.cu
 src/rasterizer/cuda_rasterizer/rasterizer_impl.cu
 ```
 
-The first migrated CUDA modules are:
+The migrated CUDA modules are:
 
 ```text
 gaussian_lic_mapping/cuda/simple_knn.hpp  dist_cuda2(points[N,3])
 gaussian_lic_mapping/cuda/sparse_adam.hpp sparse_adam_step(...)
+gaussian_lic_mapping/cuda/fused_ssim.hpp  fused_ssim(...)
+gaussian_lic_mapping/cuda/rasterizer/*    Gaussian rasterizer forward/backward
 ```
 
-The remaining rasterizer and fused-ssim modules still need to be ported as
-native ROS2/ament CMake CUDA targets rather than calling into the ROS1 catkin
-target.
+These now build as native ROS2/ament CMake CUDA targets in the strict CUDA
+profile.
 
 ## Densification Scope
 
-The current upstream does not expose classic 3DGS functions named
+The public upstream does not expose classic 3DGS functions named
 `densify_and_clone` or `densify_and_split`. The upstream growth mechanism visible
 in `cd4c122` is:
 
@@ -78,9 +79,22 @@ extend(dataset, gaussians)
 GaussianModel::densificationPostfix(...)
 ```
 
-The ROS2 port must first match this upstream behavior exactly. Gradient-aware
-clone/split logic should only be added later if a future LIC2 upstream diff or
-paper-level parity investigation proves it is required.
+The ROS2 port now has both upstream-style foreground append and a stricter
+gradient-aware clone/split density-control path for the CUDA backend. The latter
+is a parity-risk item to audit during strict reproduction because it is not
+present under those names in the currently released public tree.
+
+## LIC2-Specific 2D Primitive Check
+
+The public `cd4c122` tree does not contain a distinct 2D Gaussian primitive,
+surface-normal tensor, `normal_consistency_loss`, or mapper-side scale axis
+collapse. Gaussian tensors remain `xyz[N,3]`, `scaling[N,3]`, `rotation[N,4]`,
+`features_dc[N,1,3]`, `features_rest[N,15,3]`, and `opacity[N,1]`.
+
+The skybox implementation in `GaussianModel::initialize()` remains the sampled
+sphere path using `skybox_points_num`, `skybox_radius`, RGB DC seeds
+`0.7/0.8/0.95`, and `distCUDA2`-derived scales. The ROS2 mapper mirrors that
+surface; there is no released LIC2 skybox patch beyond this to port.
 
 ## Frontend/Tracking Surface
 
