@@ -27,6 +27,7 @@
 - Added `scripts/build_ros2.sh` and kept `scripts/build_jazzy.sh` as a compatibility wrapper.
 - Added `scripts/ci_replay_smoke.sh` so CI and local generated-bag replay smoke share one entrypoint.
 - Added CI replay smoke artifact export for bag contracts and offline extraction outputs.
+- Uploaded per-distro CI `log/` directories for colcon and smoke-test diagnostics.
 
 ## v0.1.0-m1-infra - 2026-05-03
 

@@ -222,6 +222,8 @@ Run the same mini replay smoke locally with:
 
 Use `--artifact-dir /path/to/reports` or `GAUSSIAN_LIC_CI_REPLAY_ARTIFACT_DIR=/path/to/reports` to persist the generated bag contract reports, offline metrics, TUM trajectory, and debug PLY. CI uploads that directory as `jazzy-replay-artifacts`.
 
+Each ROS distro build job uploads its full `log/` directory as `<distro>-ci-logs`, including colcon logs and any smoke-test launch logs.
+
 Reliable input-QoS rosbag2 check:
 
 ```bash

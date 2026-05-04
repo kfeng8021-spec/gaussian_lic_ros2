@@ -121,10 +121,10 @@ jobs:
           path: ci_replay_artifacts
           if-no-files-found: ignore
 
-      - name: Upload Jazzy smoke logs
-        if: always() && matrix.ros_distro == 'jazzy'
+      - name: Upload build and smoke logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jazzy-smoke-logs
-          path: log/*.log
+          name: ${{ matrix.ros_distro }}-ci-logs
+          path: log
           if-no-files-found: ignore
