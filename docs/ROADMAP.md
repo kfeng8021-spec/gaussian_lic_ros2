@@ -25,6 +25,19 @@ First concrete action:
   --output-dir /home/frank/data/fast_livo
 ```
 
+Current execution gate:
+
+```bash
+./scripts/upstream_baseline_build_attempt.sh
+./scripts/baseline_readiness.py \
+  --dataset-root /home/frank/data/fast_livo \
+  --baseline-dir baseline/fastlivo2/CBD_Building_01 \
+  --current-results-dir results/fastlivo2/current \
+  --sequence CBD_Building_01
+```
+
+As of 2026-05-04, `CBD_Building_01` download is blocked by Google Drive quota. The upstream ROS1 build is blocked on TensorRT SDK. Strict OpenCV 4.7.0 is still incomplete locally, but the existing OpenCV 4.10 CUDA build removes the OpenCV blocker in a fallback build attempt. `Bright_Screen_Wall` is the first official FAST-LIVO2 bag that has passed the ROS2 raw-sensor adapter replay.
+
 Then bring up the upstream baseline environment, run Gaussian-LIC/Gaussian-LIC2 on FAST-LIVO2, and archive outputs under:
 
 ```text
@@ -114,6 +127,7 @@ baseline_manifest.json
 - [x] Jazzy/Humble build-only CI skeleton.
 - [x] Python-only CI artifact gates for baseline manifests and reproduction reports.
 - [x] FAST-LIVO2 data fetch/readiness scripts for executable baseline status.
+- [x] Reproducible ROS1 upstream baseline build-attempt script for the local Noetic Docker environment.
 - [x] Jazzy CI smoke tests with a generated mini rosbag2 sequence.
 - [ ] ROS1 upstream baseline archive for FAST-LIVO2.
 - [x] ROS1 `.bag` to rosbag2 `.mcap` converter backend.

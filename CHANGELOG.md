@@ -29,6 +29,7 @@
 - Added `scripts/fetch_fastlivo2_sequence.py` to discover and download official FAST-LIVO2 Google Drive sequence bags.
 - Added `scripts/fastlivo2_ros1_to_frontend_raw.py` to convert official FAST-LIVO2 ROS1 bags into ROS2 camera/LiDAR/IMU frontend input bags.
 - Added `scripts/baseline_readiness.py` to gate FAST-LIVO2 data, ROS1 baseline artifacts, and ROS2 current artifacts before reproduction comparison.
+- Added `scripts/upstream_baseline_build_attempt.sh` to reproduce the ROS1 Noetic Gaussian-LIC/Gaussian-LIC2 baseline build attempt, support an explicit OpenCV build directory, and capture local environment blockers.
 - Added `scripts/reproduction_report.py` to aggregate baseline manifest, metrics, trajectory, and PLY drift gates.
 - Added a Python-only GitHub Actions artifact-gates job using `scripts/verify_artifact_gates.sh`.
 - Uploaded artifact-gate JSON/Markdown reports from CI as `artifact-gate-reports`.
