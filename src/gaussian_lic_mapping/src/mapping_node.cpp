@@ -79,6 +79,7 @@ public:
     sensor_qos_depth_ = declare_parameter<int>("sensor_qos_depth", 5);
     process_period_ms_ = declare_parameter<int>("process_period_ms", 5);
     select_every_k_frame_ = declare_parameter<int>("select_every_k_frame", 8);
+    require_depth_topic_ = declare_parameter<bool>("require_depth_topic", true);
     fx_ = declare_parameter<double>("fx", 1.0);
     fy_ = declare_parameter<double>("fy", 1.0);
     cx_ = declare_parameter<double>("cx", 0.5);
@@ -245,6 +246,8 @@ public:
       save_map_service_.c_str());
     RCLCPP_INFO(get_logger(), "Frame sync tolerance %.3f sec, max queue %d",
       sync_tolerance_sec_, max_queue_size_);
+    RCLCPP_INFO(get_logger(), "Depth topic synchronization %s",
+      require_depth_topic_ ? "required" : "optional; projected point depth fallback enabled");
     RCLCPP_INFO(get_logger(), "Sensor QoS reliability=%s history=%s depth=%d",
       sensor_qos_reliability_.c_str(), sensor_qos_history_.c_str(), sensor_qos_depth_);
 #ifdef GAUSSIAN_LIC_ENABLE_TORCH
@@ -425,16 +428,35 @@ private:
 
   AlignResult pop_aligned_locked(AlignedRosFrame & out)
   {
-    if (point_buf_.empty() || pose_buf_.empty() || image_buf_.empty() || depth_buf_.empty()) {
+    if (point_buf_.empty() || pose_buf_.empty() || image_buf_.empty() ||
+      (require_depth_topic_ && depth_buf_.empty()))
+    {
       return AlignResult::kNoData;
     }
 
     const double frame_time = stamp_to_sec(point_buf_.front()->header.stamp);
 
     if (!trim_until_near(pose_buf_, frame_time, dropped_pose_count_) ||
-      !trim_until_near(image_buf_, frame_time, dropped_image_count_) ||
-      !trim_until_near(depth_buf_, frame_time, dropped_depth_count_))
+      !trim_until_near(image_buf_, frame_time, dropped_image_count_))
     {
+      return AlignResult::kNoData;
+    }
+
+    sensor_msgs::msg::Image::ConstSharedPtr aligned_depth;
+    if (!depth_buf_.empty()) {
+      (void)trim_until_near(depth_buf_, frame_time, dropped_depth_count_);
+    }
+    if (!depth_buf_.empty()) {
+      const bool depth_too_new =
+        stamp_to_sec(depth_buf_.front()->header.stamp) > frame_time + sync_tolerance_sec_;
+      if (!depth_too_new) {
+        aligned_depth = depth_buf_.front();
+      } else if (require_depth_topic_) {
+        point_buf_.pop_front();
+        ++dropped_pointcloud_count_;
+        return AlignResult::kDropped;
+      }
+    } else if (require_depth_topic_) {
       return AlignResult::kNoData;
     }
 
@@ -442,10 +464,8 @@ private:
       stamp_to_sec(pose_buf_.front()->header.stamp) > frame_time + sync_tolerance_sec_;
     const bool image_too_new =
       stamp_to_sec(image_buf_.front()->header.stamp) > frame_time + sync_tolerance_sec_;
-    const bool depth_too_new =
-      stamp_to_sec(depth_buf_.front()->header.stamp) > frame_time + sync_tolerance_sec_;
 
-    if (pose_too_new || image_too_new || depth_too_new) {
+    if (pose_too_new || image_too_new) {
       point_buf_.pop_front();
       ++dropped_pointcloud_count_;
       return AlignResult::kDropped;
@@ -455,11 +475,13 @@ private:
     out.pointcloud = point_buf_.front();
     out.pose = pose_buf_.front();
     out.image = image_buf_.front();
-    out.depth = depth_buf_.front();
+    out.depth = aligned_depth;
     point_buf_.pop_front();
     pose_buf_.pop_front();
     image_buf_.pop_front();
-    depth_buf_.pop_front();
+    if (aligned_depth) {
+      depth_buf_.pop_front();
+    }
     ++aligned_frame_count_;
     return AlignResult::kAligned;
   }
@@ -1239,6 +1261,7 @@ private:
   int sensor_qos_depth_{5};
   int process_period_ms_{5};
   int select_every_k_frame_{8};
+  bool require_depth_topic_{true};
   double fx_{1.0};
   double fy_{1.0};
   double cx_{0.5};

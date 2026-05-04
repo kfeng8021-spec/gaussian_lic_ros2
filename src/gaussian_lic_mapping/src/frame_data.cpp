@@ -121,6 +121,49 @@ bool sample_projected_image_color(
   return true;
 }
 
+cv::Mat make_projected_depth_image(
+  const std::vector<MapperPoint> & points,
+  const int width,
+  const int height,
+  const CameraIntrinsics & intrinsics,
+  const Eigen::Quaterniond & q_wc,
+  const Eigen::Vector3d & t_wc)
+{
+  cv::Mat depth_m(height, width, CV_32FC1, cv::Scalar(0.0F));
+  if (width <= 0 || height <= 0 || !has_valid_projection_intrinsics(intrinsics)) {
+    return depth_m;
+  }
+
+  const Eigen::Matrix3d r_cw = q_wc.toRotationMatrix().transpose();
+  for (const MapperPoint & point : points) {
+    const Eigen::Vector3d xyz_world = point.xyz_world.cast<double>();
+    const Eigen::Vector3d xyz_cam = r_cw * (xyz_world - t_wc);
+    if (xyz_cam.z() <= 0.0) {
+      continue;
+    }
+
+    const double u_float = intrinsics.fx * xyz_cam.x() / xyz_cam.z() + intrinsics.cx;
+    const double v_float = intrinsics.fy * xyz_cam.y() / xyz_cam.z() + intrinsics.cy;
+    if (!std::isfinite(u_float) || !std::isfinite(v_float)) {
+      continue;
+    }
+
+    const int u = static_cast<int>(std::floor(u_float));
+    const int v = static_cast<int>(std::floor(v_float));
+    if (u < 0 || v < 0 || u >= width || v >= height) {
+      continue;
+    }
+
+    float & current_depth = depth_m.at<float>(v, u);
+    const float candidate_depth = static_cast<float>(xyz_cam.z());
+    if (current_depth <= 0.0F || candidate_depth < current_depth) {
+      current_depth = candidate_depth;
+    }
+  }
+
+  return depth_m;
+}
+
 cv::Mat convert_image_to_rgb_float(const sensor_msgs::msg::Image & image_msg)
 {
   namespace enc = sensor_msgs::image_encodings;
@@ -250,7 +293,7 @@ MapperFrameData convert_aligned_frame(
   const int select_every_k_frame,
   const CameraIntrinsics & intrinsics)
 {
-  if (!frame.pointcloud || !frame.pose || !frame.image || !frame.depth) {
+  if (!frame.pointcloud || !frame.pose || !frame.image) {
     throw std::runtime_error("cannot convert incomplete aligned ROS frame");
   }
   if (select_every_k_frame <= 0) {
@@ -262,7 +305,6 @@ MapperFrameData convert_aligned_frame(
   out.frame_index = frame_index;
   out.is_keyframe = ((frame_index + 1U) % static_cast<uint64_t>(select_every_k_frame)) == 0U;
   out.image_rgb_float = convert_image_to_rgb_float(*frame.image);
-  out.depth_m_float = convert_depth_to_float_m(*frame.depth);
   out.width = out.image_rgb_float.cols;
   out.height = out.image_rgb_float.rows;
 
@@ -281,6 +323,12 @@ MapperFrameData convert_aligned_frame(
   out.points = convert_pointcloud(
     *frame.pointcloud, out.q_wc, out.t_wc, out.image_rgb_float, intrinsics,
     out.skipped_points_nonpositive_depth);
+  if (frame.depth) {
+    out.depth_m_float = convert_depth_to_float_m(*frame.depth);
+  } else {
+    out.depth_m_float = make_projected_depth_image(
+      out.points, out.width, out.height, intrinsics, out.q_wc, out.t_wc);
+  }
 
   return out;
 }

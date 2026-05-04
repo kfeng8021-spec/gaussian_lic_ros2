@@ -37,14 +37,16 @@ class SyntheticGsFramePublisher(Node):
         self.declare_parameter("pointcloud_color_mode", "packed_rgb")
         self.declare_parameter("point_color_rgb", "255,32,16")
         self.declare_parameter("image_color_rgb", "0,0,0")
+        self.declare_parameter("publish_depth", True)
 
         self.pointcloud_color_mode = str(
             self.get_parameter("pointcloud_color_mode").value).strip().lower()
         if self.pointcloud_color_mode not in {"packed_rgb", "rgb_fields", "none"}:
             raise ValueError(
-                "pointcloud_color_mode must be packed_rgb, rgb_fields, or none")
+            "pointcloud_color_mode must be packed_rgb, rgb_fields, or none")
         self.point_rgb = parse_rgb(self.get_parameter("point_color_rgb").value)
         self.image_rgb = parse_rgb(self.get_parameter("image_color_rgb").value)
+        self.publish_depth = bool(self.get_parameter("publish_depth").value)
 
         self.points_pub = self.create_publisher(
             PointCloud2, self.get_parameter("pointcloud_topic").value, 10)
@@ -54,8 +56,10 @@ class SyntheticGsFramePublisher(Node):
             Image, self.get_parameter("image_topic").value, 10)
         self.camera_info_pub = self.create_publisher(
             CameraInfo, self.get_parameter("camera_info_topic").value, 10)
-        self.depth_pub = self.create_publisher(
-            Image, self.get_parameter("depth_topic").value, 10)
+        self.depth_pub = None
+        if self.publish_depth:
+            self.depth_pub = self.create_publisher(
+                Image, self.get_parameter("depth_topic").value, 10)
         self.imu_pub = self.create_publisher(
             Imu, self.get_parameter("imu_topic").value, 10)
 
@@ -64,7 +68,8 @@ class SyntheticGsFramePublisher(Node):
         self.frame_id = 0
         self.get_logger().info(
             "Publishing synthetic synchronized GS input frames "
-            f"(pointcloud_color_mode={self.pointcloud_color_mode})")
+            f"(pointcloud_color_mode={self.pointcloud_color_mode}, "
+            f"publish_depth={self.publish_depth})")
 
     def make_pointcloud_data(self):
         if self.pointcloud_color_mode == "none":
@@ -158,15 +163,16 @@ class SyntheticGsFramePublisher(Node):
         camera_info.p = [1.0, 0.0, 0.5, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0]
         self.camera_info_pub.publish(camera_info)
 
-        depth = Image()
-        depth.header.stamp = stamp
-        depth.header.frame_id = "camera"
-        depth.height = 1
-        depth.width = 1
-        depth.encoding = "32FC1"
-        depth.step = 4
-        depth.data = struct.pack("f", 1.0)
-        self.depth_pub.publish(depth)
+        if self.depth_pub is not None:
+            depth = Image()
+            depth.header.stamp = stamp
+            depth.header.frame_id = "camera"
+            depth.height = 1
+            depth.width = 1
+            depth.encoding = "32FC1"
+            depth.step = 4
+            depth.data = struct.pack("f", 1.0)
+            self.depth_pub.publish(depth)
 
         imu = Imu()
         imu.header.stamp = stamp

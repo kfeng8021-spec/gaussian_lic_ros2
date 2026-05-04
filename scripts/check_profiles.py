@@ -27,6 +27,7 @@ REQUIRED_PARAMS = {
     "sensor_qos_depth": int,
     "process_period_ms": int,
     "select_every_k_frame": int,
+    "require_depth_topic": bool,
     "fx": (int, float),
     "fy": (int, float),
     "cx": (int, float),

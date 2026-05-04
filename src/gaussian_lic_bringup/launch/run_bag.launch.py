@@ -20,6 +20,7 @@ def generate_launch_description():
     synthetic_pointcloud_color_mode = LaunchConfiguration("synthetic_pointcloud_color_mode")
     synthetic_point_color_rgb = LaunchConfiguration("synthetic_point_color_rgb")
     synthetic_image_color_rgb = LaunchConfiguration("synthetic_image_color_rgb")
+    synthetic_publish_depth = LaunchConfiguration("synthetic_publish_depth")
     enable_torch_camera_conversion = LaunchConfiguration("enable_torch_camera_conversion")
     enable_torch_gaussian_init = LaunchConfiguration("enable_torch_gaussian_init")
     enable_torch_gaussian_extend = LaunchConfiguration("enable_torch_gaussian_extend")
@@ -27,6 +28,7 @@ def generate_launch_description():
     sensor_qos_reliability = LaunchConfiguration("sensor_qos_reliability")
     sensor_qos_history = LaunchConfiguration("sensor_qos_history")
     sensor_qos_depth = LaunchConfiguration("sensor_qos_depth")
+    require_depth_topic = LaunchConfiguration("require_depth_topic")
     render_mode = LaunchConfiguration("render_mode")
     rendered_image_mode = LaunchConfiguration("rendered_image_mode")
     publish_tf = LaunchConfiguration("publish_tf")
@@ -56,6 +58,7 @@ def generate_launch_description():
             "sensor_qos_reliability": sensor_qos_reliability,
             "sensor_qos_history": sensor_qos_history,
             "sensor_qos_depth": sensor_qos_depth,
+            "require_depth_topic": require_depth_topic,
             "render_mode": render_mode,
             "rendered_image_mode": rendered_image_mode,
             "publish_tf": publish_tf,
@@ -68,6 +71,7 @@ def generate_launch_description():
             "pointcloud_color_mode": synthetic_pointcloud_color_mode,
             "point_color_rgb": synthetic_point_color_rgb,
             "image_color_rgb": synthetic_image_color_rgb,
+            "publish_depth": synthetic_publish_depth,
         },
     ]
     native_node_condition = IfCondition(PythonExpression([
@@ -106,6 +110,11 @@ def generate_launch_description():
             description="Synthetic image RGB as red,green,blue",
         ),
         DeclareLaunchArgument(
+            "synthetic_publish_depth",
+            default_value="true",
+            description="Publish synthetic depth_topic frames",
+        ),
+        DeclareLaunchArgument(
             "enable_torch_camera_conversion",
             default_value="false",
             description="Enable optional TorchCamera creation when mapping_node was built with torch support",
@@ -139,6 +148,11 @@ def generate_launch_description():
             "sensor_qos_depth",
             default_value="5",
             description="Input sensor QoS keep-last depth",
+        ),
+        DeclareLaunchArgument(
+            "require_depth_topic",
+            default_value="true",
+            description="Require depth_topic in frame synchronization; false uses sparse point-projected depth",
         ),
         DeclareLaunchArgument(
             "render_mode",

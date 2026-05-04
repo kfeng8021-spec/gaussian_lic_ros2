@@ -52,7 +52,7 @@ Gaussian-LIC depends on Coco-LIC for tracking, and Coco-LIC is also ROS1. A true
 /depth_for_gs
 ```
 
-and aligns frames using `/points_for_gs` as the reference timestamp with `sync_tolerance_sec` defaulting to `0.01`, matching upstream's 10 ms tolerance. `CameraInfo` is not part of the four-way sync; the latest valid message updates the active `fx/fy/cx/cy` intrinsics, and parameter values remain the fallback.
+and aligns frames using `/points_for_gs` as the reference timestamp with `sync_tolerance_sec` defaulting to `0.01`, matching upstream's 10 ms tolerance. `CameraInfo` is not part of the synchronized set; the latest valid message updates the active `fx/fy/cx/cy` intrinsics, and parameter values remain the fallback.
 
 After alignment, the node converts ROS2 messages into `MapperFrameData`:
 
@@ -65,6 +65,8 @@ PointCloud2 -> world xyz, RGB color in [0, 1], camera-frame depth
 ```
 
 PointCloud2 color uses packed `rgb/rgba` or scalar `r/g/b` fields when present. For uncolored clouds, the ROS2 port now projects each positive-depth point into the synchronized image with the active pinhole intrinsics and samples the image color, keeping a white fallback for points outside the image. This preserves the LiDAR-camera color boundary needed by Gaussian initialization without requiring a pre-colored cloud topic.
+
+Depth images are required by default. When `require_depth_topic:=false`, the mapper aligns only point cloud, pose, and image messages, then builds a sparse `CV_32FC1` metric depth image by projecting valid point-cloud points into the camera. This keeps replay usable for intermediate upstream bags while TensorRT/SPNet depth completion remains unported.
 
 Converted frames are then accumulated in `MapperDataset`, mirroring the non-torch state of upstream `Dataset`:
 
@@ -124,7 +126,7 @@ CUDA:      /usr/local/cuda-12.8
 TensorRT:  not found
 ```
 
-The ROS2 parameter contract now accepts `depth_completion`, `patch_size`, and `max_depth`, but TensorRT/SPNet depth completion is still inactive in this slice. Upstream Gaussian-LIC links TensorRT unconditionally; the ROS2 port keeps that dependency optional and consumes the provided depth topic until the backend is ported.
+The ROS2 parameter contract now accepts `depth_completion`, `patch_size`, `max_depth`, and `require_depth_topic`, but TensorRT/SPNet depth completion is still inactive in this slice. Upstream Gaussian-LIC links TensorRT unconditionally; the ROS2 port keeps that dependency optional and can either consume a provided depth topic or use sparse point-projected depth until the backend is ported.
 
 The optional torch backend can be built with:
 

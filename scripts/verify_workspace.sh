@@ -117,6 +117,9 @@ echo "[verify] live smoke"
 echo "[verify] image color fallback smoke"
 ./scripts/smoke_test.sh --image-color-fallback-check
 
+echo "[verify] optional depth smoke"
+./scripts/smoke_test.sh --optional-depth-check
+
 if [[ "${FULL_PROFILES}" == "true" ]]; then
   for profile in fastlivo fastlivo2 m2dgr mcd r3live; do
     echo "[verify] profile smoke: ${profile}"

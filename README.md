@@ -203,6 +203,8 @@ When `/points_for_gs` has no `rgb`, `rgba`, or `r/g/b` fields, the mapper projec
 
 Use `./scripts/smoke_test.sh --image-color-fallback-check` to verify that fallback path with a synthetic uncolored cloud.
 
+Set `require_depth_topic:=false` to run the mapper without synchronized `/depth_for_gs`; it will create a sparse metric depth image by projecting valid map points into the current image. The default profile keeps depth required, while upstream-derived dataset profiles allow missing depth so replay is not blocked when TensorRT/SPNet depth completion is unavailable.
+
 Current outputs:
 
 ```text

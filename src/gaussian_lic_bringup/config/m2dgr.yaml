@@ -16,6 +16,7 @@ mapping_node:
     sensor_qos_depth: 5
     process_period_ms: 5
     select_every_k_frame: 5
+    require_depth_topic: false
     fx: 617.971050917033
     fy: 616.445131524790
     cx: 327.710279392468

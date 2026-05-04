@@ -23,6 +23,7 @@ synthetic_gs_frame_pub:
     pointcloud_color_mode: packed_rgb
     point_color_rgb: "255,32,16"
     image_color_rgb: "0,0,0"
+    publish_depth: true
 
 mapping_node:
   ros__parameters:
@@ -39,6 +40,7 @@ mapping_node:
     sensor_qos_depth: 5
     process_period_ms: 5
     select_every_k_frame: 8
+    require_depth_topic: true
     fx: 1.0
     fy: 1.0
     cx: 0.5

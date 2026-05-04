@@ -80,7 +80,7 @@ run.log
 - [x] Register `mapping_node` as an `rclcpp_components` composable node.
 - [x] Add configurable input sensor QoS for ROS2 driver/rosbag2 compatibility.
 - [x] Fill `MappingStatus` tracking/mapping rate fields from live frame counters.
-- [ ] Make TensorRT depth completion optional.
+- [x] Make TensorRT depth completion optional at the ROS2 mapper input boundary.
 - [ ] Port Gaussian rasterization, optimization, densification, and pruning.
 - [x] Publish mapper status.
 - [ ] Replace rendered-image preview with Gaussian rasterizer output.
