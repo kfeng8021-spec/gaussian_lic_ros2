@@ -34,6 +34,7 @@
 - Added a dedicated `gaussian_color` reproduction-report gate so the current Bright substitute proof chain combines full-sequence metrics, trajectory, geometry, and Torch Gaussian `f_dc_0..2` RGB drift checks in one report.
 - Clarified README and roadmap progress accounting to distinguish the completed Bright substitute evidence chain from the still-incomplete paper-level algorithm port.
 - Added P0 strict-porting groundwork: upstream/toolchain lock docs, LIC2 surface inventory, sm_120 CUDA/libtorch probe, and a strict CUDA/Torch build wrapper.
+- Ported the upstream simple-knn CUDA `distCUDA2` operator into the strict CUDA build profile with a brute-force CPU reference probe.
 - Added upstream Gaussian-LIC backend parameter coverage for image size, depth completion, optimizer, loss, exposure, Gaussian extension, and skybox control.
 - Implemented the dependency-gated ROS1 `.bag` to rosbag2 converter backend using `rosbags`.
 - Added `gaussian_lic_bag_check` to validate rosbag2 mapper-contract topics before replay.

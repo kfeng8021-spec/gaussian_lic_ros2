@@ -15,6 +15,8 @@ if(GAUSSIAN_LIC_ENABLE_CUDA)
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
     set(CMAKE_CUDA_ARCHITECTURES 86 89 100 120)
   endif()
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   find_package(CUDAToolkit REQUIRED)
 endif()
 
@@ -107,8 +109,26 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
     ${TORCH_LIBRARIES}
   )
   if(GAUSSIAN_LIC_ENABLE_CUDA)
+    add_library(gaussian_lic_cuda_ops
+      cuda/simple_knn/simple_knn.cu
+      cuda/simple_knn/spatial.cu
+    )
+    set_target_properties(gaussian_lic_cuda_ops PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_include_directories(gaussian_lic_cuda_ops PUBLIC
+      include
+      cuda/simple_knn
+    )
+    target_compile_options(gaussian_lic_cuda_ops PRIVATE ${TORCH_CXX_FLAGS})
+    target_link_libraries(gaussian_lic_cuda_ops
+      ${TORCH_LIBRARIES}
+      CUDA::cudart
+    )
+
     target_compile_definitions(torch_backend PUBLIC GAUSSIAN_LIC_ENABLE_CUDA=1)
-    target_link_libraries(torch_backend CUDA::cudart)
+    target_link_libraries(torch_backend gaussian_lic_cuda_ops CUDA::cudart)
   endif()
 
   add_executable(torch_backend_probe
@@ -124,6 +144,15 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
   if(GAUSSIAN_LIC_ENABLE_CUDA)
     target_compile_definitions(torch_backend_probe PRIVATE GAUSSIAN_LIC_ENABLE_CUDA=1)
     target_link_libraries(torch_backend_probe CUDA::cudart)
+
+    add_executable(simple_knn_probe src/simple_knn_probe.cpp)
+    target_include_directories(simple_knn_probe PRIVATE include)
+    target_compile_options(simple_knn_probe PRIVATE ${TORCH_CXX_FLAGS})
+    target_link_libraries(simple_knn_probe
+      gaussian_lic_cuda_ops
+      ${TORCH_LIBRARIES}
+      CUDA::cudart
+    )
   endif()
 
   target_compile_definitions(mapping_node PRIVATE GAUSSIAN_LIC_ENABLE_TORCH=1)
@@ -144,6 +173,16 @@ if(GAUSSIAN_LIC_ENABLE_TORCH)
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
   )
+  if(GAUSSIAN_LIC_ENABLE_CUDA)
+    install(TARGETS gaussian_lic_cuda_ops
+      ARCHIVE DESTINATION lib
+      LIBRARY DESTINATION lib
+      RUNTIME DESTINATION bin
+    )
+    install(TARGETS simple_knn_probe
+      RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
+  endif()
   install(TARGETS torch_backend_probe
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
