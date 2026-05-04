@@ -142,8 +142,10 @@ baseline_manifest.json
 ## Milestone 3: Gaussian-LIC2 Frontend/Tracking Port
 
 - [x] Inventory the released Gaussian-LIC2 surface in `external/Gaussian-LIC`, including depth completion, rasterizer/optimizer changes, and any frontend/tracking code available in upstream commits.
+- [x] Inventory the Coco-LIC continuous-time frontend source surface for the native ROS2 tracker port.
 - [x] Add `gaussian_lic_frontend/lic2_contract_adapter` as the ROS2 boundary for raw camera/LiDAR/IMU/pose inputs.
 - [x] Port Livox/custom point handling to ROS2.
+- [x] Add a native timestamp-safe cubic B-spline trajectory manager foundation with a constant-velocity probe.
 - [ ] Replace dynamic reconfigure/global parameters with ROS2 parameters.
 - [ ] Publish odometry, path, TF, and Gaussian mapper input topics natively.
 - [ ] Keep any ROS1 bridge mode clearly marked as temporary.

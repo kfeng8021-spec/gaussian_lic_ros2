@@ -48,6 +48,8 @@
 - Extended `torch_cuda_backend_probe` to verify densification split growth, bounded pruning, and opacity reset execution on CUDA.
 - Ported the upstream TensorRT/SPNet depth completion wrapper as an optional ROS2 mapping backend with lazy engine loading, `depth_completion_engine_path`, TensorRT build plumbing, and profile schema coverage.
 - Documented the public LIC2-vs-v1 surface audit, including the absence of a released 2D Gaussian primitive or skybox patch in `cd4c122`.
+- Added the `gaussian_lic_tracking` ROS2 package with a signed-nanosecond cubic B-spline trajectory manager foundation and constant-velocity/negative-time probe.
+- Added a Coco-LIC frontend inventory for the remaining native tracker port.
 - Added upstream Gaussian-LIC backend parameter coverage for image size, depth completion, optimizer, loss, exposure, Gaussian extension, and skybox control.
 - Implemented the dependency-gated ROS1 `.bag` to rosbag2 converter backend using `rosbags`.
 - Added `gaussian_lic_bag_check` to validate rosbag2 mapper-contract topics before replay.
