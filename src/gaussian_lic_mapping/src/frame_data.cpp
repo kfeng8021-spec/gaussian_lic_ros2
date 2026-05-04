@@ -121,6 +121,44 @@ bool sample_projected_image_color(
   return true;
 }
 
+float normalize_intensity_color(
+  const double value,
+  const sensor_msgs::msg::PointField & field)
+{
+  double normalized = value;
+  switch (field.datatype) {
+    case sensor_msgs::msg::PointField::UINT8:
+      normalized = value / 255.0;
+      break;
+    case sensor_msgs::msg::PointField::UINT16:
+      normalized = value / 65535.0;
+      break;
+    case sensor_msgs::msg::PointField::UINT32:
+      normalized = value / 4294967295.0;
+      break;
+    default:
+      if (value > 1.0) {
+        normalized = value / 255.0;
+      }
+      break;
+  }
+  return static_cast<float>(std::clamp(normalized, 0.0, 1.0));
+}
+
+bool sample_intensity_color(
+  const uint8_t * base,
+  const sensor_msgs::msg::PointField * intensity_field,
+  Eigen::Vector3f & color_rgb)
+{
+  if (!intensity_field) {
+    return false;
+  }
+  const float intensity = normalize_intensity_color(
+    read_numeric_field(base, *intensity_field), *intensity_field);
+  color_rgb = Eigen::Vector3f::Constant(intensity);
+  return true;
+}
+
 cv::Mat make_projected_depth_image(
   const std::vector<MapperPoint> & points,
   const int width,
@@ -244,6 +282,10 @@ std::vector<MapperPoint> convert_pointcloud(
   const auto * r_field = find_field(cloud, "r");
   const auto * g_field = find_field(cloud, "g");
   const auto * b_field = find_field(cloud, "b");
+  const auto * intensity_field = find_field(cloud, "intensity");
+  if (!intensity_field) {
+    intensity_field = find_field(cloud, "reflectivity");
+  }
 
   const Eigen::Matrix3d r_cw = q_wc.toRotationMatrix().transpose();
   const Eigen::Vector3d t_cw = -r_cw * t_wc;
@@ -272,8 +314,8 @@ std::vector<MapperPoint> convert_pointcloud(
       color_rgb.x() = static_cast<float>(read_numeric_field(base, *r_field)) / 255.0F;
       color_rgb.y() = static_cast<float>(read_numeric_field(base, *g_field)) / 255.0F;
       color_rgb.z() = static_cast<float>(read_numeric_field(base, *b_field)) / 255.0F;
-    } else {
-      (void)sample_projected_image_color(image_rgb_float, intrinsics, xyz_cam, color_rgb);
+    } else if (!sample_projected_image_color(image_rgb_float, intrinsics, xyz_cam, color_rgb)) {
+      (void)sample_intensity_color(base, intensity_field, color_rgb);
     }
 
     points.push_back(MapperPoint{
