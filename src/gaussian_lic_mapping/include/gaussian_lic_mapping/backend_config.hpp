@@ -36,6 +36,10 @@ struct GaussianBackendConfig
   double exposure_lr{0.001};
   int skybox_points_num{0};
   double skybox_radius{1000.0};
+
+  bool enable_photometric_optimization{false};
+  int optimization_steps_per_keyframe{0};
+  int optimization_max_samples{4096};
 };
 
 }  // namespace gaussian_lic_mapping

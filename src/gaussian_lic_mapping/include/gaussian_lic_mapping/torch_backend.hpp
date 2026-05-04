@@ -46,6 +46,13 @@ struct TorchGaussianMap
   size_t skybox_count{0};
 };
 
+struct TorchOptimizationResult
+{
+  int steps{0};
+  size_t supervised_count{0};
+  float photometric_l1{0.0F};
+};
+
 torch::Tensor cv_mat_to_torch_tensor_float32(
   const cv::Mat & mat,
   torch::Device device,
@@ -92,6 +99,13 @@ size_t append_pending_points_to_gaussian_map(
   const GaussianBackendConfig & config,
   double fx,
   double fy,
+  torch::Device device = torch::kCPU);
+
+TorchOptimizationResult optimize_gaussian_map_from_camera(
+  TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  int steps,
   torch::Device device = torch::kCPU);
 
 }  // namespace gaussian_lic_mapping

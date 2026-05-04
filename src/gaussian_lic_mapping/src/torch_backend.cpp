@@ -6,6 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace gaussian_lic_mapping
@@ -254,6 +255,131 @@ void require_grad_for_map(TorchGaussianMap & map)
   map.opacity = map.opacity.contiguous().requires_grad_();
 }
 
+void zero_gaussian_gradients(TorchGaussianMap & map)
+{
+  for (auto * tensor : {
+      &map.xyz, &map.features_dc, &map.features_rest, &map.scaling, &map.rotation, &map.opacity})
+  {
+    if (tensor->defined() && tensor->grad().defined()) {
+      tensor->grad().zero_();
+    }
+  }
+}
+
+void validate_gaussian_map_for_optimization(const TorchGaussianMap & map)
+{
+  if (!map.xyz.defined() || !map.features_dc.defined() || !map.opacity.defined()) {
+    throw std::runtime_error("cannot optimize an uninitialized Gaussian map");
+  }
+  if (map.xyz.dim() != 2 || map.xyz.size(1) != 3) {
+    throw std::runtime_error("Gaussian xyz tensor must have shape [N, 3]");
+  }
+  if (map.features_dc.dim() != 3 || map.features_dc.size(1) != 1 || map.features_dc.size(2) != 3) {
+    throw std::runtime_error("Gaussian DC feature tensor must have shape [N, 1, 3]");
+  }
+  if (map.opacity.dim() != 2 || map.opacity.size(1) != 1) {
+    throw std::runtime_error("Gaussian opacity tensor must have shape [N, 1]");
+  }
+  if (map.xyz.size(0) != map.features_dc.size(0) || map.xyz.size(0) != map.opacity.size(0)) {
+    throw std::runtime_error("Gaussian optimization tensors have inconsistent point counts");
+  }
+}
+
+torch::Tensor select_visible_gaussians(
+  const TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  torch::Device device)
+{
+  const int64_t total_count = map.xyz.size(0);
+  const int64_t start_index = static_cast<int64_t>(map.skybox_count);
+  if (start_index >= total_count || camera.image_width <= 0 || camera.image_height <= 0) {
+    return torch::empty({0}, torch::TensorOptions().dtype(torch::kLong).device(device));
+  }
+
+  const auto long_options = torch::TensorOptions().dtype(torch::kLong).device(device);
+  const auto float_options = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+  const auto xyz = map.xyz.index({torch::indexing::Slice(start_index, torch::indexing::None)})
+    .detach()
+    .to(device);
+  const auto ones = torch::ones({xyz.size(0), 1}, float_options);
+  const auto xyz_h = torch::cat({xyz, ones}, 1);
+  const auto world_view = camera.world_view_transform.to(device);
+  if (world_view.dim() != 2 || world_view.size(0) != 4 || world_view.size(1) != 4) {
+    throw std::runtime_error("TorchCamera world_view_transform must have shape [4, 4]");
+  }
+
+  const auto xyz_cam = torch::matmul(xyz_h, world_view)
+    .index({torch::indexing::Slice(), torch::indexing::Slice(0, 3)});
+  const auto z = xyz_cam.index({torch::indexing::Slice(), 2});
+  const auto x = xyz_cam.index({torch::indexing::Slice(), 0});
+  const auto y = xyz_cam.index({torch::indexing::Slice(), 1});
+  const auto u = (static_cast<double>(camera.fx) * x / z) + static_cast<double>(camera.cx);
+  const auto v = (static_cast<double>(camera.fy) * y / z) + static_cast<double>(camera.cy);
+  const auto u_idx = torch::round(u).to(torch::kLong);
+  const auto v_idx = torch::round(v).to(torch::kLong);
+
+  auto valid = torch::logical_and(z.gt(1.0e-3), torch::isfinite(z));
+  if (config.max_depth > 0.0) {
+    valid = torch::logical_and(valid, z.lt(config.max_depth));
+  }
+  valid = torch::logical_and(valid, torch::isfinite(u));
+  valid = torch::logical_and(valid, torch::isfinite(v));
+  valid = torch::logical_and(valid, u_idx.ge(0));
+  valid = torch::logical_and(valid, v_idx.ge(0));
+  valid = torch::logical_and(valid, u_idx.lt(camera.image_width));
+  valid = torch::logical_and(valid, v_idx.lt(camera.image_height));
+
+  auto visible_local = torch::nonzero(valid).flatten().to(long_options);
+  if (visible_local.numel() == 0) {
+    return visible_local;
+  }
+
+  const int max_samples = std::max(config.optimization_max_samples, 0);
+  if (max_samples > 0 && visible_local.size(0) > max_samples) {
+    visible_local = visible_local.index({
+      torch::indexing::Slice(0, static_cast<int64_t>(max_samples))});
+  }
+
+  const auto global_offset = torch::full(
+    {visible_local.size(0)}, start_index, long_options);
+  return visible_local + global_offset;
+}
+
+torch::Tensor gather_camera_targets(
+  const TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const torch::Tensor & gaussian_indices,
+  torch::Device device)
+{
+  if (!camera.original_image.defined()) {
+    throw std::runtime_error("TorchCamera original_image is not defined");
+  }
+  const auto image = camera.original_image.to(device).contiguous();
+  if (image.dim() != 3 || image.size(0) != 3) {
+    throw std::runtime_error("TorchCamera original_image must have shape [3, H, W]");
+  }
+
+  const auto xyz = map.xyz.index_select(0, gaussian_indices).detach().to(device);
+  const auto ones = torch::ones(
+    {xyz.size(0), 1}, torch::TensorOptions().dtype(torch::kFloat32).device(device));
+  const auto xyz_h = torch::cat({xyz, ones}, 1);
+  const auto xyz_cam = torch::matmul(xyz_h, camera.world_view_transform.to(device))
+    .index({torch::indexing::Slice(), torch::indexing::Slice(0, 3)});
+  const auto z = xyz_cam.index({torch::indexing::Slice(), 2});
+  const auto x = xyz_cam.index({torch::indexing::Slice(), 0});
+  const auto y = xyz_cam.index({torch::indexing::Slice(), 1});
+  const auto u_idx = torch::round((static_cast<double>(camera.fx) * x / z) + camera.cx)
+    .to(torch::kLong);
+  const auto v_idx = torch::round((static_cast<double>(camera.fy) * y / z) + camera.cy)
+    .to(torch::kLong);
+
+  return image.index({torch::indexing::Slice(), v_idx, u_idx})
+    .transpose(0, 1)
+    .contiguous()
+    .detach();
+}
+
 }  // namespace
 
 torch::Tensor cv_mat_to_torch_tensor_float32(
@@ -423,6 +549,67 @@ size_t append_pending_points_to_gaussian_map(
 {
   return append_pending_points_to_gaussian_map(
     map, dataset, config.sh_degree, config.scaling_scale, fx, fy, device);
+}
+
+TorchOptimizationResult optimize_gaussian_map_from_camera(
+  TorchGaussianMap & map,
+  const TorchCamera & camera,
+  const GaussianBackendConfig & config,
+  const int steps,
+  torch::Device device)
+{
+  TorchOptimizationResult result;
+  if (!config.enable_photometric_optimization || steps <= 0) {
+    return result;
+  }
+
+  validate_gaussian_map_for_optimization(map);
+  if (map.xyz.defined() && map.xyz.numel() > 0) {
+    device = map.xyz.device();
+  }
+  if (config.feature_lr <= 0.0 && config.opacity_lr <= 0.0) {
+    throw std::runtime_error("photometric optimization requires a positive feature_lr or opacity_lr");
+  }
+
+  require_grad_for_map(map);
+  zero_gaussian_gradients(map);
+
+  const auto gaussian_indices = select_visible_gaussians(map, camera, config, device);
+  result.supervised_count = static_cast<size_t>(gaussian_indices.numel());
+  if (result.supervised_count == 0) {
+    return result;
+  }
+
+  const auto targets = gather_camera_targets(map, camera, gaussian_indices, device);
+  constexpr float sh_c0 = 0.28209479177387814F;
+  for (int step = 0; step < steps; ++step) {
+    zero_gaussian_gradients(map);
+    const auto dc = map.features_dc.index_select(0, gaussian_indices).select(1, 0);
+    const auto predicted = torch::clamp(dc * sh_c0 + 0.5F, 0.0F, 1.0F);
+    auto loss = torch::mean(torch::abs(predicted - targets));
+    if (config.opacity_lr > 0.0) {
+      const auto opacity = map.opacity.index_select(0, gaussian_indices);
+      const auto opacity_regularizer = torch::mean(torch::pow(torch::sigmoid(opacity) - 0.5F, 2));
+      loss = loss + 0.001F * opacity_regularizer;
+    }
+    loss.backward();
+
+    {
+      torch::NoGradGuard no_grad;
+      if (config.feature_lr > 0.0 && map.features_dc.grad().defined()) {
+        map.features_dc.add_(map.features_dc.grad(), -config.feature_lr);
+      }
+      if (config.opacity_lr > 0.0 && map.opacity.grad().defined()) {
+        map.opacity.add_(map.opacity.grad(), -config.opacity_lr);
+      }
+      result.photometric_l1 = loss.detach().to(torch::kCPU).item<float>();
+    }
+    ++result.steps;
+  }
+
+  zero_gaussian_gradients(map);
+  require_grad_for_map(map);
+  return result;
 }
 
 }  // namespace gaussian_lic_mapping

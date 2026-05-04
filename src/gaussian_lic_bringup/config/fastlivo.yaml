@@ -47,6 +47,9 @@ mapping_node:
     gaussian_init_min_points: 1
     gaussian_init_min_keyframes: 1
     enable_torch_gaussian_extend: true
+    enable_torch_gaussian_optimization: false
+    torch_gaussian_optimization_steps: 0
+    torch_gaussian_optimization_max_samples: 4096
     skybox_points_num: 0
     skybox_radius: 1000.0
     torch_gaussian_device: cpu

@@ -85,6 +85,9 @@ mapping_node:
     enable_torch_camera_conversion: false
     enable_torch_gaussian_init: false
     enable_torch_gaussian_extend: true
+    enable_torch_gaussian_optimization: false
+    torch_gaussian_optimization_steps: 0
+    torch_gaussian_optimization_max_samples: 4096
     gaussian_init_min_points: 1
     gaussian_init_min_keyframes: 1
     sh_degree: 3

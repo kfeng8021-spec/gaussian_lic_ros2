@@ -346,6 +346,8 @@ ros2 launch gaussian_lic_bringup run_bag.launch.py \
   enable_torch_camera_conversion:=true \
   enable_torch_gaussian_init:=true \
   enable_torch_gaussian_extend:=true \
+  enable_torch_gaussian_optimization:=true \
+  torch_gaussian_optimization_steps:=2 \
   torch_gaussian_device:=cpu
 ```
 
@@ -353,10 +355,11 @@ Expected log:
 
 ```text
 Torch camera conversion enabled
+Torch Gaussian photometric optimization enabled, steps/keyframe=2
 torch_cameras=... torch_errors=0 torch_image=[3, 1, 1] torch_depth=[1, 1]
-Initialized Torch Gaussian map: foreground=... skybox=0 xyz=[..., 3] features_dc=[..., 1, 3] device=cpu
-Extended Torch Gaussian map: inserted=... foreground=... skybox=0 xyz=[..., 3] device=cpu
-torch_gaussians=... gaussian_inits=1 gaussian_extends=... gaussian_init_errors=0 gaussian_extend_errors=0
+Initialized Torch Gaussian map: foreground=... skybox=0 xyz=[..., 3] features_dc=[..., 1, 3] device=cpu opt_steps=...
+Extended Torch Gaussian map: inserted=... foreground=... skybox=0 xyz=[..., 3] device=cpu opt_steps=...
+torch_gaussians=... gaussian_inits=1 gaussian_extends=... gaussian_opt_steps=... gaussian_init_errors=0 gaussian_extend_errors=0 gaussian_opt_errors=0
 ```
 
 Verify the transient-local Gaussian map output from another shell:
@@ -407,7 +410,7 @@ sed -n '1,12p' /tmp/gaussian_lic_save_test/point_cloud.ply
 tail -n 1 /tmp/gaussian_lic_save_test/point_cloud.ply
 ```
 
-This initializes foreground Gaussian tensors from keyframe-gated `MapperDataset` pending points, then appends later pending keyframe points into the same tensor map. The behavior matches the upstream initialize/extend lifecycle at the tensor boundary. Rasterization, optimization, pruning, and gradient-aware densification are still later porting slices.
+This initializes foreground Gaussian tensors from keyframe-gated `MapperDataset` pending points, appends later pending keyframe points into the same tensor map, and can run a small photometric Torch backward pass on visible foreground Gaussians. The behavior matches the upstream initialize/extend/optimize lifecycle at the tensor boundary. Upstream CUDA rasterization, full loss scheduling, pruning, and gradient-aware densification are still later porting slices.
 
 ## Current Reproduction Artifacts
 

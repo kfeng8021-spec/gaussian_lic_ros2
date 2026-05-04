@@ -17,6 +17,7 @@ CURRENT_RECORD_SEC=8
 CURRENT_TIMEOUT_SEC=30
 RENDER_MODE="debug_cpu"
 RUN_TORCH_CURRENT=false
+TORCH_OPTIMIZATION_STEPS=0
 BASELINE_DIR_SET=false
 CURRENT_DIR_SET=false
 SKIP_CONVERT=false
@@ -54,6 +55,8 @@ Options:
   --current-record-sec SEC Current ROS2 output recording duration. Default: 8.
   --current-timeout SEC    Current ROS2 wait timeout. Default: 30.
   --torch-current          Enable the current Torch Gaussian preview path.
+  --torch-optimization-steps N
+                           Enable current Torch photometric update steps per keyframe.
   --render-mode MODE       Current render mode. Default: debug_cpu.
   --skip-convert           Reuse an existing mapper-contract bag.
   --skip-current           Reuse an existing ROS2 current artifact directory.
@@ -107,6 +110,11 @@ while [[ $# -gt 0 ]]; do
     --torch-current)
       RUN_TORCH_CURRENT=true
       shift
+      ;;
+    --torch-optimization-steps)
+      RUN_TORCH_CURRENT=true
+      TORCH_OPTIMIZATION_STEPS="$2"
+      shift 2
       ;;
     --render-mode)
       RENDER_MODE="$2"
@@ -244,6 +252,9 @@ if [[ "${SKIP_CURRENT}" != "true" ]]; then
   )
   if [[ "${RUN_TORCH_CURRENT}" == "true" ]]; then
     current_args+=(--torch)
+  fi
+  if [[ "${TORCH_OPTIMIZATION_STEPS}" -gt 0 ]]; then
+    current_args+=(--torch-optimization-steps "${TORCH_OPTIMIZATION_STEPS}")
   fi
   "${current_args[@]}"
 fi

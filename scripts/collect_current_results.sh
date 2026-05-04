@@ -8,6 +8,7 @@ BAG_PATH=""
 OUTPUT_DIR="${ROOT_DIR}/results/fastlivo2/current"
 CONFIG_PATH=""
 ENABLE_TORCH=false
+TORCH_OPTIMIZATION_STEPS=0
 FRONTEND_ADAPTER=false
 IDENTITY_POSE_FALLBACK=false
 PUBLISH_TF=false
@@ -36,6 +37,7 @@ Options:
   --output DIR                 Output directory. Default: results/fastlivo2/current.
   --config FILE                Override bringup parameter YAML.
   --torch                      Enable Torch Gaussian map init/extend and save Gaussian PLY output.
+  --torch-optimization-steps N Enable Torch photometric Gaussian tensor updates with N steps per keyframe.
   --frontend-adapter           Route raw frontend topics through lic2_contract_adapter.
   --identity-pose-fallback     Let the frontend adapter publish identity poses from point-cloud stamps.
   --optional-depth             Allow mapper replay without a depth image topic.
@@ -64,6 +66,11 @@ while [[ $# -gt 0 ]]; do
     --torch)
       ENABLE_TORCH=true
       shift
+      ;;
+    --torch-optimization-steps)
+      ENABLE_TORCH=true
+      TORCH_OPTIMIZATION_STEPS="$2"
+      shift 2
       ;;
     --frontend-adapter)
       FRONTEND_ADAPTER=true
@@ -165,9 +172,15 @@ else
 fi
 
 if [[ "${ENABLE_TORCH}" == "true" ]]; then
+  torch_opt_enabled=false
+  if [[ "${TORCH_OPTIMIZATION_STEPS}" -gt 0 ]]; then
+    torch_opt_enabled=true
+  fi
   launch_args+=(
     enable_torch_camera_conversion:=true
     enable_torch_gaussian_init:=true
+    enable_torch_gaussian_optimization:="${torch_opt_enabled}"
+    torch_gaussian_optimization_steps:="${TORCH_OPTIMIZATION_STEPS}"
     torch_gaussian_device:=cpu
   )
 fi
@@ -245,7 +258,7 @@ ros2 run gaussian_lic_tools gaussian_lic_offline \
 cp "${OUTPUT_DIR}/offline/trajectory.tum" "${OUTPUT_DIR}/trajectory.tum"
 cp "${SAVED_MAP_DIR}/point_cloud.ply" "${OUTPUT_DIR}/point_cloud.ply"
 
-python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" <<'PY'
+python3 - "${OUTPUT_DIR}" "${BAG_PATH}" "${RENDER_MODE}" "${ENABLE_TORCH}" "${FRONTEND_ADAPTER}" "${RECORD_SEC}" "${TORCH_OPTIMIZATION_STEPS}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -262,6 +275,7 @@ metrics.update(
         "torch_enabled": sys.argv[4] == "true",
         "frontend_adapter": sys.argv[5] == "true",
         "record_sec": float(sys.argv[6]),
+        "torch_optimization_steps": int(sys.argv[7]),
         "saved_map": str((output / "saved_map" / "point_cloud.ply").resolve()),
         "outputs": {
             **metrics.get("outputs", {}),

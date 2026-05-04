@@ -6,6 +6,7 @@
 #include <opencv2/core.hpp>
 #include <torch/torch.h>
 
+#include <gaussian_lic_mapping/backend_config.hpp>
 #include <gaussian_lic_mapping/torch_backend.hpp>
 
 int main()
@@ -32,13 +33,22 @@ int main()
   frame_data.depth_m_float = frame.depth_m_float.clone();
   gaussian_lic_mapping::MapperPoint point;
   point.xyz_world = Eigen::Vector3f(0.0F, 0.0F, 1.0F);
-  point.color_rgb = Eigen::Vector3f(0.25F, 0.5F, 0.75F);
+  point.color_rgb = Eigen::Vector3f(0.0F, 0.0F, 0.0F);
   point.depth_m = 1.0F;
   frame_data.points.push_back(point);
   dataset.add_frame(std::move(frame_data));
   auto gaussian_map = gaussian_lic_mapping::initialize_gaussian_map(
     dataset, 3, 1.0, 1.0, 1.0, torch::kCPU);
   const auto gaussian_count_after_init = gaussian_map.foreground_count + gaussian_map.skybox_count;
+  gaussian_lic_mapping::GaussianBackendConfig optimization_config;
+  optimization_config.enable_photometric_optimization = true;
+  optimization_config.optimization_steps_per_keyframe = 2;
+  optimization_config.optimization_max_samples = 16;
+  optimization_config.feature_lr = 0.01;
+  optimization_config.opacity_lr = 0.0;
+  const auto optimization_result = gaussian_lic_mapping::optimize_gaussian_map_from_camera(
+    gaussian_map, camera, optimization_config,
+    optimization_config.optimization_steps_per_keyframe, torch::kCPU);
 
   dataset.clear_pending_points();
   gaussian_lic_mapping::MapperFrameData second_frame_data;
@@ -67,6 +77,9 @@ int main()
   std::cout << "gaussian_features_dc_sizes=" << gaussian_map.features_dc.sizes() << "\n";
   std::cout << "gaussian_features_rest_sizes=" << gaussian_map.features_rest.sizes() << "\n";
   std::cout << "gaussian_count_after_init=" << gaussian_count_after_init << "\n";
+  std::cout << "optimization_steps=" << optimization_result.steps << "\n";
+  std::cout << "optimization_supervised=" << optimization_result.supervised_count << "\n";
+  std::cout << "optimization_l1=" << optimization_result.photometric_l1 << "\n";
   std::cout << "appended_count=" << appended_count << "\n";
   std::cout << "gaussian_count=" << gaussian_map.foreground_count + gaussian_map.skybox_count << "\n";
   return 0;

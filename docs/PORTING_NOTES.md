@@ -174,6 +174,8 @@ When `mapping_node` is built with `GAUSSIAN_LIC_ENABLE_TORCH=ON`, launch can ena
 enable_torch_camera_conversion:=true
 enable_torch_gaussian_init:=true
 enable_torch_gaussian_extend:=true
+enable_torch_gaussian_optimization:=true
+torch_gaussian_optimization_steps:=2
 torch_gaussian_device:=cpu
 ```
 
@@ -188,7 +190,7 @@ rotation:      [N, 4]
 opacity:       [N, 1]
 ```
 
-The torch backend now supports optional upstream-style skybox seeding and incremental foreground insertion from pending keyframe points. `render_mode:=rasterizer` publishes a CPU Gaussian splat preview from the live `TorchGaussianMap` using Gaussian centers, DC color, scale, opacity, and the current camera pose. It is still not the full mapper: differentiable CUDA rasterization, optimization, pruning/densification, and gradient-based map updates remain separate porting steps. This keeps the heavy torch dependency compile-time optional while allowing the live ROS2 data path to exercise the same tensor boundaries, map-growth lifecycle, and rasterizer output topic that the full Gaussian core will need.
+The torch backend now supports optional upstream-style skybox seeding, incremental foreground insertion from pending keyframe points, and a dependency-gated photometric tensor update. When `enable_torch_gaussian_optimization:=true` and `torch_gaussian_optimization_steps` is positive, visible foreground Gaussians are projected into the keyframe image and a small Torch backward pass updates DC color and opacity logits from image supervision. `render_mode:=rasterizer` publishes a CPU Gaussian splat preview from the live `TorchGaussianMap` using Gaussian centers, DC color, scale, opacity, and the current camera pose. It is still not the full mapper: the upstream CUDA rasterizer, pruning/densification, and full multi-term loss schedule remain separate porting steps. This keeps the heavy torch dependency compile-time optional while allowing the live ROS2 data path to exercise the same tensor boundaries, map-growth lifecycle, gradient-update hook, and rasterizer output topic that the full Gaussian core will need.
 
 After initialization and each keyframe extension, the node publishes the current map as chunked `gaussian_lic_msgs/msg/GaussianArray` on `/gaussian_lic/gaussian_map` with reliable transient-local QoS. The message uses public transport values:
 

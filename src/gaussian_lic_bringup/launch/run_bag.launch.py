@@ -27,6 +27,9 @@ def generate_launch_description():
     enable_torch_camera_conversion = LaunchConfiguration("enable_torch_camera_conversion")
     enable_torch_gaussian_init = LaunchConfiguration("enable_torch_gaussian_init")
     enable_torch_gaussian_extend = LaunchConfiguration("enable_torch_gaussian_extend")
+    enable_torch_gaussian_optimization = LaunchConfiguration("enable_torch_gaussian_optimization")
+    torch_gaussian_optimization_steps = LaunchConfiguration("torch_gaussian_optimization_steps")
+    torch_gaussian_optimization_max_samples = LaunchConfiguration("torch_gaussian_optimization_max_samples")
     torch_gaussian_device = LaunchConfiguration("torch_gaussian_device")
     sensor_qos_reliability = LaunchConfiguration("sensor_qos_reliability")
     sensor_qos_history = LaunchConfiguration("sensor_qos_history")
@@ -57,6 +60,9 @@ def generate_launch_description():
             "enable_torch_camera_conversion": enable_torch_camera_conversion,
             "enable_torch_gaussian_init": enable_torch_gaussian_init,
             "enable_torch_gaussian_extend": enable_torch_gaussian_extend,
+            "enable_torch_gaussian_optimization": enable_torch_gaussian_optimization,
+            "torch_gaussian_optimization_steps": torch_gaussian_optimization_steps,
+            "torch_gaussian_optimization_max_samples": torch_gaussian_optimization_max_samples,
             "torch_gaussian_device": torch_gaussian_device,
             "sensor_qos_reliability": sensor_qos_reliability,
             "sensor_qos_history": sensor_qos_history,
@@ -183,6 +189,21 @@ def generate_launch_description():
             "enable_torch_gaussian_extend",
             default_value="true",
             description="Append new keyframe pending points to the Torch Gaussian map after initialization",
+        ),
+        DeclareLaunchArgument(
+            "enable_torch_gaussian_optimization",
+            default_value="false",
+            description="Run the optional Torch photometric Gaussian tensor update on keyframes",
+        ),
+        DeclareLaunchArgument(
+            "torch_gaussian_optimization_steps",
+            default_value="0",
+            description="Photometric optimizer steps per keyframe when enabled",
+        ),
+        DeclareLaunchArgument(
+            "torch_gaussian_optimization_max_samples",
+            default_value="4096",
+            description="Maximum visible foreground Gaussians supervised per keyframe optimization",
         ),
         DeclareLaunchArgument(
             "torch_gaussian_device",
