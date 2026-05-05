@@ -17,6 +17,7 @@ FRONTEND_ADAPTER = ROOT / "src" / "gaussian_lic_frontend" / "src" / "lic2_contra
 RUN_BAG_LAUNCH = ROOT / "src" / "gaussian_lic_bringup" / "launch" / "run_bag.launch.py"
 TRACKING_LAUNCH = ROOT / "src" / "gaussian_lic_bringup" / "launch" / "tracking.launch.py"
 TRACKING_NODE = ROOT / "src" / "gaussian_lic_tracking" / "src" / "tracking_node.cpp"
+TRACKING_STATUS_MSG = ROOT / "src" / "gaussian_lic_msgs" / "msg" / "TrackingStatus.msg"
 SEMANTICS_DOC = ROOT / "docs" / "ROS2_SEMANTICS.md"
 TIMING_AUDIT = ROOT / "scripts" / "rosbag2_timing_audit.py"
 
@@ -58,6 +59,7 @@ def main() -> int:
     launch_text = read(RUN_BAG_LAUNCH)
     tracking_launch_text = read(TRACKING_LAUNCH)
     tracking_node_text = read(TRACKING_NODE)
+    tracking_status_msg_text = read(TRACKING_STATUS_MSG)
     timing_audit_text = read(TIMING_AUDIT)
 
     if "stamp_to_sec" in mapping_text:
@@ -112,6 +114,14 @@ def main() -> int:
         errors.append("tracking_node must default serialize_callbacks to true")
     if "run_serialized_callback" not in tracking_node_text or "std::scoped_lock<std::mutex>" not in tracking_node_text:
         errors.append("tracking_node callbacks must pass through the serialization guard")
+    for field in [
+        "signed_nanosecond_time_math_enabled",
+        "last_image_stamp_ns",
+        "last_pointcloud_stamp_ns",
+        "last_imu_stamp_ns",
+    ]:
+        if field not in tracking_status_msg_text or field not in tracking_node_text:
+            errors.append(f"tracking status must publish signed-nanosecond field {field}")
 
     for path in sorted(CONFIG_DIR.glob("*.yaml")):
         params = mapping_params(path)

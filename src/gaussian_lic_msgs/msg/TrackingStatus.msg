@@ -13,6 +13,10 @@ string status_text
 bool executor_callback_serialization_enabled
 string sensor_qos_reliability
 uint32 sensor_qos_depth
+bool signed_nanosecond_time_math_enabled
+int64 last_image_stamp_ns
+int64 last_pointcloud_stamp_ns
+int64 last_imu_stamp_ns
 
 uint64 num_raw_images
 uint64 num_raw_pointclouds

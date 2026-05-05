@@ -277,6 +277,7 @@ private:
   {
     try {
       const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+      last_imu_stamp_ns_ = stamp_ns;
       ++num_raw_imus_;
       imu_propagator_.add_measurement(
         stamp_ns,
@@ -332,6 +333,7 @@ private:
 
   void handle_image(const sensor_msgs::msg::Image & msg)
   {
+    last_image_stamp_ns_ = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
     ++num_raw_images_;
     image_pub_->publish(msg);
     if (!enable_visual_factor_) {
@@ -428,6 +430,7 @@ private:
     ++num_raw_pointclouds_;
     gaussian_lic_tracking::TrajectoryPose tracking_pose;
     tracking_pose.stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    last_pointcloud_stamp_ns_ = tracking_pose.stamp_ns;
     tracking_pose.q_w_i = Eigen::Quaterniond::Identity();
     if (imu_propagator_.initialized()) {
       const auto & state = imu_propagator_.state();
@@ -1219,6 +1222,10 @@ private:
     status.executor_callback_serialization_enabled = serialize_callbacks_;
     status.sensor_qos_reliability = sensor_qos_reliability_;
     status.sensor_qos_depth = static_cast<uint32_t>(std::max(sensor_qos_depth_, 1));
+    status.signed_nanosecond_time_math_enabled = true;
+    status.last_image_stamp_ns = last_image_stamp_ns_;
+    status.last_pointcloud_stamp_ns = last_pointcloud_stamp_ns_;
+    status.last_imu_stamp_ns = last_imu_stamp_ns_;
     if (num_published_poses_ == 0U) {
       status.state = gaussian_lic_msgs::msg::TrackingStatus::STATE_INITIALIZING;
       status.status_text = "initializing";
@@ -1441,6 +1448,9 @@ private:
   uint64_t num_raw_pointclouds_{0};
   uint64_t num_raw_imus_{0};
   uint64_t num_published_poses_{0};
+  int64_t last_image_stamp_ns_{0};
+  int64_t last_pointcloud_stamp_ns_{0};
+  int64_t last_imu_stamp_ns_{0};
   uint64_t num_lidar_keyframes_{0};
   size_t last_lidar_points_{0};
   size_t last_lidar_matches_{0};

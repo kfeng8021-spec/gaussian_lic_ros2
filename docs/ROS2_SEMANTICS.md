@@ -15,6 +15,9 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
   compatibility, then converts it once to `sync_tolerance_nsec_`.
 - `lic2_contract_adapter` IMU fallback integrates with nanosecond stamp deltas
   and rejects non-positive or over-limit intervals.
+- `gaussian_lic_tracking/tracking_node` publishes the latest image, LiDAR, and
+  IMU stamps as signed nanoseconds on `/gaussian_lic/frontend/status`; the
+  native tracking smoke gate requires those fields to be nonzero.
 
 ## QoS
 

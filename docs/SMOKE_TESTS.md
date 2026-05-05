@@ -155,6 +155,7 @@ and checks `/pose_for_gs`, `/points_for_gs`, `/gaussian_lic/frontend/odometry`,
 `/gaussian_lic/frontend/path`, and `/gaussian_lic/frontend/status`. The status
 gate requires `STATE_TRACKING`, nonzero IMU factors, nonzero LiDAR point factors,
 enabled callback serialization for ROS1-style single-callback mutation order,
+nonzero signed-nanosecond image/LiDAR/IMU stamps,
 bounded `best_effort` sensor QoS with depth `5`,
 nonzero dense-prior rank/singular-value coverage after marginalization, nonzero
 bias observability, nonzero visual factors, valid visual subpixel alignment,
