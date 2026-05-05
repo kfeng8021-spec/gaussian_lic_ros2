@@ -1234,12 +1234,51 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
     if (!rows_available(row, 15)) {
       return fallback_to_numeric();
     }
-    const int indices[3] = {previous, current, next};
-    for (const int index : indices) {
-      const Eigen::Index offset = variable_offsets[static_cast<size_t>(index)];
-      if (offset >= 0) {
-        mark_numeric(row, 15, offset, static_cast<Eigen::Index>(kStateDof));
+    const double previous_dt_s =
+      static_cast<double>(
+      states[static_cast<size_t>(current)].stamp_ns -
+      states[static_cast<size_t>(previous)].stamp_ns) / 1.0e9;
+    const double next_dt_s =
+      static_cast<double>(
+      states[static_cast<size_t>(next)].stamp_ns -
+      states[static_cast<size_t>(current)].stamp_ns) / 1.0e9;
+    if (previous_dt_s <= 0.0 || next_dt_s <= 0.0) {
+      row += 15;
+      continue;
+    }
+    const struct SmoothnessBlock
+    {
+      int state_index;
+      double position_scale;
+      double velocity_scale;
+      double bias_scale;
+    } blocks[3] = {
+      {previous, 1.0 / previous_dt_s, 1.0 / previous_dt_s, 1.0 / previous_dt_s},
+      {current, -1.0 / next_dt_s - 1.0 / previous_dt_s,
+        -1.0 / next_dt_s - 1.0 / previous_dt_s,
+        -1.0 / next_dt_s - 1.0 / previous_dt_s},
+      {next, 1.0 / next_dt_s, 1.0 / next_dt_s, 1.0 / next_dt_s}
+    };
+    for (const auto & block : blocks) {
+      const Eigen::Index offset = variable_offsets[static_cast<size_t>(block.state_index)];
+      if (offset < 0) {
+        continue;
       }
+      if (factor.rotation_rate_weight > 0.0) {
+        mark_numeric(row, 3, offset, 3);
+      }
+      jacobian.template block<3, 3>(row + 3, offset + 6) =
+        std::sqrt(factor.position_rate_weight) * block.position_scale *
+        Eigen::Matrix3d::Identity();
+      jacobian.template block<3, 3>(row + 6, offset + 3) =
+        std::sqrt(factor.velocity_acceleration_weight) * block.velocity_scale *
+        Eigen::Matrix3d::Identity();
+      jacobian.template block<3, 3>(row + 9, offset + 9) =
+        std::sqrt(factor.gyro_bias_rate_weight) * block.bias_scale *
+        Eigen::Matrix3d::Identity();
+      jacobian.template block<3, 3>(row + 12, offset + 12) =
+        std::sqrt(factor.accel_bias_rate_weight) * block.bias_scale *
+        Eigen::Matrix3d::Identity();
     }
     row += 15;
   }

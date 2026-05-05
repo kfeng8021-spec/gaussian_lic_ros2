@@ -70,6 +70,14 @@ int main()
     std::cerr << "smoothness factor normal equation has wrong dimensions\n";
     return 1;
   }
+  Eigen::MatrixXd expected_linear = Eigen::MatrixXd::Zero(12, 15);
+  const double scale = -2.0 * std::sqrt(10.0);
+  expected_linear.block<3, 3>(0, 6) = scale * Eigen::Matrix3d::Identity();
+  expected_linear.block<3, 3>(3, 3) = scale * Eigen::Matrix3d::Identity();
+  expected_linear.block<3, 3>(6, 9) = scale * Eigen::Matrix3d::Identity();
+  expected_linear.block<3, 3>(9, 12) = scale * Eigen::Matrix3d::Identity();
+  const double max_linear_jacobian_error =
+    (normal.jacobian.block(3, 0, 12, 15) - expected_linear).cwiseAbs().maxCoeff();
 
   const auto summary = optimizer.optimize();
   gaussian_lic_tracking::SlidingWindowState optimized;
@@ -94,13 +102,14 @@ int main()
             << " velocity_error=" << velocity_error
             << " orientation_error=" << orientation_error
             << " gyro_bias_error=" << gyro_bias_error
-            << " accel_bias_error=" << accel_bias_error << "\n";
+            << " accel_bias_error=" << accel_bias_error
+            << " max_linear_jacobian_error=" << max_linear_jacobian_error << "\n";
 
   if (!summary.converged || summary.smoothness_factor_count != 1U ||
     summary.final_cost >= summary.initial_cost ||
     position_error > 1.0e-8 || velocity_error > 1.0e-8 ||
     orientation_error > 1.0e-8 || gyro_bias_error > 1.0e-8 ||
-    accel_bias_error > 1.0e-8)
+    accel_bias_error > 1.0e-8 || max_linear_jacobian_error > 1.0e-12)
   {
     std::cerr << "trajectory smoothness factor failed to recover the constant-rate midpoint\n";
     return 1;
