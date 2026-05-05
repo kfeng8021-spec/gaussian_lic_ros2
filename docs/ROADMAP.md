@@ -188,6 +188,7 @@ baseline_manifest.json
 - [x] Add configurable LM step limits for rotation, translation, velocity, and biases to prevent BA state jumps from transient outliers.
 - [x] Publish sliding-window accepted/rejected LM steps, last step norm/scale, and damping through `TrackingStatus`.
 - [x] Publish sliding-window limited-step counts so real-bag BA saturation is visible without parsing debug logs.
+- [x] Publish sliding-window normal-equation row/column/rank, singular-value, and condition-number diagnostics through `TrackingStatus`.
 - [x] Publish per-factor skip counters for LiDAR point/plane, visual, SE3 photometric, smoothness, IMU, and optimizer failures.
 - [x] Reject non-finite LiDAR point/plane correspondences, zero plane normals, and invalid robust weights before they enter the BA normal equation.
 - [x] Filter non-finite LiDAR keyframe/factor samples and reject invalid-pose LiDAR factors before they contaminate the map or BA window.

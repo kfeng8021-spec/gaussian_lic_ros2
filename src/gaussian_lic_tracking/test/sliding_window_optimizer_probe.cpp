@@ -49,6 +49,10 @@ int main()
   const double velocity_error = (optimized.v_w_i - Eigen::Vector3d{1.0, 0.0, 0.0}).norm();
   std::cout << "sliding_window_optimizer_probe states=" << summary.state_count
             << " imu_factors=" << summary.imu_factor_count
+            << " normal_rows=" << summary.normal_equation_rows
+            << " normal_cols=" << summary.normal_equation_cols
+            << " normal_rank=" << summary.normal_equation_rank
+            << " normal_condition=" << summary.normal_equation_condition_number
             << " iterations=" << summary.iterations
             << " initial_cost=" << summary.initial_cost
             << " final_cost=" << summary.final_cost
@@ -59,6 +63,15 @@ int main()
     position_error > 1.0e-8 || velocity_error > 1.0e-8)
   {
     std::cerr << "sliding window optimizer failed to close the IMU factor\n";
+    return 1;
+  }
+  if (summary.normal_equation_rows == 0U || summary.normal_equation_cols == 0U ||
+    summary.normal_equation_rank == 0U ||
+    summary.normal_equation_min_singular_value <= 0.0 ||
+    summary.normal_equation_max_singular_value < summary.normal_equation_min_singular_value ||
+    !std::isfinite(summary.normal_equation_condition_number))
+  {
+    std::cerr << "sliding window optimizer did not report valid normal-equation health\n";
     return 1;
   }
   std::cout << "sliding_window_optimizer_probe OK\n";

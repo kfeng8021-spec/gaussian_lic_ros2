@@ -151,6 +151,9 @@ struct SlidingWindowSummary
   size_t dense_prior_rows{0};
   size_t dense_prior_cols{0};
   size_t dense_prior_rank{0};
+  size_t normal_equation_rows{0};
+  size_t normal_equation_cols{0};
+  size_t normal_equation_rank{0};
   size_t iterations{0};
   size_t accepted_steps{0};
   size_t rejected_steps{0};
@@ -162,6 +165,9 @@ struct SlidingWindowSummary
   double last_damping{0.0};
   double dense_prior_min_singular_value{0.0};
   double dense_prior_max_singular_value{0.0};
+  double normal_equation_min_singular_value{0.0};
+  double normal_equation_max_singular_value{0.0};
+  double normal_equation_condition_number{0.0};
   double gyro_bias_norm{0.0};
   double accel_bias_norm{0.0};
   double gyro_bias_observability{0.0};

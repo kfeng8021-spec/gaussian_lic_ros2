@@ -1630,6 +1630,12 @@ private:
     status.sliding_window_dense_prior_rows = static_cast<uint64_t>(summary.dense_prior_rows);
     status.sliding_window_dense_prior_cols = static_cast<uint64_t>(summary.dense_prior_cols);
     status.sliding_window_dense_prior_rank = static_cast<uint64_t>(summary.dense_prior_rank);
+    status.sliding_window_normal_equation_rows =
+      static_cast<uint64_t>(summary.normal_equation_rows);
+    status.sliding_window_normal_equation_cols =
+      static_cast<uint64_t>(summary.normal_equation_cols);
+    status.sliding_window_normal_equation_rank =
+      static_cast<uint64_t>(summary.normal_equation_rank);
     status.sliding_window_iterations = static_cast<uint64_t>(summary.iterations);
     status.sliding_window_accepted_steps = static_cast<uint64_t>(summary.accepted_steps);
     status.sliding_window_rejected_steps = static_cast<uint64_t>(summary.rejected_steps);
@@ -1641,6 +1647,12 @@ private:
     status.sliding_window_last_damping = summary.last_damping;
     status.sliding_window_dense_prior_min_singular_value = summary.dense_prior_min_singular_value;
     status.sliding_window_dense_prior_max_singular_value = summary.dense_prior_max_singular_value;
+    status.sliding_window_normal_equation_min_singular_value =
+      summary.normal_equation_min_singular_value;
+    status.sliding_window_normal_equation_max_singular_value =
+      summary.normal_equation_max_singular_value;
+    status.sliding_window_normal_equation_condition_number =
+      summary.normal_equation_condition_number;
     status.sliding_window_gyro_bias_norm = summary.gyro_bias_norm;
     status.sliding_window_accel_bias_norm = summary.accel_bias_norm;
     status.sliding_window_gyro_bias_observability = summary.gyro_bias_observability;

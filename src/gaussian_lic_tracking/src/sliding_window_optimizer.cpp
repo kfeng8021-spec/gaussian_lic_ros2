@@ -1619,6 +1619,47 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
 
   const auto variables = variable_layout();
   const size_t variable_count = variables.size() * kStateDof;
+  auto refresh_normal_equation_summary = [&summary, this, &variables]() {
+      summary.normal_equation_rows = 0U;
+      summary.normal_equation_cols = 0U;
+      summary.normal_equation_rank = 0U;
+      summary.normal_equation_min_singular_value = 0.0;
+      summary.normal_equation_max_singular_value = 0.0;
+      summary.normal_equation_condition_number = 0.0;
+
+      const auto normal = linearize(states_, variables, 0.0);
+      if (!normal.valid) {
+        return;
+      }
+      summary.normal_equation_rows = static_cast<size_t>(normal.residual.size());
+      summary.normal_equation_cols = static_cast<size_t>(normal.variable_count);
+      if (normal.hessian.rows() == 0 || normal.hessian.cols() == 0) {
+        return;
+      }
+
+      const Eigen::MatrixXd symmetric_hessian =
+        0.5 * (normal.hessian + normal.hessian.transpose());
+      const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(symmetric_hessian);
+      if (solver.info() != Eigen::Success || solver.eigenvalues().size() == 0) {
+        return;
+      }
+      const double max_singular = std::max(0.0, solver.eigenvalues().maxCoeff());
+      const double threshold = static_cast<double>(normal.hessian.rows()) *
+        std::numeric_limits<double>::epsilon() * std::max(max_singular, 1.0);
+      double min_positive = std::numeric_limits<double>::infinity();
+      for (Eigen::Index index = 0; index < solver.eigenvalues().size(); ++index) {
+        const double singular = std::max(0.0, solver.eigenvalues()[index]);
+        if (singular > threshold) {
+          ++summary.normal_equation_rank;
+          min_positive = std::min(min_positive, singular);
+        }
+      }
+      summary.normal_equation_max_singular_value = max_singular;
+      if (std::isfinite(min_positive)) {
+        summary.normal_equation_min_singular_value = min_positive;
+        summary.normal_equation_condition_number = max_singular / min_positive;
+      }
+    };
   auto refresh_dense_prior_summary = [&summary, this]() {
       summary.dense_prior_rows = 0U;
       summary.dense_prior_cols = 0U;
@@ -1694,10 +1735,12 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
       }
     };
   refresh_dense_prior_summary();
+  refresh_normal_equation_summary();
   if (residual.size() == 0 || variable_count == 0U) {
     summary.converged = true;
     refresh_bias_summary();
     refresh_dense_prior_summary();
+    refresh_normal_equation_summary();
     return summary;
   }
 
@@ -1765,6 +1808,7 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   }
   refresh_bias_summary();
   refresh_dense_prior_summary();
+  refresh_normal_equation_summary();
   return summary;
 }
 
