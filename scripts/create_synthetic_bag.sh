@@ -8,10 +8,15 @@ OUTPUT="${ROOT_DIR}/bags/synthetic_gs_demo"
 DURATION_SEC=6
 FRONTEND_RAW=false
 FRONTEND_RAW_ODOMETRY=false
+IMAGE_WIDTH=1
+IMAGE_HEIGHT=1
+IMAGE_PATTERN=solid
+IMAGE_SHIFT_X_PX=0.0
+IMAGE_SHIFT_Y_PX=0.0
 
 usage() {
   cat <<'EOF'
-Usage: scripts/create_synthetic_bag.sh [--output DIR] [--duration SEC] [--frontend-raw] [--frontend-raw-odometry]
+Usage: scripts/create_synthetic_bag.sh [--output DIR] [--duration SEC] [--frontend-raw] [--frontend-raw-odometry] [--image-width PX] [--image-height PX] [--image-pattern solid|gradient|gaussian] [--image-shift-x PX] [--image-shift-y PX]
 
 Records a small rosbag2 from synthetic Gaussian-LIC mapper inputs.
 
@@ -19,6 +24,16 @@ Options:
   --frontend-raw  Record raw LIC2 frontend adapter inputs instead of mapper topics.
   --frontend-raw-odometry
                   In frontend raw mode, record raw Odometry instead of PoseStamped.
+  --image-width PX
+                  Synthetic image width. Default: 1.
+  --image-height PX
+                  Synthetic image height. Default: 1.
+  --image-pattern solid|gradient|gaussian
+                  Synthetic image pattern. Default: solid.
+  --image-shift-x PX
+                  Subpixel horizontal shift applied to the recorded image.
+  --image-shift-y PX
+                  Subpixel vertical shift applied to the recorded image.
 EOF
 }
 
@@ -40,6 +55,26 @@ while [[ $# -gt 0 ]]; do
       FRONTEND_RAW=true
       FRONTEND_RAW_ODOMETRY=true
       shift
+      ;;
+    --image-width)
+      IMAGE_WIDTH="$2"
+      shift 2
+      ;;
+    --image-height)
+      IMAGE_HEIGHT="$2"
+      shift 2
+      ;;
+    --image-pattern)
+      IMAGE_PATTERN="$2"
+      shift 2
+      ;;
+    --image-shift-x)
+      IMAGE_SHIFT_X_PX="$2"
+      shift 2
+      ;;
+    --image-shift-y)
+      IMAGE_SHIFT_Y_PX="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -95,6 +130,11 @@ if [[ "${FRONTEND_RAW}" == "true" ]]; then
     -p camera_info_topic:=/camera/camera_info
     -p depth_topic:=/camera/depth
     -p imu_topic:=/imu
+    -p image_width:="${IMAGE_WIDTH}"
+    -p image_height:="${IMAGE_HEIGHT}"
+    -p image_pattern:="${IMAGE_PATTERN}"
+    -p image_shift_x_px:="${IMAGE_SHIFT_X_PX}"
+    -p image_shift_y_px:="${IMAGE_SHIFT_Y_PX}"
     "${pose_output_args[@]}"
   )
 else
@@ -109,6 +149,11 @@ else
   publisher_args=(
     --ros-args
     --params-file "${ROOT_DIR}/src/gaussian_lic_bringup/config/default.yaml"
+    -p image_width:="${IMAGE_WIDTH}"
+    -p image_height:="${IMAGE_HEIGHT}"
+    -p image_pattern:="${IMAGE_PATTERN}"
+    -p image_shift_x_px:="${IMAGE_SHIFT_X_PX}"
+    -p image_shift_y_px:="${IMAGE_SHIFT_Y_PX}"
   )
 fi
 

@@ -262,6 +262,8 @@ private:
         latest_rendered_frame_,
         observed,
         std::max(visual_alignment_max_shift_px_, 0));
+      last_visual_photometric_linearization_ =
+        visual_factor_.linearize_translation(latest_rendered_frame_, observed);
       if (last_visual_alignment_.valid) {
         pending_visual_alignment_ = last_visual_alignment_;
         has_pending_visual_alignment_ = true;
@@ -269,14 +271,17 @@ private:
       if (last_visual_residual_.valid) {
         RCLCPP_DEBUG_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "visual residual pixels=%zu mae=%.6f rmse=%.6f align_valid=%s dx=%d dy=%d align_rmse=%.6f",
+          "visual residual pixels=%zu mae=%.6f rmse=%.6f align_valid=%s dx=%d dy=%d align_rmse=%.6f photo_valid=%s photo_step=(%.4f, %.4f)",
           last_visual_residual_.compared_pixels,
           last_visual_residual_.mean_abs_error,
           last_visual_residual_.rmse,
           last_visual_alignment_.valid ? "true" : "false",
           last_visual_alignment_.dx,
           last_visual_alignment_.dy,
-          last_visual_alignment_.rmse);
+          last_visual_alignment_.rmse,
+          last_visual_photometric_linearization_.valid ? "true" : "false",
+          last_visual_photometric_linearization_.gauss_newton_step.x(),
+          last_visual_photometric_linearization_.gauss_newton_step.y());
       }
     }
   }
@@ -1021,6 +1026,18 @@ private:
     status.visual_rmse = last_visual_residual_.valid ? last_visual_residual_.rmse : 0.0;
     status.visual_subpixel_dx = last_visual_alignment_.valid ? last_visual_alignment_.subpixel_dx : 0.0;
     status.visual_subpixel_dy = last_visual_alignment_.valid ? last_visual_alignment_.subpixel_dy : 0.0;
+    status.visual_photometric_valid = last_visual_photometric_linearization_.valid;
+    status.visual_photometric_pixels =
+      static_cast<uint64_t>(last_visual_photometric_linearization_.compared_pixels);
+    status.visual_photometric_cost = last_visual_photometric_linearization_.valid
+      ? last_visual_photometric_linearization_.cost
+      : 0.0;
+    status.visual_photometric_step_dx = last_visual_photometric_linearization_.valid
+      ? last_visual_photometric_linearization_.gauss_newton_step.x()
+      : 0.0;
+    status.visual_photometric_step_dy = last_visual_photometric_linearization_.valid
+      ? last_visual_photometric_linearization_.gauss_newton_step.y()
+      : 0.0;
     tracking_status_pub_->publish(status);
   }
 
@@ -1111,6 +1128,7 @@ private:
   gaussian_lic_tracking::VisualFrame latest_rendered_frame_;
   gaussian_lic_tracking::VisualResidual last_visual_residual_;
   gaussian_lic_tracking::VisualAlignment last_visual_alignment_;
+  gaussian_lic_tracking::VisualPhotometricLinearization last_visual_photometric_linearization_;
   gaussian_lic_tracking::VisualAlignment pending_visual_alignment_;
   bool has_pending_visual_alignment_{false};
   bool has_rendered_frame_{false};

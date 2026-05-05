@@ -9,6 +9,7 @@ CHECK_TORCH=false
 FULL_PROFILES=false
 BAG_PATH="${ROOT_DIR}/bags/synthetic_gs_demo"
 FRONTEND_RAW_BAG_PATH="${ROOT_DIR}/bags/synthetic_frontend_raw_demo"
+FRONTEND_RAW_VISUAL_BAG_PATH="${ROOT_DIR}/bags/synthetic_frontend_raw_visual_demo"
 
 usage() {
   cat <<'EOF'
@@ -100,6 +101,18 @@ echo "[verify] creating frontend raw synthetic bag at ${FRONTEND_RAW_BAG_PATH}"
   --output "${FRONTEND_RAW_BAG_PATH}" \
   --duration 4
 
+echo "[verify] creating frontend raw visual synthetic bag at ${FRONTEND_RAW_VISUAL_BAG_PATH}"
+./scripts/create_synthetic_bag.sh \
+  --frontend-raw \
+  --frontend-raw-odometry \
+  --output "${FRONTEND_RAW_VISUAL_BAG_PATH}" \
+  --duration 4 \
+  --image-width 32 \
+  --image-height 32 \
+  --image-pattern gaussian \
+  --image-shift-x 1.25 \
+  --image-shift-y -0.35
+
 echo "[verify] bag smoke"
 ./scripts/smoke_test.sh --bag "${BAG_PATH}" --tf
 
@@ -158,7 +171,7 @@ echo "[verify] frontend adapter smoke"
 ./scripts/smoke_test.sh --frontend-adapter --tf
 
 echo "[verify] native tracking smoke"
-./scripts/tracking_smoke_test.sh --bag "${FRONTEND_RAW_BAG_PATH}"
+./scripts/tracking_smoke_test.sh --bag "${FRONTEND_RAW_VISUAL_BAG_PATH}"
 
 echo "[verify] image color fallback smoke"
 ./scripts/smoke_test.sh --image-color-fallback-check

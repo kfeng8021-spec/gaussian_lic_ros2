@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import math
 import struct
 
 import rclpy
@@ -8,6 +9,7 @@ from nav_msgs.msg import Odometry
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CameraInfo, Image, Imu, PointCloud2, PointField
 
 
@@ -35,10 +37,19 @@ class SyntheticGsFramePublisher(Node):
         self.declare_parameter("camera_info_topic", "/camera_info_for_gs")
         self.declare_parameter("depth_topic", "/depth_for_gs")
         self.declare_parameter("imu_topic", "/imu_for_gs")
+        self.declare_parameter("rendered_image_topic", "/gaussian_lic/rendered_image")
         self.declare_parameter("publish_rate_hz", 5.0)
         self.declare_parameter("pointcloud_color_mode", "packed_rgb")
         self.declare_parameter("point_color_rgb", "255,32,16")
         self.declare_parameter("image_color_rgb", "0,0,0")
+        self.declare_parameter("image_width", 1)
+        self.declare_parameter("image_height", 1)
+        self.declare_parameter("image_pattern", "solid")
+        self.declare_parameter("image_shift_x_px", 0.0)
+        self.declare_parameter("image_shift_y_px", 0.0)
+        self.declare_parameter("publish_rendered_image", False)
+        self.declare_parameter("rendered_shift_x_px", 0.0)
+        self.declare_parameter("rendered_shift_y_px", 0.0)
         self.declare_parameter("publish_depth", True)
         self.declare_parameter("pose_output_mode", "pose_stamped")
         self.declare_parameter("child_frame_id", "base_link")
@@ -57,6 +68,22 @@ class SyntheticGsFramePublisher(Node):
             raise ValueError(
                 "pose_output_mode must be pose_stamped, odometry, both, or none")
         self.child_frame_id = str(self.get_parameter("child_frame_id").value)
+        self.image_width = int(self.get_parameter("image_width").value)
+        self.image_height = int(self.get_parameter("image_height").value)
+        if self.image_width <= 0 or self.image_height <= 0:
+            raise ValueError("image_width and image_height must be positive")
+        self.image_pattern = str(
+            self.get_parameter("image_pattern").value).strip().lower()
+        if self.image_pattern not in {"solid", "gradient", "gaussian"}:
+            raise ValueError("image_pattern must be solid, gradient, or gaussian")
+        self.image_shift_x_px = float(self.get_parameter("image_shift_x_px").value)
+        self.image_shift_y_px = float(self.get_parameter("image_shift_y_px").value)
+        self.publish_rendered_image = bool(
+            self.get_parameter("publish_rendered_image").value)
+        self.rendered_shift_x_px = float(
+            self.get_parameter("rendered_shift_x_px").value)
+        self.rendered_shift_y_px = float(
+            self.get_parameter("rendered_shift_y_px").value)
 
         self.points_pub = self.create_publisher(
             PointCloud2, self.get_parameter("pointcloud_topic").value, 10)
@@ -70,6 +97,17 @@ class SyntheticGsFramePublisher(Node):
                 Odometry, self.get_parameter("odometry_topic").value, 10)
         self.image_pub = self.create_publisher(
             Image, self.get_parameter("image_topic").value, 10)
+        self.rendered_image_pub = None
+        if self.publish_rendered_image:
+            self.rendered_image_pub = self.create_publisher(
+                Image,
+                self.get_parameter("rendered_image_topic").value,
+                QoSProfile(
+                    depth=1,
+                    reliability=ReliabilityPolicy.RELIABLE,
+                    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                ),
+            )
         self.camera_info_pub = self.create_publisher(
             CameraInfo, self.get_parameter("camera_info_topic").value, 10)
         self.depth_pub = None
@@ -86,7 +124,51 @@ class SyntheticGsFramePublisher(Node):
             "Publishing synthetic synchronized GS input frames "
             f"(pointcloud_color_mode={self.pointcloud_color_mode}, "
             f"publish_depth={self.publish_depth}, "
-            f"pose_output_mode={self.pose_output_mode})")
+            f"pose_output_mode={self.pose_output_mode}, "
+            f"image={self.image_width}x{self.image_height}:{self.image_pattern}, "
+            f"publish_rendered_image={self.publish_rendered_image})")
+
+    @staticmethod
+    def clamp_byte(value):
+        return max(0, min(255, int(round(value))))
+
+    def sample_image_rgb(self, x, y, shift_x, shift_y):
+        if self.image_pattern == "solid":
+            return self.image_rgb
+
+        sample_x = float(x) - shift_x
+        sample_y = float(y) - shift_y
+        if self.image_pattern == "gradient":
+            value = 32.0 + 4.0 * sample_x + 2.0 * sample_y
+            gray = self.clamp_byte(value)
+            return (gray, gray, gray)
+
+        center_x = 0.5 * float(self.image_width - 1)
+        center_y = 0.5 * float(self.image_height - 1)
+        sigma = max(float(min(self.image_width, self.image_height)) / 5.0, 1.0)
+        dx = sample_x - center_x
+        dy = sample_y - center_y
+        gray = self.clamp_byte(255.0 * math.exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma)))
+        return (gray, gray, gray)
+
+    def make_image(self, stamp, shift_x, shift_y):
+        image = Image()
+        image.header.stamp = stamp
+        image.header.frame_id = "camera"
+        image.height = self.image_height
+        image.width = self.image_width
+        image.encoding = "bgr8"
+        image.step = self.image_width * 3
+        data = bytearray(self.image_height * image.step)
+        for y in range(self.image_height):
+            for x in range(self.image_width):
+                red, green, blue = self.sample_image_rgb(x, y, shift_x, shift_y)
+                offset = y * image.step + x * 3
+                data[offset] = blue
+                data[offset + 1] = green
+                data[offset + 2] = red
+        image.data = bytes(data)
+        return image
 
     def make_pointcloud_data(self):
         if self.pointcloud_color_mode == "none":
@@ -164,38 +246,38 @@ class SyntheticGsFramePublisher(Node):
             odometry.pose.pose = pose.pose
             self.odometry_pub.publish(odometry)
 
-        image = Image()
-        image.header.stamp = stamp
-        image.header.frame_id = "camera"
-        image.height = 1
-        image.width = 1
-        image.encoding = "bgr8"
-        image.step = 3
-        red, green, blue = self.image_rgb
-        image.data = bytes([blue, green, red])
+        image = self.make_image(stamp, self.image_shift_x_px, self.image_shift_y_px)
         self.image_pub.publish(image)
+        if self.rendered_image_pub is not None:
+            rendered = self.make_image(
+                stamp, self.rendered_shift_x_px, self.rendered_shift_y_px)
+            self.rendered_image_pub.publish(rendered)
 
         camera_info = CameraInfo()
         camera_info.header.stamp = stamp
         camera_info.header.frame_id = "camera"
-        camera_info.height = 1
-        camera_info.width = 1
+        camera_info.height = self.image_height
+        camera_info.width = self.image_width
         camera_info.distortion_model = "plumb_bob"
         camera_info.d = []
-        camera_info.k = [1.0, 0.0, 0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0]
+        fx = max(float(self.image_width), 1.0)
+        fy = max(float(self.image_height), 1.0)
+        cx = 0.5 if self.image_width == 1 else 0.5 * float(self.image_width - 1)
+        cy = 0.5 if self.image_height == 1 else 0.5 * float(self.image_height - 1)
+        camera_info.k = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]
         camera_info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-        camera_info.p = [1.0, 0.0, 0.5, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0]
+        camera_info.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
         self.camera_info_pub.publish(camera_info)
 
         if self.depth_pub is not None:
             depth = Image()
             depth.header.stamp = stamp
             depth.header.frame_id = "camera"
-            depth.height = 1
-            depth.width = 1
+            depth.height = self.image_height
+            depth.width = self.image_width
             depth.encoding = "32FC1"
-            depth.step = 4
-            depth.data = struct.pack("f", 1.0)
+            depth.step = self.image_width * 4
+            depth.data = struct.pack("f", 1.0) * (self.image_width * self.image_height)
             self.depth_pub.publish(depth)
 
         imu = Imu()

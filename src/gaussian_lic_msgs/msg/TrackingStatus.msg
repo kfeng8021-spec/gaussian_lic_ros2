@@ -51,3 +51,8 @@ bool visual_alignment_valid
 float64 visual_rmse
 float64 visual_subpixel_dx
 float64 visual_subpixel_dy
+bool visual_photometric_valid
+uint64 visual_photometric_pixels
+float64 visual_photometric_cost
+float64 visual_photometric_step_dx
+float64 visual_photometric_step_dy

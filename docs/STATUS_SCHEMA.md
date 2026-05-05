@@ -93,13 +93,21 @@ visual_alignment_valid
 visual_rmse
 visual_subpixel_dx
 visual_subpixel_dy
+visual_photometric_valid
+visual_photometric_pixels
+visual_photometric_cost
+visual_photometric_step_dx
+visual_photometric_step_dy
 ```
 
 `scripts/tracking_smoke_test.sh` asserts that the synthetic frontend bag reaches
 `STATE_TRACKING`, publishes frontend odometry/path, and exercises the sliding
-window with nonzero IMU and point factors. The synthetic bag intentionally lowers
-the LiDAR point threshold to one point; dataset profiles keep production
-thresholds.
+window with nonzero IMU, LiDAR point, and visual factors. The visual gate replays
+a 32x32 Gaussian-pattern image bag while a transient-local rendered-image
+publisher supplies the mapper-render reference, then checks both subpixel
+alignment and photometric Gauss-Newton linearization status. The synthetic bag
+intentionally lowers the LiDAR point threshold to one point; dataset profiles
+keep production thresholds.
 
 ## Render Mode Policy
 

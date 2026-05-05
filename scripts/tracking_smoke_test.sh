@@ -4,10 +4,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROS_DISTRO="${ROS_DISTRO:-jazzy}"
-BAG_PATH="${ROOT_DIR}/bags/synthetic_frontend_raw_demo"
+BAG_PATH="${ROOT_DIR}/bags/synthetic_frontend_raw_visual_demo"
 TIMEOUT_SEC=20
 ENABLE_SLIDING_WINDOW=true
 ENABLE_LIDAR_PLANE_FACTOR=true
+ENABLE_VISUAL_FACTOR_GATE=true
 
 usage() {
   cat <<'EOF'
@@ -22,6 +23,7 @@ Options:
   --timeout SEC                     Topic wait timeout. Default: 20
   --no-sliding-window               Disable optional sliding-window optimizer.
   --no-lidar-plane-factor           Disable point-to-plane LiDAR window factors.
+  --no-visual-factor-gate           Disable rendered-image visual runtime checks.
 EOF
 }
 
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ENABLE_LIDAR_PLANE_FACTOR=false
       shift
       ;;
+    --no-visual-factor-gate)
+      ENABLE_VISUAL_FACTOR_GATE=false
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -61,7 +67,12 @@ if [[ ! -f "${BAG_PATH}/metadata.yaml" ]]; then
     --frontend-raw \
     --frontend-raw-odometry \
     --output "${BAG_PATH}" \
-    --duration 4
+    --duration 4 \
+    --image-width 32 \
+    --image-height 32 \
+    --image-pattern gaussian \
+    --image-shift-x 1.25 \
+    --image-shift-y -0.35
 fi
 
 set +u
@@ -71,13 +82,18 @@ set -u
 
 launch_log="${ROOT_DIR}/log/tracking_smoke_launch.log"
 play_log="${ROOT_DIR}/log/tracking_smoke_play.log"
+render_log="${ROOT_DIR}/log/tracking_smoke_rendered_pub.log"
 mkdir -p "${ROOT_DIR}/log"
-rm -f "${launch_log}" "${play_log}"
+rm -f "${launch_log}" "${play_log}" "${render_log}"
 
 cleanup() {
   if [[ -n "${play_pid:-}" ]]; then
     kill "${play_pid}" 2>/dev/null || true
     wait "${play_pid}" 2>/dev/null || true
+  fi
+  if [[ -n "${render_pid:-}" ]]; then
+    kill -- -"${render_pid}" 2>/dev/null || true
+    wait "${render_pid}" 2>/dev/null || true
   fi
   if [[ -n "${launch_pid:-}" ]]; then
     kill -- -"${launch_pid}" 2>/dev/null || true
@@ -89,6 +105,7 @@ trap cleanup EXIT
 setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   enable_sliding_window_optimizer:="${ENABLE_SLIDING_WINDOW}" \
   enable_lidar_plane_factor:="${ENABLE_LIDAR_PLANE_FACTOR}" \
+  enable_visual_alignment_window_factor:="${ENABLE_VISUAL_FACTOR_GATE}" \
   lidar_min_points:=1 \
   lidar_nearest_distance_m:=2.0 \
   lidar_keyframe_translation_m:=0.0 \
@@ -96,21 +113,76 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
 launch_pid=$!
 
 sleep 2
+if [[ "${ENABLE_VISUAL_FACTOR_GATE}" == "true" ]]; then
+  setsid ros2 run gaussian_lic_tools synthetic_gs_frame_pub \
+    --ros-args \
+    -p pointcloud_topic:=/__gaussian_lic_tracking_smoke_unused/points \
+    -p pose_topic:=/__gaussian_lic_tracking_smoke_unused/pose \
+    -p odometry_topic:=/__gaussian_lic_tracking_smoke_unused/odometry \
+    -p image_topic:=/__gaussian_lic_tracking_smoke_unused/image \
+    -p camera_info_topic:=/__gaussian_lic_tracking_smoke_unused/camera_info \
+    -p depth_topic:=/__gaussian_lic_tracking_smoke_unused/depth \
+    -p imu_topic:=/__gaussian_lic_tracking_smoke_unused/imu \
+    -p pose_output_mode:=none \
+    -p publish_depth:=false \
+    -p publish_rendered_image:=true \
+    -p rendered_image_topic:=/gaussian_lic/rendered_image \
+    -p image_width:=32 \
+    -p image_height:=32 \
+    -p image_pattern:=gaussian \
+    -p rendered_shift_x_px:=0.0 \
+    -p rendered_shift_y_px:=0.0 \
+    >"${render_log}" 2>&1 &
+  render_pid=$!
+  sleep 1
+fi
+
 ros2 bag play "${BAG_PATH}" --clock --rate 1.0 >"${play_log}" 2>&1 &
 play_pid=$!
 
 for topic in /pose_for_gs /points_for_gs /gaussian_lic/frontend/odometry /gaussian_lic/frontend/path; do
   timeout "${TIMEOUT_SEC}" ros2 topic echo --once "${topic}" >/dev/null
 done
-timeout "${TIMEOUT_SEC}" ros2 topic echo --once \
-  /gaussian_lic/frontend/status gaussian_lic_msgs/msg/TrackingStatus \
-  >/tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "state: 2" /tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "sliding_window_enabled: true" /tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "sliding_window_imu_factors: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "sliding_window_point_factors: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "total_window_point_correspondences: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
-rg -q "num_lidar_keyframes: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
+
+status_file=/tmp/gaussian_lic_tracking_smoke_status.txt
+status_tmp=/tmp/gaussian_lic_tracking_smoke_status.tmp
+rm -f "${status_file}" "${status_tmp}"
+
+status_matches() {
+  rg -q "state: 2" "${status_file}" &&
+    rg -q "sliding_window_enabled: true" "${status_file}" &&
+    rg -q "sliding_window_imu_factors: [1-9]" "${status_file}" &&
+    rg -q "sliding_window_point_factors: [1-9]" "${status_file}" &&
+    rg -q "total_window_point_correspondences: [1-9]" "${status_file}" &&
+    rg -q "num_lidar_keyframes: [1-9]" "${status_file}" || return 1
+  if [[ "${ENABLE_VISUAL_FACTOR_GATE}" == "true" ]]; then
+    rg -q "visual_factor_enabled: true" "${status_file}" &&
+      rg -q "visual_alignment_valid: true" "${status_file}" &&
+      rg -q "visual_photometric_valid: true" "${status_file}" &&
+      rg -q "visual_photometric_pixels: [1-9]" "${status_file}" &&
+      rg -q "sliding_window_visual_factors: [1-9]" "${status_file}" || return 1
+  fi
+}
+
+deadline=$((SECONDS + TIMEOUT_SEC))
+while (( SECONDS < deadline )); do
+  if timeout 3 ros2 topic echo --once \
+    /gaussian_lic/frontend/status gaussian_lic_msgs/msg/TrackingStatus \
+    >"${status_tmp}" 2>/dev/null
+  then
+    mv "${status_tmp}" "${status_file}"
+    if status_matches; then
+      break
+    fi
+  fi
+  sleep 0.5
+done
+
+if [[ ! -f "${status_file}" ]] || ! status_matches; then
+  echo "tracking status did not satisfy smoke gates" >&2
+  [[ -f "${status_file}" ]] && cat "${status_file}" >&2
+  exit 1
+fi
 
 echo "[tracking-smoke] passed"
 echo "[tracking-smoke] launch log: ${launch_log}"
