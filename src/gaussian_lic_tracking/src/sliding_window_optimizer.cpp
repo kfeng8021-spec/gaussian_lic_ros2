@@ -122,6 +122,7 @@ void SlidingWindowOptimizer::clear()
   point_factors_.clear();
   plane_factors_.clear();
   visual_factors_.clear();
+  se3_photometric_factors_.clear();
   marginalized_state_count_ = 0U;
 }
 
@@ -274,6 +275,22 @@ void SlidingWindowOptimizer::add_visual_alignment_factor(const SlidingWindowVisu
   enforce_window_size();
 }
 
+void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3PhotometricFactor & factor)
+{
+  if (factor.weight <= 0.0) {
+    throw std::runtime_error("SE3 photometric factor weight must be positive");
+  }
+  if (!factor.reference_p_w_i.allFinite() || !factor.target_delta.allFinite() ||
+    !factor.sqrt_information.allFinite())
+  {
+    throw std::runtime_error("SE3 photometric factor values must be finite");
+  }
+  SlidingWindowSe3PhotometricFactor normalized = factor;
+  normalized.reference_q_w_i.normalize();
+  se3_photometric_factors_.push_back(normalized);
+  enforce_window_size();
+}
+
 SlidingWindowStatePrior SlidingWindowOptimizer::make_state_prior(const SlidingWindowState & state) const
 {
   SlidingWindowStatePrior prior;
@@ -361,6 +378,13 @@ size_t SlidingWindowOptimizer::enforce_window_size()
           return factor.stamp_ns == stamp_ns;
         }),
       visual_factors_.end());
+    se3_photometric_factors_.erase(
+      std::remove_if(
+        se3_photometric_factors_.begin(), se3_photometric_factors_.end(),
+        [stamp_ns](const SlidingWindowSe3PhotometricFactor & factor) {
+          return factor.stamp_ns == stamp_ns;
+        }),
+      se3_photometric_factors_.end());
     if (!added_schur_prior && !states_.empty() && config_.marginalization_prior_weight > 0.0) {
       const int64_t anchor_stamp_ns = states_.front().stamp_ns;
       state_priors_.erase(
@@ -422,7 +446,7 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
   values.reserve(
     imu_factors_.size() * 15U + pose_priors_.size() * 6U + state_priors_.size() * 15U +
     dense_priors_.size() * 30U + point_factors_.size() * 300U + plane_factors_.size() * 100U +
-    visual_factors_.size() * 2U);
+    visual_factors_.size() * 2U + se3_photometric_factors_.size() * 6U);
 
   auto append = [&values](const Eigen::VectorXd & residual) {
       for (Eigen::Index i = 0; i < residual.size(); ++i) {
@@ -586,6 +610,18 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     residual.x() = state.p_w_i.x() - target_xy.x();
     residual.y() = state.p_w_i.y() - target_xy.y();
     append(std::sqrt(factor.weight) * residual);
+  }
+
+  for (const auto & factor : se3_photometric_factors_) {
+    const int index = find_local(factor.stamp_ns);
+    if (index < 0) {
+      continue;
+    }
+    const auto & state = states[static_cast<size_t>(index)];
+    Eigen::Matrix<double, 6, 1> delta;
+    delta.template segment<3>(0) = rotation_residual(factor.reference_q_w_i, state.q_w_i);
+    delta.template segment<3>(3) = state.p_w_i - factor.reference_p_w_i;
+    append(std::sqrt(factor.weight) * factor.sqrt_information * (delta - factor.target_delta));
   }
 
   Eigen::VectorXd residual(values.size());
@@ -753,6 +789,15 @@ std::vector<std::pair<Eigen::Index, Eigen::Index>> SlidingWindowOptimizer::fill_
       jacobian(row + 1, offset + 7) = scale;
     }
     row += 2;
+  }
+
+  for (const auto & factor : se3_photometric_factors_) {
+    const int index = find_local(factor.stamp_ns);
+    if (index < 0) {
+      continue;
+    }
+    mark_numeric(row, 6);
+    row += 6;
   }
 
   if (row != jacobian.rows()) {
@@ -947,6 +992,7 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   summary.point_factor_count = point_factors_.size();
   summary.plane_factor_count = plane_factors_.size();
   summary.visual_factor_count = visual_factors_.size();
+  summary.se3_photometric_factor_count = se3_photometric_factors_.size();
   Eigen::VectorXd residual = build_residual(states_);
   summary.initial_cost = compute_cost(residual);
   summary.final_cost = summary.initial_cost;

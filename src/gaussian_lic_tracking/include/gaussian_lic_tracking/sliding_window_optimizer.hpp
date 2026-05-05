@@ -99,6 +99,16 @@ struct SlidingWindowVisualAlignmentFactor
   double weight{1.0};
 };
 
+struct SlidingWindowSe3PhotometricFactor
+{
+  int64_t stamp_ns{0};
+  Eigen::Vector3d reference_p_w_i{Eigen::Vector3d::Zero()};
+  Eigen::Quaterniond reference_q_w_i{Eigen::Quaterniond::Identity()};
+  Eigen::Matrix<double, 6, 1> target_delta{Eigen::Matrix<double, 6, 1>::Zero()};
+  Eigen::Matrix<double, 6, 6> sqrt_information{Eigen::Matrix<double, 6, 6>::Identity()};
+  double weight{1.0};
+};
+
 struct SlidingWindowDensePrior
 {
   std::vector<int64_t> stamp_ns;
@@ -117,6 +127,7 @@ struct SlidingWindowSummary
   size_t point_factor_count{0};
   size_t plane_factor_count{0};
   size_t visual_factor_count{0};
+  size_t se3_photometric_factor_count{0};
   size_t marginalized_state_count{0};
   size_t iterations{0};
   double initial_cost{0.0};
@@ -174,6 +185,7 @@ public:
   void add_point_to_point_factor(const SlidingWindowPointToPointFactor & factor);
   void add_point_to_plane_factor(const SlidingWindowPointToPlaneFactor & factor);
   void add_visual_alignment_factor(const SlidingWindowVisualAlignmentFactor & factor);
+  void add_se3_photometric_factor(const SlidingWindowSe3PhotometricFactor & factor);
 
   SlidingWindowNormalEquation build_normal_equation(double damping = 0.0) const;
   SlidingWindowSummary optimize();
@@ -222,6 +234,7 @@ private:
   std::vector<SlidingWindowPointToPointFactor> point_factors_;
   std::vector<SlidingWindowPointToPlaneFactor> plane_factors_;
   std::vector<SlidingWindowVisualAlignmentFactor> visual_factors_;
+  std::vector<SlidingWindowSe3PhotometricFactor> se3_photometric_factors_;
   size_t marginalized_state_count_{0};
 };
 

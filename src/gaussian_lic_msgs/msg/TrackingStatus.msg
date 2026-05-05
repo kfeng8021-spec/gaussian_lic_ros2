@@ -34,6 +34,7 @@ uint64 sliding_window_dense_priors
 uint64 sliding_window_point_factors
 uint64 sliding_window_plane_factors
 uint64 sliding_window_visual_factors
+uint64 sliding_window_se3_photometric_factors
 uint64 sliding_window_marginalized_states
 uint64 sliding_window_iterations
 float64 sliding_window_initial_cost

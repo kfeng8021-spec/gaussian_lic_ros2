@@ -1009,6 +1009,8 @@ private:
     status.sliding_window_point_factors = static_cast<uint64_t>(summary.point_factor_count);
     status.sliding_window_plane_factors = static_cast<uint64_t>(summary.plane_factor_count);
     status.sliding_window_visual_factors = static_cast<uint64_t>(summary.visual_factor_count);
+    status.sliding_window_se3_photometric_factors =
+      static_cast<uint64_t>(summary.se3_photometric_factor_count);
     status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
     status.sliding_window_iterations = static_cast<uint64_t>(summary.iterations);
     status.sliding_window_initial_cost = summary.initial_cost;
