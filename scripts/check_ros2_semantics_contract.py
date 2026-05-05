@@ -108,6 +108,7 @@ def main() -> int:
         "camera_to_imu_rpy_rad",
         "visual_factor_max_dt_ns",
         "depth_frame_cache_size",
+        "rendered_frame_cache_size",
         "sliding_window_max_states",
         "sliding_window_max_iterations",
         "sliding_window_imu_weight",
@@ -139,6 +140,10 @@ def main() -> int:
         errors.append("tracking_node must default the visual depth-frame cache size to 8")
     if 'DeclareLaunchArgument("depth_frame_cache_size", default_value="8")' not in tracking_launch_text:
         errors.append("tracking.launch.py must default the visual depth-frame cache size to 8")
+    if 'declare_parameter<int>("rendered_frame_cache_size", 8)' not in tracking_node_text:
+        errors.append("tracking_node must default the visual rendered-frame cache size to 8")
+    if 'DeclareLaunchArgument("rendered_frame_cache_size", default_value="8")' not in tracking_launch_text:
+        errors.append("tracking.launch.py must default the visual rendered-frame cache size to 8")
     if 'declare_parameter<bool>("enable_sliding_window_smoothness_factor", true)' not in tracking_node_text:
         errors.append("tracking_node must default trajectory smoothness BA factors to true")
     if 'DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true")' not in tracking_launch_text:

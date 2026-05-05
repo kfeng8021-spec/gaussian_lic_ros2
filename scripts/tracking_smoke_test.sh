@@ -128,6 +128,7 @@ if [[ "${ENABLE_VISUAL_FACTOR_GATE}" == "true" ]]; then
     -p publish_depth:=false \
     -p publish_rendered_image:=true \
     -p rendered_image_topic:=/gaussian_lic/rendered_image \
+    -p use_sim_time:=true \
     -p image_width:=32 \
     -p image_height:=32 \
     -p image_pattern:=gaussian \

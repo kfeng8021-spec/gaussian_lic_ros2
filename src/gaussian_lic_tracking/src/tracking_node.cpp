@@ -70,6 +70,7 @@ public:
     visual_factor_max_dt_ns_ =
       declare_parameter<int64_t>("visual_factor_max_dt_ns", 150000000LL);
     depth_frame_cache_size_ = declare_parameter<int>("depth_frame_cache_size", 8);
+    rendered_frame_cache_size_ = declare_parameter<int>("rendered_frame_cache_size", 8);
     const auto camera_to_imu_translation = declare_parameter<std::vector<double>>(
       "camera_to_imu_translation_m", std::vector<double>{0.0, 0.0, 0.0});
     const auto camera_to_imu_rpy = declare_parameter<std::vector<double>>(
@@ -388,16 +389,18 @@ private:
     if (!decode_image_gray(msg, observed)) {
       return;
     }
-    if (has_rendered_frame_) {
-      last_visual_residual_ = visual_factor_.evaluate(latest_rendered_frame_, observed);
+    const gaussian_lic_tracking::VisualFrame * rendered_frame =
+      select_rendered_frame_for_stamp(observed.stamp_ns, observed.width, observed.height);
+    if (rendered_frame != nullptr) {
+      last_visual_residual_ = visual_factor_.evaluate(*rendered_frame, observed);
       last_visual_alignment_ = visual_factor_.estimate_translation(
-        latest_rendered_frame_,
+        *rendered_frame,
         observed,
         std::max(visual_alignment_max_shift_px_, 0));
       last_visual_photometric_linearization_ =
-        visual_factor_.linearize_translation(latest_rendered_frame_, observed);
+        visual_factor_.linearize_translation(*rendered_frame, observed);
       if (enable_se3_photometric_window_factor_) {
-        const auto se3_samples = build_se3_photometric_samples(latest_rendered_frame_, observed);
+        const auto se3_samples = build_se3_photometric_samples(*rendered_frame, observed);
         last_visual_se3_photometric_candidate_pixels_ = se3_samples.candidate_pixels;
         last_visual_se3_photometric_accepted_pixels_ = se3_samples.accepted_pixels;
         last_visual_se3_photometric_mean_abs_residual_ = se3_samples.mean_abs_residual;
@@ -446,8 +449,7 @@ private:
     }
     gaussian_lic_tracking::VisualFrame rendered;
     if (decode_image_gray(msg, rendered)) {
-      latest_rendered_frame_ = std::move(rendered);
-      has_rendered_frame_ = true;
+      cache_rendered_frame(std::move(rendered));
     }
   }
 
@@ -889,6 +891,25 @@ private:
     }
   }
 
+  void cache_rendered_frame(gaussian_lic_tracking::VisualFrame frame)
+  {
+    const auto insert_it = std::lower_bound(
+      rendered_frame_cache_.begin(), rendered_frame_cache_.end(), frame.stamp_ns,
+      [](const gaussian_lic_tracking::VisualFrame & cached, const int64_t stamp_ns) {
+        return cached.stamp_ns < stamp_ns;
+      });
+    if (insert_it != rendered_frame_cache_.end() && insert_it->stamp_ns == frame.stamp_ns) {
+      *insert_it = std::move(frame);
+    } else {
+      rendered_frame_cache_.insert(insert_it, std::move(frame));
+    }
+
+    const auto max_cache_size = static_cast<size_t>(std::max(rendered_frame_cache_size_, 1));
+    while (rendered_frame_cache_.size() > max_cache_size) {
+      rendered_frame_cache_.pop_front();
+    }
+  }
+
   const DepthFrame * select_depth_frame_for_stamp(
     const int64_t image_stamp_ns,
     const size_t width,
@@ -897,6 +918,28 @@ private:
     const DepthFrame * best = nullptr;
     int64_t best_delta_ns = std::numeric_limits<int64_t>::max();
     for (const auto & frame : depth_frame_cache_) {
+      if (frame.width != width || frame.height != height) {
+        continue;
+      }
+      const int64_t delta_ns = stamp_delta_ns(frame.stamp_ns, image_stamp_ns);
+      if (delta_ns <= std::max<int64_t>(visual_factor_max_dt_ns_, 0LL) &&
+        delta_ns < best_delta_ns)
+      {
+        best = &frame;
+        best_delta_ns = delta_ns;
+      }
+    }
+    return best;
+  }
+
+  const gaussian_lic_tracking::VisualFrame * select_rendered_frame_for_stamp(
+    const int64_t image_stamp_ns,
+    const size_t width,
+    const size_t height) const
+  {
+    const gaussian_lic_tracking::VisualFrame * best = nullptr;
+    int64_t best_delta_ns = std::numeric_limits<int64_t>::max();
+    for (const auto & frame : rendered_frame_cache_) {
       if (frame.width != width || frame.height != height) {
         continue;
       }
@@ -1562,6 +1605,7 @@ private:
   int visual_max_pixels_{200000};
   int64_t visual_factor_max_dt_ns_{150000000LL};
   int depth_frame_cache_size_{8};
+  int rendered_frame_cache_size_{8};
   Eigen::Vector3d p_i_c_{Eigen::Vector3d::Zero()};
   Eigen::Quaterniond q_i_c_{Eigen::Quaterniond::Identity()};
   int visual_alignment_max_shift_px_{8};
@@ -1648,7 +1692,7 @@ private:
   bool has_lidar_keyframe_{false};
   gaussian_lic_tracking::GaussianSnapshot gaussian_snapshot_;
   gaussian_lic_tracking::VisualFactor visual_factor_;
-  gaussian_lic_tracking::VisualFrame latest_rendered_frame_;
+  std::deque<gaussian_lic_tracking::VisualFrame> rendered_frame_cache_;
   gaussian_lic_tracking::VisualResidual last_visual_residual_;
   gaussian_lic_tracking::VisualAlignment last_visual_alignment_;
   gaussian_lic_tracking::VisualPhotometricLinearization last_visual_photometric_linearization_;
@@ -1665,7 +1709,6 @@ private:
   bool has_camera_intrinsics_{false};
   bool has_pending_visual_se3_photometric_{false};
   bool has_pending_visual_alignment_{false};
-  bool has_rendered_frame_{false};
   gaussian_lic_tracking::SlidingWindowSummary last_sliding_window_summary_;
   bool has_last_sliding_window_summary_{false};
   uint64_t num_raw_images_{0};
