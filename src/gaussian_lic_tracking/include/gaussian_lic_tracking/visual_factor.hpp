@@ -25,6 +25,16 @@ struct VisualResidual
   double rmse{0.0};
 };
 
+struct VisualAlignment
+{
+  bool valid{false};
+  int dx{0};
+  int dy{0};
+  size_t compared_pixels{0};
+  double mean_abs_error{0.0};
+  double rmse{0.0};
+};
+
 class VisualFactor
 {
 public:
@@ -34,8 +44,18 @@ public:
   size_t max_pixels() const { return max_pixels_; }
 
   VisualResidual evaluate(const VisualFrame & reference, const VisualFrame & candidate) const;
+  VisualAlignment estimate_translation(
+    const VisualFrame & reference,
+    const VisualFrame & candidate,
+    int max_shift_px) const;
 
 private:
+  VisualResidual evaluate_shifted(
+    const VisualFrame & reference,
+    const VisualFrame & candidate,
+    int dx,
+    int dy) const;
+
   size_t max_pixels_{200000};
 };
 

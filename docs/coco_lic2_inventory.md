@@ -70,7 +70,8 @@ Current ROS2 implementation status:
   convergence probes. It is exposed as an optional tracking-node path while the
   production Coco-LIC2 BA factors are ported.
 - `gaussian_lic_tracking::VisualFactor` provides the first native photometric
-  residual foundation, and `tracking_node` subscribes to
+  residual and integer image-alignment foundation, and `tracking_node`
+  subscribes to
   `/gaussian_lic/rendered_image` so mapper Gaussian renders can be compared
   against incoming camera frames.
 - `tracking_node` also subscribes to `/gaussian_lic/gaussian_map`

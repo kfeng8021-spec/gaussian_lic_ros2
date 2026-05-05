@@ -42,6 +42,32 @@ int main()
     return 1;
   }
 
+  gaussian_lic_tracking::VisualFrame alignment_reference;
+  alignment_reference.width = 8;
+  alignment_reference.height = 8;
+  alignment_reference.gray.assign(alignment_reference.width * alignment_reference.height, 0.0F);
+  for (size_t y = 0; y < alignment_reference.height; ++y) {
+    for (size_t x = 0; x < alignment_reference.width; ++x) {
+      alignment_reference.gray[y * alignment_reference.width + x] =
+        static_cast<float>(0.1 * static_cast<double>(x) + 0.03 * static_cast<double>(y));
+    }
+  }
+  gaussian_lic_tracking::VisualFrame alignment_candidate = alignment_reference;
+  for (size_t y = 0; y < alignment_reference.height; ++y) {
+    for (size_t x = 0; x + 1 < alignment_reference.width; ++x) {
+      alignment_candidate.gray[y * alignment_candidate.width + x + 1] =
+        alignment_reference.gray[y * alignment_reference.width + x];
+    }
+  }
+  const auto alignment = factor.estimate_translation(alignment_reference, alignment_candidate, 2);
+  std::cout << " visual_alignment dx=" << alignment.dx
+            << " dy=" << alignment.dy
+            << " rmse=" << alignment.rmse;
+  if (!alignment.valid || alignment.dx != 1 || alignment.dy != 0 || alignment.rmse > 1.0e-6) {
+    std::cerr << "visual alignment failed to recover integer translation\n";
+    return 1;
+  }
+
   candidate.width = 2;
   if (factor.evaluate(reference, candidate).valid) {
     std::cerr << "shape-mismatched visual frames should be invalid\n";

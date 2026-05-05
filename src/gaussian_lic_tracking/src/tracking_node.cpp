@@ -57,6 +57,7 @@ public:
     enable_visual_factor_ = declare_parameter<bool>("enable_visual_factor", true);
     enable_gaussian_snapshot_ = declare_parameter<bool>("enable_gaussian_snapshot", true);
     visual_max_pixels_ = declare_parameter<int>("visual_max_pixels", 200000);
+    visual_alignment_max_shift_px_ = declare_parameter<int>("visual_alignment_max_shift_px", 8);
     enable_lio_factor_ = declare_parameter<bool>("enable_lio_factor", true);
     lidar_min_points_ = declare_parameter<int>("lidar_min_points", 32);
     lidar_max_frame_points_ = declare_parameter<int>("lidar_max_frame_points", 2000);
@@ -236,13 +237,21 @@ private:
     }
     if (has_rendered_frame_) {
       last_visual_residual_ = visual_factor_.evaluate(latest_rendered_frame_, observed);
+      last_visual_alignment_ = visual_factor_.estimate_translation(
+        latest_rendered_frame_,
+        observed,
+        std::max(visual_alignment_max_shift_px_, 0));
       if (last_visual_residual_.valid) {
         RCLCPP_DEBUG_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "visual residual pixels=%zu mae=%.6f rmse=%.6f",
+          "visual residual pixels=%zu mae=%.6f rmse=%.6f align_valid=%s dx=%d dy=%d align_rmse=%.6f",
           last_visual_residual_.compared_pixels,
           last_visual_residual_.mean_abs_error,
-          last_visual_residual_.rmse);
+          last_visual_residual_.rmse,
+          last_visual_alignment_.valid ? "true" : "false",
+          last_visual_alignment_.dx,
+          last_visual_alignment_.dy,
+          last_visual_alignment_.rmse);
       }
     }
   }
@@ -879,6 +888,7 @@ private:
   bool enable_visual_factor_{true};
   bool enable_gaussian_snapshot_{true};
   int visual_max_pixels_{200000};
+  int visual_alignment_max_shift_px_{8};
   bool enable_lio_factor_{true};
   bool enable_lidar_deskew_{true};
   bool enable_sliding_window_optimizer_{false};
@@ -932,6 +942,7 @@ private:
   gaussian_lic_tracking::VisualFactor visual_factor_;
   gaussian_lic_tracking::VisualFrame latest_rendered_frame_;
   gaussian_lic_tracking::VisualResidual last_visual_residual_;
+  gaussian_lic_tracking::VisualAlignment last_visual_alignment_;
   bool has_rendered_frame_{false};
   int64_t last_gaussian_snapshot_stamp_ns_{0};
   uint32_t last_gaussian_total_count_{0};
