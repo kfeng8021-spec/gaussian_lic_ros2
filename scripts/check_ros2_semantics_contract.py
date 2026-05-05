@@ -68,6 +68,9 @@ def main() -> int:
         errors.append("mapping_node does not retain a nanosecond sync tolerance")
     if "const double frame_time" in mapping_text:
         errors.append("mapping_node frame synchronization regressed to double seconds")
+    nanosecond_guard = "stamp.nanosec >= static_cast<uint32_t>(kNanosecondsPerSecond)"
+    if nanosecond_guard not in mapping_text:
+        errors.append("mapping_node stamp_to_nsec must reject ROS2 stamps with nanosec >= 1e9")
 
     if "stamp_to_sec" in frontend_text:
         errors.append("lic2_contract_adapter still exposes stamp_to_sec; use int64 nanoseconds")
@@ -75,6 +78,8 @@ def main() -> int:
         errors.append("lic2_contract_adapter IMU integration still stores double-second stamps")
     if "last_imu_stamp_nsec_" not in frontend_text:
         errors.append("lic2_contract_adapter does not store IMU stamps in nanoseconds")
+    if nanosecond_guard not in frontend_text:
+        errors.append("lic2_contract_adapter stamp_to_nsec must reject ROS2 stamps with nanosec >= 1e9")
 
     if 'executable="component_container_mt"' in launch_text or "component_container_mt" in launch_text:
         errors.append("run_bag.launch.py must default strict composition to single-threaded component_container")

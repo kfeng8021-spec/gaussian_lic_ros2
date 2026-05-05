@@ -159,6 +159,7 @@ baseline_manifest.json
 - [x] Add `gaussian_lic_frontend/lic2_contract_adapter` as the ROS2 boundary for raw camera/LiDAR/IMU/pose inputs.
 - [x] Port Livox/custom point handling to ROS2.
 - [x] Publish signed-nanosecond image/LiDAR/IMU tracking stamps and gate them in native tracking smoke.
+- [x] Reject invalid ROS2 builtin stamp nanosecond fields in mapper/frontend timestamp helpers before estimator arithmetic.
 - [x] Expose tracking sensor QoS through launch/status and gate bounded `best_effort` defaults in native tracking smoke.
 - [x] Add default callback serialization in native tracking so MultiThreadedExecutor use cannot concurrently mutate IMU/LiDAR/image estimator state.
 - [x] Add a native timestamp-safe cubic B-spline trajectory manager foundation with position/velocity and SO(3) cubic orientation constant-rate probes.

@@ -489,6 +489,9 @@ private:
 
   static int64_t stamp_to_nsec(const builtin_interfaces::msg::Time & stamp)
   {
+    if (stamp.nanosec >= static_cast<uint32_t>(kNanosecondsPerSecond)) {
+      throw std::invalid_argument("ROS2 Time.nanosec must be less than 1e9");
+    }
     return static_cast<int64_t>(stamp.sec) * kNanosecondsPerSecond +
       static_cast<int64_t>(stamp.nanosec);
   }

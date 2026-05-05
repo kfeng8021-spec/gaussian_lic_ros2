@@ -11,6 +11,9 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
 - Zero and negative builtin stamps are preserved as numeric nanoseconds. They are
   not normalized through ROS clocks before B-spline, IMU, LiDAR deskew, or frame
   synchronization math.
+- Local builtin-stamp helpers reject invalid ROS2 stamps with `nanosec >= 1e9`
+  before arithmetic, so malformed messages fail at the input boundary instead of
+  shifting synchronization, IMU integration, or deskew intervals silently.
 - `mapping_node` keeps `sync_tolerance_sec` as the public parameter for profile
   compatibility, then converts it once to `sync_tolerance_nsec_`.
 - `lic2_contract_adapter` IMU fallback integrates with nanosecond stamp deltas
