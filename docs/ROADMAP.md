@@ -164,6 +164,7 @@ baseline_manifest.json
 - [x] Publish signed-nanosecond image/LiDAR/IMU tracking stamps and gate them in native tracking smoke.
 - [x] Reject invalid ROS2 builtin stamp nanosecond fields in mapper/frontend timestamp helpers before estimator arithmetic.
 - [x] Expose tracking sensor QoS through launch/status and gate bounded `best_effort` defaults in native tracking smoke.
+- [x] Add per-stream native tracking raw-input and mapper-output QoS controls so image/LiDAR/IMU/depth/pose/odometry streams no longer share one fixed policy.
 - [x] Add default callback serialization in native tracking so MultiThreadedExecutor use cannot concurrently mutate IMU/LiDAR/image estimator state.
 - [x] Add a native timestamp-safe cubic B-spline trajectory manager foundation with position/velocity and SO(3) cubic orientation constant-rate probes.
 - [x] Add a native signed-nanosecond IMU propagation foundation with a deterministic gyro/accel probe.

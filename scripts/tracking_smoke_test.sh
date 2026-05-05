@@ -166,6 +166,7 @@ rm -f "${status_file}" "${status_tmp}"
 status_matches() {
   rg -q "executor_callback_serialization_enabled: true" "${status_file}" &&
     rg -q "sensor_qos_reliability: best_effort" "${status_file}" &&
+    rg -q "sensor_qos_history: keep_last" "${status_file}" &&
     rg -q "sensor_qos_depth: 5" "${status_file}" &&
     rg -q "signed_nanosecond_time_math_enabled: true" "${status_file}" &&
     rg -q "last_image_stamp_ns: [1-9]" "${status_file}" &&

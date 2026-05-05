@@ -18,7 +18,38 @@ def generate_launch_description():
     gaussian_map_topic = LaunchConfiguration("gaussian_map_topic")
     serialize_callbacks = LaunchConfiguration("serialize_callbacks")
     sensor_qos_reliability = LaunchConfiguration("sensor_qos_reliability")
+    sensor_qos_history = LaunchConfiguration("sensor_qos_history")
     sensor_qos_depth = LaunchConfiguration("sensor_qos_depth")
+    qos_streams = (
+        "raw_image",
+        "raw_camera_info",
+        "raw_depth",
+        "raw_pointcloud",
+        "raw_imu",
+        "image",
+        "camera_info",
+        "depth",
+        "pointcloud",
+        "pose",
+        "frontend_odometry",
+    )
+    qos_launch_configs = {
+        f"{stream}_{suffix}": LaunchConfiguration(f"{stream}_{suffix}")
+        for stream in qos_streams
+        for suffix in ("qos_reliability", "qos_history", "qos_depth")
+    }
+    qos_launch_arguments = [
+        DeclareLaunchArgument(
+            f"{stream}_{suffix}",
+            default_value={
+                "qos_reliability": "best_effort",
+                "qos_history": "keep_last",
+                "qos_depth": "5",
+            }[suffix],
+        )
+        for stream in qos_streams
+        for suffix in ("qos_reliability", "qos_history", "qos_depth")
+    ]
     enable_lio_factor = LaunchConfiguration("enable_lio_factor")
     enable_lidar_plane_factor = LaunchConfiguration("enable_lidar_plane_factor")
     lidar_min_points = LaunchConfiguration("lidar_min_points")
@@ -102,7 +133,9 @@ def generate_launch_description():
             DeclareLaunchArgument("gaussian_map_topic", default_value="/gaussian_lic/gaussian_map"),
             DeclareLaunchArgument("serialize_callbacks", default_value="true"),
             DeclareLaunchArgument("sensor_qos_reliability", default_value="best_effort"),
+            DeclareLaunchArgument("sensor_qos_history", default_value="keep_last"),
             DeclareLaunchArgument("sensor_qos_depth", default_value="5"),
+            *qos_launch_arguments,
             DeclareLaunchArgument("enable_lio_factor", default_value="true"),
             DeclareLaunchArgument("enable_lidar_plane_factor", default_value="true"),
             DeclareLaunchArgument("lidar_min_points", default_value="32"),
@@ -188,7 +221,9 @@ def generate_launch_description():
                         "gaussian_map_topic": gaussian_map_topic,
                         "serialize_callbacks": serialize_callbacks,
                         "sensor_qos_reliability": sensor_qos_reliability,
+                        "sensor_qos_history": sensor_qos_history,
                         "sensor_qos_depth": sensor_qos_depth,
+                        **qos_launch_configs,
                         "enable_lio_factor": enable_lio_factor,
                         "enable_lidar_plane_factor": enable_lidar_plane_factor,
                         "lidar_min_points": lidar_min_points,

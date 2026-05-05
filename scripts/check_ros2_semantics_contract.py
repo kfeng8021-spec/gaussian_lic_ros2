@@ -127,6 +127,7 @@ def main() -> int:
         "tracking_status_topic",
         "serialize_callbacks",
         "sensor_qos_reliability",
+        "sensor_qos_history",
         "sensor_qos_depth",
         "enable_lidar_plane_factor",
         "enable_visual_alignment_window_factor",
@@ -173,8 +174,36 @@ def main() -> int:
         if f'"{argument}": {argument}' not in tracking_launch_text:
             errors.append(f"tracking.launch.py must pass {argument} into tracking_node")
 
+    required_tracking_qos_streams = [
+        "raw_image",
+        "raw_camera_info",
+        "raw_depth",
+        "raw_pointcloud",
+        "raw_imu",
+        "image",
+        "camera_info",
+        "depth",
+        "pointcloud",
+        "pose",
+        "frontend_odometry",
+    ]
+    if "qos_launch_configs" not in tracking_launch_text or "**qos_launch_configs" not in tracking_launch_text:
+        errors.append("tracking.launch.py must pass per-stream tracking QoS overrides into tracking_node")
+    for stream in required_tracking_qos_streams:
+        if f'"{stream}"' not in tracking_launch_text:
+            errors.append(f"tracking.launch.py must include {stream} in per-stream QoS launch overrides")
+        if f'declare_topic_qos("{stream}")' not in tracking_node_text:
+            errors.append(f"tracking_node must declare {stream} per-stream QoS parameters")
+        if f'make_sensor_qos("{stream}"' not in tracking_node_text:
+            errors.append(f"tracking_node must apply {stream} per-stream QoS")
+
     if 'declare_parameter<bool>("serialize_callbacks", true)' not in tracking_node_text:
         errors.append("tracking_node must default serialize_callbacks to true")
+    if (
+        'declare_parameter<std::string>("sensor_qos_history", "keep_last")' not in tracking_node_text
+        or "sensor_qos_history" not in tracking_status_msg_text
+    ):
+        errors.append("tracking_node must expose and publish sensor_qos_history")
     if "valid_camera_info_intrinsics" not in tracking_node_text or "std::isfinite(msg.k[2])" not in tracking_node_text:
         errors.append("tracking_node must reject non-finite CameraInfo intrinsics at the input boundary")
     if "vector3_from_parameter" not in tracking_node_text or "quaternion_from_rpy_parameter" not in tracking_node_text:

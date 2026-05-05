@@ -66,6 +66,18 @@ public:
     sensor_qos_depth_ = integer_parameter_at_least(
       "sensor_qos_depth", declare_parameter<int>("sensor_qos_depth", 5), 1);
     sensor_qos_reliability_ = declare_parameter<std::string>("sensor_qos_reliability", "best_effort");
+    sensor_qos_history_ = declare_parameter<std::string>("sensor_qos_history", "keep_last");
+    raw_image_qos_ = declare_topic_qos("raw_image");
+    raw_camera_info_qos_ = declare_topic_qos("raw_camera_info");
+    raw_depth_qos_ = declare_topic_qos("raw_depth");
+    raw_pointcloud_qos_ = declare_topic_qos("raw_pointcloud");
+    raw_imu_qos_ = declare_topic_qos("raw_imu");
+    image_qos_ = declare_topic_qos("image");
+    camera_info_qos_ = declare_topic_qos("camera_info");
+    depth_qos_ = declare_topic_qos("depth");
+    pointcloud_qos_ = declare_topic_qos("pointcloud");
+    pose_qos_ = declare_topic_qos("pose");
+    frontend_odometry_qos_ = declare_topic_qos("frontend_odometry");
     serialize_callbacks_ = declare_parameter<bool>("serialize_callbacks", true);
     enable_visual_factor_ = declare_parameter<bool>("enable_visual_factor", true);
     enable_gaussian_snapshot_ = declare_parameter<bool>("enable_gaussian_snapshot", true);
@@ -275,49 +287,62 @@ public:
     lidar_factor_.set_config(lidar_config);
     visual_factor_.set_max_pixels(static_cast<size_t>(visual_max_pixels_));
 
-    auto qos = make_sensor_qos();
+    const auto raw_image_qos = make_sensor_qos("raw_image", raw_image_qos_);
+    const auto raw_camera_info_qos = make_sensor_qos("raw_camera_info", raw_camera_info_qos_);
+    const auto raw_depth_qos = make_sensor_qos("raw_depth", raw_depth_qos_);
+    const auto raw_pointcloud_qos = make_sensor_qos("raw_pointcloud", raw_pointcloud_qos_);
+    const auto raw_imu_qos = make_sensor_qos("raw_imu", raw_imu_qos_);
+    const auto image_qos = make_sensor_qos("image", image_qos_);
+    const auto camera_info_qos = make_sensor_qos("camera_info", camera_info_qos_);
+    const auto depth_qos = make_sensor_qos("depth", depth_qos_);
+    const auto pointcloud_qos = make_sensor_qos("pointcloud", pointcloud_qos_);
+    const auto pose_qos = make_sensor_qos("pose", pose_qos_);
+    const auto frontend_odometry_qos = make_sensor_qos("frontend_odometry", frontend_odometry_qos_);
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
-      raw_image_topic_, qos,
+      raw_image_topic_, raw_image_qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr msg) {
         run_serialized_callback([this, msg]() {
           handle_image(*msg);
         });
       });
     camera_info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-      raw_camera_info_topic_, qos,
+      raw_camera_info_topic_, raw_camera_info_qos,
       [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr msg) {
         run_serialized_callback([this, msg]() {
           handle_camera_info(*msg);
         });
       });
     depth_sub_ = create_subscription<sensor_msgs::msg::Image>(
-      raw_depth_topic_, qos,
+      raw_depth_topic_, raw_depth_qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr msg) {
         run_serialized_callback([this, msg]() {
           handle_depth(*msg);
         });
       });
     pointcloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      raw_pointcloud_topic_, qos,
+      raw_pointcloud_topic_, raw_pointcloud_qos,
       [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
         run_serialized_callback([this, msg]() {
           handle_pointcloud(*msg);
         });
       });
     imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
-      raw_imu_topic_, qos,
+      raw_imu_topic_, raw_imu_qos,
       [this](sensor_msgs::msg::Imu::ConstSharedPtr msg) {
         run_serialized_callback([this, msg]() {
           handle_imu(*msg);
         });
       });
 
-    image_pub_ = create_publisher<sensor_msgs::msg::Image>(image_topic_, qos);
-    camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_topic_, qos);
-    depth_pub_ = create_publisher<sensor_msgs::msg::Image>(depth_topic_, qos);
-    pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(pointcloud_topic_, qos);
-    pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_, 20);
-    odometry_pub_ = create_publisher<nav_msgs::msg::Odometry>(odometry_topic_, 20);
+    image_pub_ = create_publisher<sensor_msgs::msg::Image>(image_topic_, image_qos);
+    camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
+      camera_info_topic_, camera_info_qos);
+    depth_pub_ = create_publisher<sensor_msgs::msg::Image>(depth_topic_, depth_qos);
+    pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      pointcloud_topic_, pointcloud_qos);
+    pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_, pose_qos);
+    odometry_pub_ = create_publisher<nav_msgs::msg::Odometry>(
+      odometry_topic_, frontend_odometry_qos);
     path_pub_ = create_publisher<nav_msgs::msg::Path>(path_topic_, rclcpp::QoS(1).transient_local().reliable());
     tracking_status_pub_ = create_publisher<gaussian_lic_msgs::msg::TrackingStatus>(
       tracking_status_topic_, rclcpp::QoS(1).transient_local().reliable());
@@ -382,6 +407,13 @@ private:
     double mean_abs_residual{0.0};
   };
 
+  struct QosProfileParams
+  {
+    std::string reliability{"best_effort"};
+    std::string history{"keep_last"};
+    int depth{5};
+  };
+
   template<typename CallbackT>
   void run_serialized_callback(CallbackT && callback)
   {
@@ -393,15 +425,40 @@ private:
     std::forward<CallbackT>(callback)();
   }
 
-  rclcpp::QoS make_sensor_qos() const
+  QosProfileParams declare_topic_qos(const std::string & prefix)
   {
-    rclcpp::QoS qos(static_cast<size_t>(sensor_qos_depth_));
-    qos.keep_last(static_cast<size_t>(sensor_qos_depth_));
-    qos.durability_volatile();
-    if (sensor_qos_reliability_ == "reliable") {
-      qos.reliable();
+    QosProfileParams params;
+    params.reliability = declare_parameter<std::string>(
+      prefix + "_qos_reliability", sensor_qos_reliability_);
+    params.history = declare_parameter<std::string>(
+      prefix + "_qos_history", sensor_qos_history_);
+    params.depth = integer_parameter_at_least(
+      (prefix + "_qos_depth").c_str(),
+      declare_parameter<int>(prefix + "_qos_depth", sensor_qos_depth_), 1);
+    return params;
+  }
+
+  rclcpp::QoS make_sensor_qos(const char * stream_name, const QosProfileParams & params) const
+  {
+    rclcpp::QoS qos(static_cast<size_t>(params.depth));
+    if (params.history == "keep_all") {
+      qos.keep_all();
+    } else if (params.history == "keep_last") {
+      qos.keep_last(static_cast<size_t>(params.depth));
     } else {
+      throw std::runtime_error(
+        std::string(stream_name) + "_qos_history must be keep_last or keep_all, got " +
+        params.history);
+    }
+    qos.durability_volatile();
+    if (params.reliability == "reliable") {
+      qos.reliable();
+    } else if (params.reliability == "best_effort") {
       qos.best_effort();
+    } else {
+      throw std::runtime_error(
+        std::string(stream_name) + "_qos_reliability must be best_effort or reliable, got " +
+        params.reliability);
     }
     return qos;
   }
@@ -1734,6 +1791,7 @@ private:
     status.header.frame_id = world_frame_;
     status.executor_callback_serialization_enabled = serialize_callbacks_;
     status.sensor_qos_reliability = sensor_qos_reliability_;
+    status.sensor_qos_history = sensor_qos_history_;
     status.sensor_qos_depth = static_cast<uint32_t>(sensor_qos_depth_);
     status.signed_nanosecond_time_math_enabled = true;
     status.last_image_stamp_ns = last_image_stamp_ns_;
@@ -1921,6 +1979,18 @@ private:
   int max_path_length_{5000};
   int sensor_qos_depth_{5};
   std::string sensor_qos_reliability_{"best_effort"};
+  std::string sensor_qos_history_{"keep_last"};
+  QosProfileParams raw_image_qos_;
+  QosProfileParams raw_camera_info_qos_;
+  QosProfileParams raw_depth_qos_;
+  QosProfileParams raw_pointcloud_qos_;
+  QosProfileParams raw_imu_qos_;
+  QosProfileParams image_qos_;
+  QosProfileParams camera_info_qos_;
+  QosProfileParams depth_qos_;
+  QosProfileParams pointcloud_qos_;
+  QosProfileParams pose_qos_;
+  QosProfileParams frontend_odometry_qos_;
   bool serialize_callbacks_{true};
   bool enable_visual_factor_{true};
   bool enable_gaussian_snapshot_{true};

@@ -12,6 +12,7 @@ uint8 state
 string status_text
 bool executor_callback_serialization_enabled
 string sensor_qos_reliability
+string sensor_qos_history
 uint32 sensor_qos_depth
 bool signed_nanosecond_time_math_enabled
 int64 last_image_stamp_ns

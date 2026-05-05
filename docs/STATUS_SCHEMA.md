@@ -59,6 +59,7 @@ the estimator did more than publish pass-through topics.
 state/status_text
 executor_callback_serialization_enabled
 sensor_qos_reliability
+sensor_qos_history
 sensor_qos_depth
 signed_nanosecond_time_math_enabled
 last_image_stamp_ns

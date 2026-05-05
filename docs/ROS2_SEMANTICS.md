@@ -34,9 +34,12 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
   inputs and mapper-contract outputs, so adapter publisher QoS can be matched to
   mapper subscriber QoS when a replay profile promotes selected low-rate streams
   to `reliable`.
-- `gaussian_lic_tracking/tracking.launch.py` exposes `sensor_qos_reliability`
-  and `sensor_qos_depth`, defaults them to `best_effort` and `5`, and publishes
-  the effective values on `/gaussian_lic/frontend/status` for smoke gating.
+- `gaussian_lic_tracking/tracking.launch.py` exposes `sensor_qos_reliability`,
+  `sensor_qos_history`, and `sensor_qos_depth`, plus per-stream raw-input and
+  mapper-output QoS overrides. Raw image, CameraInfo, depth, LiDAR, and IMU
+  subscriptions, and image, CameraInfo, depth, point cloud, pose, and frontend
+  odometry publishers each fall back to the global defaults instead of sharing a
+  hard-coded policy.
 - High-rate image, LiDAR, IMU, and depth topics should stay volatile and bounded.
 - Visual and SE3 photometric BA samples use bounded mapper-render/depth caches
   and nearest-stamp selection inside `visual_factor_max_dt_ns`, so rosbag2 topic
