@@ -86,6 +86,7 @@ sliding_window_point_factors
 sliding_window_plane_factors
 sliding_window_visual_factors
 sliding_window_se3_photometric_factors
+sliding_window_smoothness_factors
 sliding_window_marginalized_states
 sliding_window_dense_prior_rows
 sliding_window_dense_prior_cols
@@ -136,6 +137,9 @@ visual factors.
 The sliding-window gate also requires nonzero dense-prior rank and singular
 value coverage after marginalization so retained-state priors are numerically
 observable rather than only present by count.
+It also gates nonzero trajectory smoothness factors, which constrain adjacent
+three-state rotation-rate, position-rate, velocity-acceleration, and bias-rate
+continuity in the native joint BA window.
 The visual gate replays a 32x32 Gaussian-pattern image bag while a
 transient-local rendered-image publisher supplies the mapper-render reference,
 then checks both subpixel alignment and photometric Gauss-Newton linearization

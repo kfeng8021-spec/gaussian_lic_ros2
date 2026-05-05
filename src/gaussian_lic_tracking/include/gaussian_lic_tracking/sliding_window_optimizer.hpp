@@ -109,6 +109,18 @@ struct SlidingWindowSe3PhotometricFactor
   double weight{1.0};
 };
 
+struct SlidingWindowTrajectorySmoothnessFactor
+{
+  int64_t previous_stamp_ns{0};
+  int64_t current_stamp_ns{0};
+  int64_t next_stamp_ns{0};
+  double rotation_rate_weight{1.0};
+  double position_rate_weight{1.0};
+  double velocity_acceleration_weight{1.0};
+  double gyro_bias_rate_weight{1.0};
+  double accel_bias_rate_weight{1.0};
+};
+
 struct SlidingWindowDensePrior
 {
   std::vector<int64_t> stamp_ns;
@@ -128,6 +140,7 @@ struct SlidingWindowSummary
   size_t plane_factor_count{0};
   size_t visual_factor_count{0};
   size_t se3_photometric_factor_count{0};
+  size_t smoothness_factor_count{0};
   size_t marginalized_state_count{0};
   size_t dense_prior_rows{0};
   size_t dense_prior_cols{0};
@@ -191,6 +204,7 @@ public:
   void add_point_to_plane_factor(const SlidingWindowPointToPlaneFactor & factor);
   void add_visual_alignment_factor(const SlidingWindowVisualAlignmentFactor & factor);
   void add_se3_photometric_factor(const SlidingWindowSe3PhotometricFactor & factor);
+  void add_trajectory_smoothness_factor(const SlidingWindowTrajectorySmoothnessFactor & factor);
 
   SlidingWindowNormalEquation build_normal_equation(double damping = 0.0) const;
   SlidingWindowSummary optimize();
@@ -247,6 +261,7 @@ private:
   std::vector<SlidingWindowPointToPlaneFactor> plane_factors_;
   std::vector<SlidingWindowVisualAlignmentFactor> visual_factors_;
   std::vector<SlidingWindowSe3PhotometricFactor> se3_photometric_factors_;
+  std::vector<SlidingWindowTrajectorySmoothnessFactor> smoothness_factors_;
   size_t marginalized_state_count_{0};
 };
 

@@ -42,6 +42,7 @@ uint64 sliding_window_point_factors
 uint64 sliding_window_plane_factors
 uint64 sliding_window_visual_factors
 uint64 sliding_window_se3_photometric_factors
+uint64 sliding_window_smoothness_factors
 uint64 sliding_window_marginalized_states
 uint64 sliding_window_dense_prior_rows
 uint64 sliding_window_dense_prior_cols

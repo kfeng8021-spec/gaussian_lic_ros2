@@ -56,6 +56,11 @@ def generate_launch_description():
     sliding_window_bias_weight = LaunchConfiguration("sliding_window_bias_weight")
     sliding_window_pose_translation_weight = LaunchConfiguration("sliding_window_pose_translation_weight")
     sliding_window_pose_rotation_weight = LaunchConfiguration("sliding_window_pose_rotation_weight")
+    enable_sliding_window_smoothness_factor = LaunchConfiguration("enable_sliding_window_smoothness_factor")
+    sliding_window_smoothness_rotation_weight = LaunchConfiguration("sliding_window_smoothness_rotation_weight")
+    sliding_window_smoothness_position_weight = LaunchConfiguration("sliding_window_smoothness_position_weight")
+    sliding_window_smoothness_velocity_weight = LaunchConfiguration("sliding_window_smoothness_velocity_weight")
+    sliding_window_smoothness_bias_weight = LaunchConfiguration("sliding_window_smoothness_bias_weight")
     enable_gaussian_snapshot_lidar_factor = LaunchConfiguration("enable_gaussian_snapshot_lidar_factor")
     gaussian_snapshot_lidar_min_opacity = LaunchConfiguration("gaussian_snapshot_lidar_min_opacity")
     lidar_time_field = LaunchConfiguration("lidar_time_field")
@@ -116,6 +121,11 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_bias_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_pose_translation_weight", default_value="2.0"),
             DeclareLaunchArgument("sliding_window_pose_rotation_weight", default_value="2.0"),
+            DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true"),
+            DeclareLaunchArgument("sliding_window_smoothness_rotation_weight", default_value="0.1"),
+            DeclareLaunchArgument("sliding_window_smoothness_position_weight", default_value="0.1"),
+            DeclareLaunchArgument("sliding_window_smoothness_velocity_weight", default_value="0.1"),
+            DeclareLaunchArgument("sliding_window_smoothness_bias_weight", default_value="0.1"),
             DeclareLaunchArgument("enable_gaussian_snapshot_lidar_factor", default_value="true"),
             DeclareLaunchArgument("gaussian_snapshot_lidar_min_opacity", default_value="0.01"),
             Node(
@@ -179,6 +189,11 @@ def generate_launch_description():
                         "sliding_window_bias_weight": sliding_window_bias_weight,
                         "sliding_window_pose_translation_weight": sliding_window_pose_translation_weight,
                         "sliding_window_pose_rotation_weight": sliding_window_pose_rotation_weight,
+                        "enable_sliding_window_smoothness_factor": enable_sliding_window_smoothness_factor,
+                        "sliding_window_smoothness_rotation_weight": sliding_window_smoothness_rotation_weight,
+                        "sliding_window_smoothness_position_weight": sliding_window_smoothness_position_weight,
+                        "sliding_window_smoothness_velocity_weight": sliding_window_smoothness_velocity_weight,
+                        "sliding_window_smoothness_bias_weight": sliding_window_smoothness_bias_weight,
                         "enable_gaussian_snapshot_lidar_factor": enable_gaussian_snapshot_lidar_factor,
                         "gaussian_snapshot_lidar_min_opacity": gaussian_snapshot_lidar_min_opacity,
                     }

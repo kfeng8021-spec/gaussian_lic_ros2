@@ -107,6 +107,11 @@ def main() -> int:
         "sliding_window_imu_weight",
         "sliding_window_pose_translation_weight",
         "sliding_window_pose_rotation_weight",
+        "enable_sliding_window_smoothness_factor",
+        "sliding_window_smoothness_rotation_weight",
+        "sliding_window_smoothness_position_weight",
+        "sliding_window_smoothness_velocity_weight",
+        "sliding_window_smoothness_bias_weight",
     ]
     for argument in required_tracking_launch_args:
         if f'DeclareLaunchArgument("{argument}"' not in tracking_launch_text:
@@ -124,6 +129,10 @@ def main() -> int:
         errors.append("tracking.launch.py must default visual alignment window factors to true")
     if 'DeclareLaunchArgument("enable_se3_photometric_window_factor", default_value="true")' not in tracking_launch_text:
         errors.append("tracking.launch.py must default SE3 photometric window factors to true")
+    if 'declare_parameter<bool>("enable_sliding_window_smoothness_factor", true)' not in tracking_node_text:
+        errors.append("tracking_node must default trajectory smoothness BA factors to true")
+    if 'DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true")' not in tracking_launch_text:
+        errors.append("tracking.launch.py must default trajectory smoothness BA factors to true")
     if "run_serialized_callback" not in tracking_node_text or "std::scoped_lock<std::mutex>" not in tracking_node_text:
         errors.append("tracking_node callbacks must pass through the serialization guard")
     for field in [
@@ -132,6 +141,7 @@ def main() -> int:
         "last_pointcloud_stamp_ns",
         "last_imu_stamp_ns",
         "sliding_window_imu_reanchors",
+        "sliding_window_smoothness_factors",
         "trajectory_control_poses",
         "trajectory_deskew_queries",
         "trajectory_deskew_hits",

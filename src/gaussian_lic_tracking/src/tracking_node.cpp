@@ -123,6 +123,16 @@ public:
       declare_parameter<double>("sliding_window_pose_translation_weight", 2.0);
     sliding_window_pose_rotation_weight_ =
       declare_parameter<double>("sliding_window_pose_rotation_weight", 2.0);
+    enable_sliding_window_smoothness_factor_ =
+      declare_parameter<bool>("enable_sliding_window_smoothness_factor", true);
+    sliding_window_smoothness_rotation_weight_ =
+      declare_parameter<double>("sliding_window_smoothness_rotation_weight", 0.1);
+    sliding_window_smoothness_position_weight_ =
+      declare_parameter<double>("sliding_window_smoothness_position_weight", 0.1);
+    sliding_window_smoothness_velocity_weight_ =
+      declare_parameter<double>("sliding_window_smoothness_velocity_weight", 0.1);
+    sliding_window_smoothness_bias_weight_ =
+      declare_parameter<double>("sliding_window_smoothness_bias_weight", 0.1);
     const auto gravity = declare_parameter<std::vector<double>>("imu_gravity_w", std::vector<double>{0.0, 0.0, 0.0});
     if (gravity.size() == 3U) {
       imu_propagator_.set_gravity_w(Eigen::Vector3d{gravity[0], gravity[1], gravity[2]});
@@ -671,6 +681,26 @@ private:
           "sliding window SE3 photometric factor skipped: %s", ex.what());
       }
     }
+    if (enable_sliding_window_smoothness_factor_ &&
+      previous_sliding_window_stamp_ns_.has_value() && has_sliding_window_state_)
+    {
+      gaussian_lic_tracking::SlidingWindowTrajectorySmoothnessFactor factor;
+      factor.previous_stamp_ns = previous_sliding_window_stamp_ns_.value();
+      factor.current_stamp_ns = last_sliding_window_stamp_ns_;
+      factor.next_stamp_ns = input_pose.stamp_ns;
+      factor.rotation_rate_weight = sliding_window_smoothness_rotation_weight_;
+      factor.position_rate_weight = sliding_window_smoothness_position_weight_;
+      factor.velocity_acceleration_weight = sliding_window_smoothness_velocity_weight_;
+      factor.gyro_bias_rate_weight = sliding_window_smoothness_bias_weight_;
+      factor.accel_bias_rate_weight = sliding_window_smoothness_bias_weight_;
+      try {
+        sliding_window_optimizer_.add_trajectory_smoothness_factor(factor);
+      } catch (const std::exception & ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "sliding window trajectory smoothness factor skipped: %s", ex.what());
+      }
+    }
 
     if (has_sliding_window_state_ && sliding_window_preintegrator_initialized_ &&
       sliding_window_preintegrator_.delta_t_s() > 0.0)
@@ -710,7 +740,7 @@ private:
         }
         RCLCPP_DEBUG_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "sliding window states=%zu imu=%zu pose_priors=%zu dense_priors=%zu point=%zu plane=%zu visual=%zu se3_photo=%zu cost %.6g -> %.6g",
+          "sliding window states=%zu imu=%zu pose_priors=%zu dense_priors=%zu point=%zu plane=%zu visual=%zu se3_photo=%zu smooth=%zu cost %.6g -> %.6g",
           summary.state_count,
           summary.imu_factor_count,
           summary.pose_prior_count,
@@ -719,6 +749,7 @@ private:
           summary.plane_factor_count,
           summary.visual_factor_count,
           summary.se3_photometric_factor_count,
+          summary.smoothness_factor_count,
           summary.initial_cost,
           summary.final_cost);
       } catch (const std::exception & ex) {
@@ -728,6 +759,9 @@ private:
       }
     }
 
+    if (has_sliding_window_state_) {
+      previous_sliding_window_stamp_ns_ = last_sliding_window_stamp_ns_;
+    }
     has_sliding_window_state_ = true;
     last_sliding_window_stamp_ns_ = input_pose.stamp_ns;
     sliding_window_preintegrator_.reset(input_pose.stamp_ns, sliding_window_bias_);
@@ -1308,6 +1342,8 @@ private:
     status.sliding_window_visual_factors = static_cast<uint64_t>(summary.visual_factor_count);
     status.sliding_window_se3_photometric_factors =
       static_cast<uint64_t>(summary.se3_photometric_factor_count);
+    status.sliding_window_smoothness_factors =
+      static_cast<uint64_t>(summary.smoothness_factor_count);
     status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
     status.sliding_window_dense_prior_rows = static_cast<uint64_t>(summary.dense_prior_rows);
     status.sliding_window_dense_prior_cols = static_cast<uint64_t>(summary.dense_prior_cols);
@@ -1428,6 +1464,11 @@ private:
   double sliding_window_bias_weight_{1.0};
   double sliding_window_pose_translation_weight_{2.0};
   double sliding_window_pose_rotation_weight_{2.0};
+  bool enable_sliding_window_smoothness_factor_{true};
+  double sliding_window_smoothness_rotation_weight_{0.1};
+  double sliding_window_smoothness_position_weight_{0.1};
+  double sliding_window_smoothness_velocity_weight_{0.1};
+  double sliding_window_smoothness_bias_weight_{0.1};
   int lidar_min_points_{32};
   int lidar_max_frame_points_{2000};
   int lidar_max_map_points_{20000};
@@ -1465,6 +1506,7 @@ private:
   bool sliding_window_preintegrator_initialized_{false};
   bool has_sliding_window_state_{false};
   int64_t last_sliding_window_stamp_ns_{0};
+  std::optional<int64_t> previous_sliding_window_stamp_ns_;
   std::optional<int64_t> last_trajectory_control_stamp_ns_;
   uint64_t num_sliding_window_imu_reanchors_{0};
   uint64_t trajectory_deskew_queries_{0};

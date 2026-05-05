@@ -106,6 +106,28 @@ Eigen::Matrix3d skew_symmetric(const Eigen::Vector3d & value)
   return skew;
 }
 
+Eigen::Vector3d quaternion_log_vector(Eigen::Quaterniond quaternion)
+{
+  quaternion.normalize();
+  if (quaternion.w() < 0.0) {
+    quaternion.coeffs() *= -1.0;
+  }
+  const Eigen::Vector3d vector = quaternion.vec();
+  const double vector_norm = vector.norm();
+  if (vector_norm < 1.0e-12) {
+    return 2.0 * vector;
+  }
+  const double angle = 2.0 * std::atan2(vector_norm, quaternion.w());
+  return angle * vector / vector_norm;
+}
+
+Eigen::Vector3d relative_rotation_vector(
+  const Eigen::Quaterniond & from,
+  const Eigen::Quaterniond & to)
+{
+  return quaternion_log_vector(from.normalized().inverse() * to.normalized());
+}
+
 Eigen::Matrix3d left_perturbation_rotation_residual_jacobian(
   const Eigen::Quaterniond & reference_q)
 {
@@ -251,6 +273,62 @@ Eigen::Matrix<double, 15, 15> effective_state_prior_sqrt_information(
     std::sqrt(prior.accel_bias_weight) * Eigen::Matrix3d::Identity();
   return sqrt_information;
 }
+
+Eigen::Matrix<double, 15, 1> smoothness_residual(
+  const SlidingWindowTrajectorySmoothnessFactor & factor,
+  const SlidingWindowState & previous,
+  const SlidingWindowState & current,
+  const SlidingWindowState & next)
+{
+  const double previous_dt_s =
+    static_cast<double>(current.stamp_ns - previous.stamp_ns) / 1.0e9;
+  const double next_dt_s =
+    static_cast<double>(next.stamp_ns - current.stamp_ns) / 1.0e9;
+  Eigen::Matrix<double, 15, 1> residual;
+  residual.setZero();
+  if (previous_dt_s <= 0.0 || next_dt_s <= 0.0) {
+    return residual;
+  }
+
+  const Eigen::Vector3d previous_rotation_rate =
+    relative_rotation_vector(previous.q_w_i, current.q_w_i) / previous_dt_s;
+  const Eigen::Vector3d next_rotation_rate =
+    relative_rotation_vector(current.q_w_i, next.q_w_i) / next_dt_s;
+  residual.template segment<3>(0) =
+    std::sqrt(factor.rotation_rate_weight) * (next_rotation_rate - previous_rotation_rate);
+
+  const Eigen::Vector3d previous_position_rate =
+    (current.p_w_i - previous.p_w_i) / previous_dt_s;
+  const Eigen::Vector3d next_position_rate =
+    (next.p_w_i - current.p_w_i) / next_dt_s;
+  residual.template segment<3>(3) =
+    std::sqrt(factor.position_rate_weight) * (next_position_rate - previous_position_rate);
+
+  const Eigen::Vector3d previous_velocity_acceleration =
+    (current.v_w_i - previous.v_w_i) / previous_dt_s;
+  const Eigen::Vector3d next_velocity_acceleration =
+    (next.v_w_i - current.v_w_i) / next_dt_s;
+  residual.template segment<3>(6) =
+    std::sqrt(factor.velocity_acceleration_weight) *
+    (next_velocity_acceleration - previous_velocity_acceleration);
+
+  const Eigen::Vector3d previous_gyro_bias_rate =
+    (current.gyro_bias - previous.gyro_bias) / previous_dt_s;
+  const Eigen::Vector3d next_gyro_bias_rate =
+    (next.gyro_bias - current.gyro_bias) / next_dt_s;
+  residual.template segment<3>(9) =
+    std::sqrt(factor.gyro_bias_rate_weight) *
+    (next_gyro_bias_rate - previous_gyro_bias_rate);
+
+  const Eigen::Vector3d previous_accel_bias_rate =
+    (current.accel_bias - previous.accel_bias) / previous_dt_s;
+  const Eigen::Vector3d next_accel_bias_rate =
+    (next.accel_bias - current.accel_bias) / next_dt_s;
+  residual.template segment<3>(12) =
+    std::sqrt(factor.accel_bias_rate_weight) *
+    (next_accel_bias_rate - previous_accel_bias_rate);
+  return residual;
+}
 }  // namespace
 
 SchurComplementResult compute_schur_complement(
@@ -323,6 +401,7 @@ void SlidingWindowOptimizer::clear()
   plane_factors_.clear();
   visual_factors_.clear();
   se3_photometric_factors_.clear();
+  smoothness_factors_.clear();
   marginalized_state_count_ = 0U;
 }
 
@@ -491,6 +570,30 @@ void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3Ph
   enforce_window_size();
 }
 
+void SlidingWindowOptimizer::add_trajectory_smoothness_factor(
+  const SlidingWindowTrajectorySmoothnessFactor & factor)
+{
+  if (factor.previous_stamp_ns >= factor.current_stamp_ns ||
+    factor.current_stamp_ns >= factor.next_stamp_ns)
+  {
+    throw std::runtime_error("trajectory smoothness factor timestamps must be strictly increasing");
+  }
+  if (factor.rotation_rate_weight < 0.0 || factor.position_rate_weight < 0.0 ||
+    factor.velocity_acceleration_weight < 0.0 || factor.gyro_bias_rate_weight < 0.0 ||
+    factor.accel_bias_rate_weight < 0.0)
+  {
+    throw std::runtime_error("trajectory smoothness factor weights must be non-negative");
+  }
+  if (factor.rotation_rate_weight == 0.0 && factor.position_rate_weight == 0.0 &&
+    factor.velocity_acceleration_weight == 0.0 && factor.gyro_bias_rate_weight == 0.0 &&
+    factor.accel_bias_rate_weight == 0.0)
+  {
+    return;
+  }
+  smoothness_factors_.push_back(factor);
+  enforce_window_size();
+}
+
 SlidingWindowStatePrior SlidingWindowOptimizer::make_state_prior(const SlidingWindowState & state) const
 {
   SlidingWindowStatePrior prior;
@@ -585,6 +688,14 @@ size_t SlidingWindowOptimizer::enforce_window_size()
           return factor.stamp_ns == stamp_ns;
         }),
       se3_photometric_factors_.end());
+    smoothness_factors_.erase(
+      std::remove_if(
+        smoothness_factors_.begin(), smoothness_factors_.end(),
+        [stamp_ns](const SlidingWindowTrajectorySmoothnessFactor & factor) {
+          return factor.previous_stamp_ns == stamp_ns || factor.current_stamp_ns == stamp_ns ||
+                 factor.next_stamp_ns == stamp_ns;
+        }),
+      smoothness_factors_.end());
     if (!added_schur_prior && !states_.empty() && config_.marginalization_prior_weight > 0.0) {
       const int64_t anchor_stamp_ns = states_.front().stamp_ns;
       state_priors_.erase(
@@ -646,7 +757,8 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
   values.reserve(
     imu_factors_.size() * 15U + pose_priors_.size() * 6U + state_priors_.size() * 15U +
     dense_priors_.size() * 30U + point_factors_.size() * 300U + plane_factors_.size() * 100U +
-    visual_factors_.size() * 2U + se3_photometric_factors_.size() * 6U);
+    visual_factors_.size() * 2U + se3_photometric_factors_.size() * 6U +
+    smoothness_factors_.size() * 15U);
 
   auto append = [&values](const Eigen::VectorXd & residual) {
       for (Eigen::Index i = 0; i < residual.size(); ++i) {
@@ -808,6 +920,21 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     delta.template segment<3>(0) = rotation_residual(factor.reference_q_w_i, state.q_w_i);
     delta.template segment<3>(3) = state.p_w_i - factor.reference_p_w_i;
     append(std::sqrt(factor.weight) * factor.sqrt_information * (delta - factor.target_delta));
+  }
+
+  for (const auto & factor : smoothness_factors_) {
+    const int previous = find_local(factor.previous_stamp_ns);
+    const int current = find_local(factor.current_stamp_ns);
+    const int next = find_local(factor.next_stamp_ns);
+    if (previous < 0 || current < 0 || next < 0) {
+      continue;
+    }
+    append(
+      smoothness_residual(
+        factor,
+        states[static_cast<size_t>(previous)],
+        states[static_cast<size_t>(current)],
+        states[static_cast<size_t>(next)]));
   }
 
   Eigen::VectorXd residual(values.size());
@@ -1097,6 +1224,26 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
     row += 6;
   }
 
+  for (const auto & factor : smoothness_factors_) {
+    const int previous = find_local(factor.previous_stamp_ns);
+    const int current = find_local(factor.current_stamp_ns);
+    const int next = find_local(factor.next_stamp_ns);
+    if (previous < 0 || current < 0 || next < 0) {
+      continue;
+    }
+    if (!rows_available(row, 15)) {
+      return fallback_to_numeric();
+    }
+    const int indices[3] = {previous, current, next};
+    for (const int index : indices) {
+      const Eigen::Index offset = variable_offsets[static_cast<size_t>(index)];
+      if (offset >= 0) {
+        mark_numeric(row, 15, offset, static_cast<Eigen::Index>(kStateDof));
+      }
+    }
+    row += 15;
+  }
+
   if (row != jacobian.rows()) {
     numeric_blocks.clear();
     mark_numeric(0, jacobian.rows(), 0, jacobian.cols());
@@ -1305,6 +1452,7 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   summary.plane_factor_count = plane_factors_.size();
   summary.visual_factor_count = visual_factors_.size();
   summary.se3_photometric_factor_count = se3_photometric_factors_.size();
+  summary.smoothness_factor_count = smoothness_factors_.size();
   Eigen::VectorXd residual = build_residual(states_);
   summary.initial_cost = compute_cost(residual);
   summary.final_cost = summary.initial_cost;
