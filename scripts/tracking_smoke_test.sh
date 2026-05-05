@@ -197,6 +197,10 @@ status_matches() {
     rg -q "sliding_window_se3_photometric_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_smoothness_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_imu_factor_skip_count:" "${status_file}" &&
+    rg -q "sliding_window_last_imu_preintegration_samples:" "${status_file}" &&
+    rg -q "sliding_window_last_imu_preintegration_dt_s:" "${status_file}" &&
+    rg -q "sliding_window_last_imu_preintegration_start_stamp_ns:" "${status_file}" &&
+    rg -q "sliding_window_last_imu_preintegration_end_stamp_ns:" "${status_file}" &&
     rg -q "sliding_window_optimization_skip_count:" "${status_file}" &&
     rg -q "sliding_window_invalid_optimized_states: 0" "${status_file}" &&
     rg -q "sliding_window_normal_equation_rows: [1-9]" "${status_file}" &&
@@ -219,6 +223,10 @@ status_matches() {
       rg -q "sliding_window_last_step_scale: .*[1-9]" "${status_file}" &&
       rg -q "sliding_window_last_damping: .*[1-9]" "${status_file}" &&
       rg -q "sliding_window_imu_factors: [1-9]" "${status_file}" &&
+      rg -q "sliding_window_last_imu_preintegration_samples: [1-9]" "${status_file}" &&
+      rg -q "sliding_window_last_imu_preintegration_dt_s: .*[1-9]" "${status_file}" &&
+      rg -q "sliding_window_last_imu_preintegration_start_stamp_ns: [1-9]" "${status_file}" &&
+      rg -q "sliding_window_last_imu_preintegration_end_stamp_ns: [1-9]" "${status_file}" &&
       rg -q "sliding_window_gyro_bias_observability: [1-9]" "${status_file}" &&
       rg -q "sliding_window_accel_bias_observability: [1-9]" "${status_file}" &&
       rg -q "sliding_window_imu_reanchors: [1-9]" "${status_file}" || return 1

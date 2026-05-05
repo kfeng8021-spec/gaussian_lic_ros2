@@ -1107,6 +1107,13 @@ private:
       factor.velocity_weight = sliding_window_imu_velocity_weight_;
       factor.position_weight = sliding_window_imu_position_weight_;
       factor.bias_weight = sliding_window_bias_weight_;
+      last_sliding_window_imu_preintegration_samples_ =
+        static_cast<uint64_t>(sliding_window_preintegrator_.sample_count());
+      last_sliding_window_imu_preintegration_dt_s_ = sliding_window_preintegrator_.delta_t_s();
+      last_sliding_window_imu_preintegration_start_stamp_ns_ =
+        sliding_window_preintegrator_.start_stamp_ns();
+      last_sliding_window_imu_preintegration_end_stamp_ns_ =
+        sliding_window_preintegrator_.end_stamp_ns();
       try {
         sliding_window_optimizer_.add_imu_factor(factor);
         window_factor_added = true;
@@ -1986,6 +1993,14 @@ private:
     status.sliding_window_smoothness_factor_skip_count =
       sliding_window_smoothness_factor_skip_count_;
     status.sliding_window_imu_factor_skip_count = sliding_window_imu_factor_skip_count_;
+    status.sliding_window_last_imu_preintegration_samples =
+      last_sliding_window_imu_preintegration_samples_;
+    status.sliding_window_last_imu_preintegration_dt_s =
+      last_sliding_window_imu_preintegration_dt_s_;
+    status.sliding_window_last_imu_preintegration_start_stamp_ns =
+      last_sliding_window_imu_preintegration_start_stamp_ns_;
+    status.sliding_window_last_imu_preintegration_end_stamp_ns =
+      last_sliding_window_imu_preintegration_end_stamp_ns_;
     status.sliding_window_optimization_skip_count = sliding_window_optimization_skip_count_;
     status.sliding_window_invalid_optimized_states = sliding_window_invalid_optimized_states_;
     status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
@@ -2230,6 +2245,10 @@ private:
   uint64_t sliding_window_se3_photometric_factor_skip_count_{0};
   uint64_t sliding_window_smoothness_factor_skip_count_{0};
   uint64_t sliding_window_imu_factor_skip_count_{0};
+  uint64_t last_sliding_window_imu_preintegration_samples_{0};
+  double last_sliding_window_imu_preintegration_dt_s_{0.0};
+  int64_t last_sliding_window_imu_preintegration_start_stamp_ns_{0};
+  int64_t last_sliding_window_imu_preintegration_end_stamp_ns_{0};
   uint64_t sliding_window_optimization_skip_count_{0};
   uint64_t sliding_window_invalid_optimized_states_{0};
   uint64_t trajectory_deskew_queries_{0};

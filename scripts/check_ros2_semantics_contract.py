@@ -290,6 +290,8 @@ def main() -> int:
         errors.append("sliding_window_optimizer must explicitly reject invalid candidate states")
     if "trajectory_control_pose_skip_count_" not in tracking_node_text:
         errors.append("tracking_node must publish trajectory-control pose rejection counters")
+    if "last_sliding_window_imu_preintegration_samples_" not in tracking_node_text:
+        errors.append("tracking_node must publish last consumed IMU preintegration block health")
     for field in [
         "signed_nanosecond_time_math_enabled",
         "last_image_stamp_ns",
@@ -321,6 +323,10 @@ def main() -> int:
         "sliding_window_se3_photometric_factor_skip_count",
         "sliding_window_smoothness_factor_skip_count",
         "sliding_window_imu_factor_skip_count",
+        "sliding_window_last_imu_preintegration_samples",
+        "sliding_window_last_imu_preintegration_dt_s",
+        "sliding_window_last_imu_preintegration_start_stamp_ns",
+        "sliding_window_last_imu_preintegration_end_stamp_ns",
         "sliding_window_optimization_skip_count",
         "sliding_window_invalid_optimized_states",
         "sliding_window_normal_equation_rows",
