@@ -21,6 +21,9 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
 - `gaussian_lic_tracking/tracking_node` publishes the latest image, LiDAR, and
   IMU stamps as signed nanoseconds on `/gaussian_lic/frontend/status`; the
   native tracking smoke gate requires those fields to be nonzero.
+- Native tracking rejects non-monotonic image, depth, rendered-image, LiDAR, and
+  IMU stream stamps before mutating the estimator. Image/depth/rendered streams
+  may repeat a stamp, while LiDAR and IMU must be strictly increasing.
 
 ## QoS
 

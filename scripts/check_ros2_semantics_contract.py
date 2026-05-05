@@ -270,11 +270,18 @@ def main() -> int:
         errors.append("tracking.launch.py must default trajectory smoothness BA factors to true")
     if "run_serialized_callback" not in tracking_node_text or "std::scoped_lock<std::mutex>" not in tracking_node_text:
         errors.append("tracking_node callbacks must pass through the serialization guard")
+    if "accept_stream_stamp" not in tracking_node_text or "non-monotonic stamp" not in tracking_node_text:
+        errors.append("tracking_node must reject non-monotonic raw stream stamps before estimator mutation")
     for field in [
         "signed_nanosecond_time_math_enabled",
         "last_image_stamp_ns",
         "last_pointcloud_stamp_ns",
         "last_imu_stamp_ns",
+        "image_stamp_regressions",
+        "depth_stamp_regressions",
+        "rendered_stamp_regressions",
+        "pointcloud_stamp_regressions",
+        "imu_stamp_regressions",
         "sliding_window_imu_reanchors",
         "sliding_window_smoothness_factors",
         "sliding_window_accepted_steps",

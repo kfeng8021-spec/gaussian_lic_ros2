@@ -467,6 +467,9 @@ private:
   {
     try {
       const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+      if (!accept_stream_stamp("imu", stamp_ns, last_imu_input_stamp_ns_, imu_stamp_regressions_, false)) {
+        return;
+      }
       last_imu_stamp_ns_ = stamp_ns;
       ++num_raw_imus_;
       imu_propagator_.add_measurement(
@@ -592,8 +595,36 @@ private:
     return value;
   }
 
+  bool accept_stream_stamp(
+    const char * stream_name,
+    const int64_t stamp_ns,
+    std::optional<int64_t> & last_seen_stamp_ns,
+    uint64_t & regression_count,
+    const bool allow_equal_stamp)
+  {
+    if (last_seen_stamp_ns.has_value()) {
+      const bool out_of_order = allow_equal_stamp
+        ? stamp_ns < last_seen_stamp_ns.value()
+        : stamp_ns <= last_seen_stamp_ns.value();
+      if (out_of_order) {
+        ++regression_count;
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "dropping %s message with non-monotonic stamp: current=%ld previous=%ld",
+          stream_name, static_cast<long>(stamp_ns), static_cast<long>(last_seen_stamp_ns.value()));
+        return false;
+      }
+    }
+    last_seen_stamp_ns = stamp_ns;
+    return true;
+  }
+
   void handle_depth(const sensor_msgs::msg::Image & msg)
   {
+    const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    if (!accept_stream_stamp("depth", stamp_ns, last_depth_input_stamp_ns_, depth_stamp_regressions_, true)) {
+      return;
+    }
     depth_pub_->publish(msg);
     DepthFrame decoded;
     if (decode_depth_image(msg, decoded)) {
@@ -603,7 +634,11 @@ private:
 
   void handle_image(const sensor_msgs::msg::Image & msg)
   {
-    last_image_stamp_ns_ = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    if (!accept_stream_stamp("image", stamp_ns, last_image_input_stamp_ns_, image_stamp_regressions_, true)) {
+      return;
+    }
+    last_image_stamp_ns_ = stamp_ns;
     ++num_raw_images_;
     image_pub_->publish(msg);
     if (!enable_visual_factor_) {
@@ -692,6 +727,12 @@ private:
     if (!enable_visual_factor_) {
       return;
     }
+    const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    if (!accept_stream_stamp(
+        "rendered_image", stamp_ns, last_rendered_input_stamp_ns_, rendered_stamp_regressions_, true))
+    {
+      return;
+    }
     gaussian_lic_tracking::VisualFrame rendered;
     if (decode_image_gray(msg, rendered)) {
       cache_rendered_frame(std::move(rendered));
@@ -721,9 +762,15 @@ private:
 
   void handle_pointcloud(const sensor_msgs::msg::PointCloud2 & msg)
   {
-    ++num_raw_pointclouds_;
     gaussian_lic_tracking::TrajectoryPose tracking_pose;
     tracking_pose.stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+    if (!accept_stream_stamp(
+        "pointcloud", tracking_pose.stamp_ns, last_pointcloud_input_stamp_ns_,
+        pointcloud_stamp_regressions_, false))
+    {
+      return;
+    }
+    ++num_raw_pointclouds_;
     last_pointcloud_stamp_ns_ = tracking_pose.stamp_ns;
     tracking_pose.q_w_i = Eigen::Quaterniond::Identity();
     if (imu_propagator_.initialized()) {
@@ -1797,6 +1844,11 @@ private:
     status.last_image_stamp_ns = last_image_stamp_ns_;
     status.last_pointcloud_stamp_ns = last_pointcloud_stamp_ns_;
     status.last_imu_stamp_ns = last_imu_stamp_ns_;
+    status.image_stamp_regressions = image_stamp_regressions_;
+    status.depth_stamp_regressions = depth_stamp_regressions_;
+    status.rendered_stamp_regressions = rendered_stamp_regressions_;
+    status.pointcloud_stamp_regressions = pointcloud_stamp_regressions_;
+    status.imu_stamp_regressions = imu_stamp_regressions_;
     if (num_published_poses_ == 0U) {
       status.state = gaussian_lic_msgs::msg::TrackingStatus::STATE_INITIALIZING;
       status.status_text = "initializing";
@@ -2143,6 +2195,16 @@ private:
   int64_t last_image_stamp_ns_{0};
   int64_t last_pointcloud_stamp_ns_{0};
   int64_t last_imu_stamp_ns_{0};
+  std::optional<int64_t> last_image_input_stamp_ns_;
+  std::optional<int64_t> last_depth_input_stamp_ns_;
+  std::optional<int64_t> last_rendered_input_stamp_ns_;
+  std::optional<int64_t> last_pointcloud_input_stamp_ns_;
+  std::optional<int64_t> last_imu_input_stamp_ns_;
+  uint64_t image_stamp_regressions_{0};
+  uint64_t depth_stamp_regressions_{0};
+  uint64_t rendered_stamp_regressions_{0};
+  uint64_t pointcloud_stamp_regressions_{0};
+  uint64_t imu_stamp_regressions_{0};
   uint64_t num_lidar_keyframes_{0};
   size_t last_lidar_points_{0};
   size_t last_lidar_matches_{0};

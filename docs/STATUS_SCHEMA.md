@@ -65,6 +65,11 @@ signed_nanosecond_time_math_enabled
 last_image_stamp_ns
 last_pointcloud_stamp_ns
 last_imu_stamp_ns
+image_stamp_regressions
+depth_stamp_regressions
+rendered_stamp_regressions
+pointcloud_stamp_regressions
+imu_stamp_regressions
 num_raw_images
 num_raw_pointclouds
 num_raw_imus

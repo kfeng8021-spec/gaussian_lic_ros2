@@ -75,6 +75,10 @@ Current ROS2 implementation status:
   depth-frame caches, selects the nearest stamps within that freshness gate, and
   rejects stale render/depth instead of depending on latest-frame arrival order,
   preserving signed-nanosecond rosbag2 replay semantics.
+- Native tracking now rejects non-monotonic raw image, depth, rendered-image,
+  LiDAR, and IMU stamps before estimator mutation and publishes regression
+  counters in `TrackingStatus`. LiDAR and IMU are strictly increasing because
+  they drive continuous-time state propagation and window factors.
 - `gaussian_lic_tracking::deskew_lidar_points` performs per-point LiDAR deskew
   from PointCloud2 time fields before mapper publication and LIO correction.
 - `gaussian_lic_tracking::SlidingWindowOptimizer` provides the first native

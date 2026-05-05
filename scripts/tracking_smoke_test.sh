@@ -172,6 +172,11 @@ status_matches() {
     rg -q "last_image_stamp_ns: [1-9]" "${status_file}" &&
     rg -q "last_pointcloud_stamp_ns: [1-9]" "${status_file}" &&
     rg -q "last_imu_stamp_ns: [1-9]" "${status_file}" &&
+    rg -q "image_stamp_regressions: 0" "${status_file}" &&
+    rg -q "depth_stamp_regressions: 0" "${status_file}" &&
+    rg -q "rendered_stamp_regressions: 0" "${status_file}" &&
+    rg -q "pointcloud_stamp_regressions: 0" "${status_file}" &&
+    rg -q "imu_stamp_regressions: 0" "${status_file}" &&
     rg -q "sliding_window_enabled: true" "${status_file}" &&
     rg -q "sliding_window_rejected_steps:" "${status_file}" &&
     rg -q "sliding_window_limited_steps:" "${status_file}" &&
