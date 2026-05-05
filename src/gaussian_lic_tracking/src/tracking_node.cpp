@@ -643,10 +643,20 @@ private:
           q_i_c_,
           p_i_c_,
           pending_visual_se3_photometric_linearization_.gauss_newton_step);
-        factor.sqrt_information.setIdentity();
+        const Eigen::Matrix<double, 6, 6> body_hessian =
+          gaussian_lic_tracking::transform_camera_information_to_body(
+          q_i_c_,
+          p_i_c_,
+          pending_visual_se3_photometric_linearization_.hessian);
+        factor.sqrt_information =
+          gaussian_lic_tracking::sqrt_information_from_hessian(body_hessian);
         factor.weight = se3_photometric_window_weight_;
         factor.huber_delta = se3_photometric_factor_huber_delta_;
-        se3_photometric_factors.push_back(factor);
+        if (factor.sqrt_information.norm() > std::numeric_limits<double>::epsilon()) {
+          se3_photometric_factors.push_back(factor);
+        } else {
+          ++sliding_window_se3_photometric_factor_skip_count_;
+        }
       } else {
         ++visual_se3_photometric_pending_stale_drops_;
       }

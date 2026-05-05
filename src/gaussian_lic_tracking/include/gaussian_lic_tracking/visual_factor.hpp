@@ -97,6 +97,18 @@ Eigen::Matrix<double, 6, 1> transform_camera_delta_to_body(
   const Eigen::Vector3d & p_body_camera,
   const Eigen::Matrix<double, 6, 1> & camera_delta);
 
+Eigen::Matrix<double, 6, 6> camera_delta_to_body_adjoint(
+  const Eigen::Quaterniond & q_body_camera,
+  const Eigen::Vector3d & p_body_camera);
+
+Eigen::Matrix<double, 6, 6> transform_camera_information_to_body(
+  const Eigen::Quaterniond & q_body_camera,
+  const Eigen::Vector3d & p_body_camera,
+  const Eigen::Matrix<double, 6, 6> & camera_hessian);
+
+Eigen::Matrix<double, 6, 6> sqrt_information_from_hessian(
+  const Eigen::Matrix<double, 6, 6> & hessian);
+
 class VisualFactor
 {
 public:

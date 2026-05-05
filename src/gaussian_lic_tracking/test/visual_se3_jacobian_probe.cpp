@@ -128,6 +128,29 @@ int main()
     std::cerr << "camera-to-body SE3 delta adjoint is incorrect\n";
     return 1;
   }
+  const Eigen::Matrix<double, 6, 6> adjoint =
+    gaussian_lic_tracking::camera_delta_to_body_adjoint(q_i_c, p_i_c);
+  if ((adjoint * camera_delta - body_delta).norm() > 1.0e-12) {
+    std::cerr << "camera-to-body adjoint matrix does not match delta transform\n";
+    return 1;
+  }
+  const Eigen::Matrix<double, 6, 6> body_hessian =
+    gaussian_lic_tracking::transform_camera_information_to_body(
+    q_i_c, p_i_c, linearization.hessian);
+  const Eigen::Matrix<double, 6, 6> expected_body_hessian =
+    adjoint.inverse().transpose() * linearization.hessian * adjoint.inverse();
+  const double body_hessian_error =
+    (body_hessian - 0.5 * (expected_body_hessian + expected_body_hessian.transpose())).norm();
+  const Eigen::Matrix<double, 6, 6> body_sqrt =
+    gaussian_lic_tracking::sqrt_information_from_hessian(body_hessian);
+  const double sqrt_reconstruction_error =
+    (body_sqrt.transpose() * body_sqrt - body_hessian).norm();
+  std::cout << " body_hessian_error=" << body_hessian_error
+            << " body_sqrt_error=" << sqrt_reconstruction_error;
+  if (body_hessian_error > 1.0e-8 || sqrt_reconstruction_error > 1.0e-8) {
+    std::cerr << "camera photometric Hessian was not transformed to body sqrt-information correctly\n";
+    return 1;
+  }
   const auto invalid_body_delta = gaussian_lic_tracking::transform_camera_delta_to_body(
     Eigen::Quaterniond{0.0, 0.0, 0.0, 0.0}, p_i_c, camera_delta);
   if (invalid_body_delta.norm() != 0.0) {

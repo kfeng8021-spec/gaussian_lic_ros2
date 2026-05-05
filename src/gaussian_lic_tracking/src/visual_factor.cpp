@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include <Eigen/Cholesky>
+#include <Eigen/Eigenvalues>
 
 namespace gaussian_lic_tracking
 {
@@ -17,6 +18,15 @@ bool intrinsics_are_finite(const VisualCameraIntrinsics & intrinsics)
 {
   return std::isfinite(intrinsics.fx) && std::isfinite(intrinsics.fy) &&
          std::isfinite(intrinsics.cx) && std::isfinite(intrinsics.cy);
+}
+
+Eigen::Matrix3d skew_symmetric(const Eigen::Vector3d & value)
+{
+  Eigen::Matrix3d skew;
+  skew << 0.0, -value.z(), value.y(),
+    value.z(), 0.0, -value.x(),
+    -value.y(), value.x(), 0.0;
+  return skew;
 }
 
 double parabolic_subpixel_offset(
@@ -131,22 +141,75 @@ Eigen::Matrix<double, 6, 1> transform_camera_delta_to_body(
   const Eigen::Vector3d & p_body_camera,
   const Eigen::Matrix<double, 6, 1> & camera_delta)
 {
-  Eigen::Matrix<double, 6, 1> body_delta;
-  body_delta.setZero();
-  if (!q_body_camera.coeffs().allFinite() || q_body_camera.norm() <= std::numeric_limits<double>::epsilon() ||
-    !p_body_camera.allFinite() || !camera_delta.allFinite())
-  {
+  Eigen::Matrix<double, 6, 1> body_delta = Eigen::Matrix<double, 6, 1>::Zero();
+  if (!camera_delta.allFinite()) {
     return body_delta;
   }
-  const Eigen::Quaterniond normalized_q = q_body_camera.normalized();
-  const Eigen::Vector3d omega_body =
-    normalized_q * camera_delta.template segment<3>(0);
-  const Eigen::Vector3d translation_body =
-    p_body_camera.cross(omega_body) +
-    normalized_q * camera_delta.template segment<3>(3);
-  body_delta.template segment<3>(0) = omega_body;
-  body_delta.template segment<3>(3) = translation_body;
-  return body_delta;
+  const Eigen::Matrix<double, 6, 6> adjoint =
+    camera_delta_to_body_adjoint(q_body_camera, p_body_camera);
+  if (!adjoint.allFinite() || adjoint.norm() <= std::numeric_limits<double>::epsilon()) {
+    return body_delta;
+  }
+  body_delta = adjoint * camera_delta;
+  return body_delta.allFinite() ? body_delta : Eigen::Matrix<double, 6, 1>::Zero();
+}
+
+Eigen::Matrix<double, 6, 6> camera_delta_to_body_adjoint(
+  const Eigen::Quaterniond & q_body_camera,
+  const Eigen::Vector3d & p_body_camera)
+{
+  Eigen::Matrix<double, 6, 6> adjoint = Eigen::Matrix<double, 6, 6>::Zero();
+  if (!q_body_camera.coeffs().allFinite() ||
+    q_body_camera.norm() <= std::numeric_limits<double>::epsilon() ||
+    !p_body_camera.allFinite())
+  {
+    return adjoint;
+  }
+  const Eigen::Matrix3d r_body_camera = q_body_camera.normalized().toRotationMatrix();
+  adjoint.template block<3, 3>(0, 0) = r_body_camera;
+  adjoint.template block<3, 3>(3, 0) = skew_symmetric(p_body_camera) * r_body_camera;
+  adjoint.template block<3, 3>(3, 3) = r_body_camera;
+  return adjoint;
+}
+
+Eigen::Matrix<double, 6, 6> transform_camera_information_to_body(
+  const Eigen::Quaterniond & q_body_camera,
+  const Eigen::Vector3d & p_body_camera,
+  const Eigen::Matrix<double, 6, 6> & camera_hessian)
+{
+  Eigen::Matrix<double, 6, 6> body_hessian = Eigen::Matrix<double, 6, 6>::Zero();
+  if (!camera_hessian.allFinite()) {
+    return body_hessian;
+  }
+  const Eigen::Matrix<double, 6, 6> adjoint =
+    camera_delta_to_body_adjoint(q_body_camera, p_body_camera);
+  if (!adjoint.allFinite() || adjoint.norm() <= std::numeric_limits<double>::epsilon()) {
+    return body_hessian;
+  }
+  const Eigen::Matrix<double, 6, 6> inverse_adjoint = adjoint.inverse();
+  body_hessian = inverse_adjoint.transpose() * camera_hessian * inverse_adjoint;
+  body_hessian = 0.5 * (body_hessian + body_hessian.transpose());
+  return body_hessian.allFinite() ? body_hessian : Eigen::Matrix<double, 6, 6>::Zero();
+}
+
+Eigen::Matrix<double, 6, 6> sqrt_information_from_hessian(
+  const Eigen::Matrix<double, 6, 6> & hessian)
+{
+  Eigen::Matrix<double, 6, 6> sqrt_information = Eigen::Matrix<double, 6, 6>::Zero();
+  if (!hessian.allFinite()) {
+    return sqrt_information;
+  }
+  const Eigen::Matrix<double, 6, 6> symmetric = 0.5 * (hessian + hessian.transpose());
+  const Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> solver(symmetric);
+  if (solver.info() != Eigen::Success) {
+    return sqrt_information;
+  }
+  Eigen::Matrix<double, 6, 1> sqrt_values;
+  for (Eigen::Index index = 0; index < solver.eigenvalues().size(); ++index) {
+    sqrt_values[index] = std::sqrt(std::max(0.0, solver.eigenvalues()[index]));
+  }
+  sqrt_information = sqrt_values.asDiagonal() * solver.eigenvectors().transpose();
+  return sqrt_information.allFinite() ? sqrt_information : Eigen::Matrix<double, 6, 6>::Zero();
 }
 
 VisualPhotometricLinearization VisualFactor::linearize_translation(

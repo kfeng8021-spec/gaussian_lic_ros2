@@ -198,6 +198,7 @@ baseline_manifest.json
 - [x] Publish rendered/depth cache hit diagnostics, pending visual-factor stale drops, and SE3 photometric depth/gradient/residual rejection counters through `TrackingStatus`.
 - [x] Skip non-finite visual residual pixels, non-finite SE3 photometric sample weights, invalid intrinsics, and invalid camera-to-body adjoints before photometric BA.
 - [x] Add analytic SE3 camera photometric pixel Jacobians and multi-sample normal equations with finite-difference CTest coverage.
+- [x] Transform SE3 photometric camera-frame Hessians through the camera-to-IMU adjoint into body-frame sqrt-information before adding sliding-window BA factors.
 - [x] Default-enable native sliding-window BA plus visual-alignment and SE3 photometric window factors in `tracking.launch.py`, while preserving bounded best-effort QoS and serialized callbacks.
 - [x] Feed optimized sliding-window pose/velocity/bias back into odometry, the continuous-time trajectory-control cache, and safe IMU propagation re-anchoring, and expose cubic B-spline pose/velocity trajectory queries for deskew fallback.
 - [x] Publish and smoke-gate optimized IMU re-anchor and B-spline trajectory-control runtime status fields.
