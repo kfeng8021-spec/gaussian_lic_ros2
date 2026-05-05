@@ -743,6 +743,7 @@ private:
       try {
         sliding_window_optimizer_.add_point_to_point_factor(point_factor);
       } catch (const std::exception & ex) {
+        ++sliding_window_point_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window point factor skipped: %s", ex.what());
@@ -752,6 +753,7 @@ private:
       try {
         sliding_window_optimizer_.add_point_to_plane_factor(plane_factor);
       } catch (const std::exception & ex) {
+        ++sliding_window_plane_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window plane factor skipped: %s", ex.what());
@@ -761,15 +763,17 @@ private:
       try {
         sliding_window_optimizer_.add_visual_alignment_factor(visual_factor);
       } catch (const std::exception & ex) {
+        ++sliding_window_visual_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
-        "sliding window visual factor skipped: %s", ex.what());
+          "sliding window visual factor skipped: %s", ex.what());
       }
     }
     for (const auto & se3_factor : se3_photometric_factors) {
       try {
         sliding_window_optimizer_.add_se3_photometric_factor(se3_factor);
       } catch (const std::exception & ex) {
+        ++sliding_window_se3_photometric_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window SE3 photometric factor skipped: %s", ex.what());
@@ -790,6 +794,7 @@ private:
       try {
         sliding_window_optimizer_.add_trajectory_smoothness_factor(factor);
       } catch (const std::exception & ex) {
+        ++sliding_window_smoothness_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window trajectory smoothness factor skipped: %s", ex.what());
@@ -806,51 +811,63 @@ private:
       factor.gravity_w = imu_propagator_.gravity_w();
       factor.weight = sliding_window_imu_weight_;
       factor.bias_weight = sliding_window_bias_weight_;
+      bool imu_factor_added = false;
       try {
         sliding_window_optimizer_.add_imu_factor(factor);
-        const auto summary = sliding_window_optimizer_.optimize();
-        last_sliding_window_summary_ = summary;
-        has_last_sliding_window_summary_ = true;
-        gaussian_lic_tracking::SlidingWindowState optimized;
-        if (sliding_window_optimizer_.get_state(input_pose.stamp_ns, optimized)) {
-          output_pose.p_w_i = optimized.p_w_i;
-          output_pose.q_w_i = optimized.q_w_i;
-          output_pose.v_w_i = optimized.v_w_i;
-          sliding_window_bias_.gyro = optimized.gyro_bias;
-          sliding_window_bias_.accel = optimized.accel_bias;
-          if (!imu_propagator_.initialized() ||
-            imu_propagator_.state().stamp_ns <= optimized.stamp_ns)
-          {
-            gaussian_lic_tracking::ImuState corrected_state;
-            corrected_state.stamp_ns = optimized.stamp_ns;
-            corrected_state.p_w_i = optimized.p_w_i;
-            corrected_state.q_w_i = optimized.q_w_i;
-            corrected_state.v_w_i = optimized.v_w_i;
-            corrected_state.gyro_bias = optimized.gyro_bias;
-            corrected_state.accel_bias = optimized.accel_bias;
-            imu_propagator_.reset(corrected_state);
-            ++num_sliding_window_imu_reanchors_;
-          }
-        }
-        sync_optimized_trajectory_controls();
-        RCLCPP_DEBUG_THROTTLE(
-          get_logger(), *get_clock(), 2000,
-          "sliding window states=%zu imu=%zu pose_priors=%zu dense_priors=%zu point=%zu plane=%zu visual=%zu se3_photo=%zu smooth=%zu cost %.6g -> %.6g",
-          summary.state_count,
-          summary.imu_factor_count,
-          summary.pose_prior_count,
-          summary.dense_prior_count,
-          summary.point_factor_count,
-          summary.plane_factor_count,
-          summary.visual_factor_count,
-          summary.se3_photometric_factor_count,
-          summary.smoothness_factor_count,
-          summary.initial_cost,
-          summary.final_cost);
+        imu_factor_added = true;
       } catch (const std::exception & ex) {
+        ++sliding_window_imu_factor_skip_count_;
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "sliding window optimization skipped: %s", ex.what());
+          "sliding window IMU factor skipped: %s", ex.what());
+      }
+      if (imu_factor_added) {
+        try {
+          const auto summary = sliding_window_optimizer_.optimize();
+          last_sliding_window_summary_ = summary;
+          has_last_sliding_window_summary_ = true;
+          gaussian_lic_tracking::SlidingWindowState optimized;
+          if (sliding_window_optimizer_.get_state(input_pose.stamp_ns, optimized)) {
+            output_pose.p_w_i = optimized.p_w_i;
+            output_pose.q_w_i = optimized.q_w_i;
+            output_pose.v_w_i = optimized.v_w_i;
+            sliding_window_bias_.gyro = optimized.gyro_bias;
+            sliding_window_bias_.accel = optimized.accel_bias;
+            if (!imu_propagator_.initialized() ||
+              imu_propagator_.state().stamp_ns <= optimized.stamp_ns)
+            {
+              gaussian_lic_tracking::ImuState corrected_state;
+              corrected_state.stamp_ns = optimized.stamp_ns;
+              corrected_state.p_w_i = optimized.p_w_i;
+              corrected_state.q_w_i = optimized.q_w_i;
+              corrected_state.v_w_i = optimized.v_w_i;
+              corrected_state.gyro_bias = optimized.gyro_bias;
+              corrected_state.accel_bias = optimized.accel_bias;
+              imu_propagator_.reset(corrected_state);
+              ++num_sliding_window_imu_reanchors_;
+            }
+          }
+          sync_optimized_trajectory_controls();
+          RCLCPP_DEBUG_THROTTLE(
+            get_logger(), *get_clock(), 2000,
+            "sliding window states=%zu imu=%zu pose_priors=%zu dense_priors=%zu point=%zu plane=%zu visual=%zu se3_photo=%zu smooth=%zu cost %.6g -> %.6g",
+            summary.state_count,
+            summary.imu_factor_count,
+            summary.pose_prior_count,
+            summary.dense_prior_count,
+            summary.point_factor_count,
+            summary.plane_factor_count,
+            summary.visual_factor_count,
+            summary.se3_photometric_factor_count,
+            summary.smoothness_factor_count,
+            summary.initial_cost,
+            summary.final_cost);
+        } catch (const std::exception & ex) {
+          ++sliding_window_optimization_skip_count_;
+          RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 2000,
+            "sliding window optimization skipped: %s", ex.what());
+        }
       }
     }
 
@@ -1600,6 +1617,15 @@ private:
       static_cast<uint64_t>(summary.se3_photometric_factor_count);
     status.sliding_window_smoothness_factors =
       static_cast<uint64_t>(summary.smoothness_factor_count);
+    status.sliding_window_point_factor_skip_count = sliding_window_point_factor_skip_count_;
+    status.sliding_window_plane_factor_skip_count = sliding_window_plane_factor_skip_count_;
+    status.sliding_window_visual_factor_skip_count = sliding_window_visual_factor_skip_count_;
+    status.sliding_window_se3_photometric_factor_skip_count =
+      sliding_window_se3_photometric_factor_skip_count_;
+    status.sliding_window_smoothness_factor_skip_count =
+      sliding_window_smoothness_factor_skip_count_;
+    status.sliding_window_imu_factor_skip_count = sliding_window_imu_factor_skip_count_;
+    status.sliding_window_optimization_skip_count = sliding_window_optimization_skip_count_;
     status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
     status.sliding_window_dense_prior_rows = static_cast<uint64_t>(summary.dense_prior_rows);
     status.sliding_window_dense_prior_cols = static_cast<uint64_t>(summary.dense_prior_cols);
@@ -1802,6 +1828,13 @@ private:
   std::optional<int64_t> previous_sliding_window_stamp_ns_;
   std::optional<int64_t> last_trajectory_control_stamp_ns_;
   uint64_t num_sliding_window_imu_reanchors_{0};
+  uint64_t sliding_window_point_factor_skip_count_{0};
+  uint64_t sliding_window_plane_factor_skip_count_{0};
+  uint64_t sliding_window_visual_factor_skip_count_{0};
+  uint64_t sliding_window_se3_photometric_factor_skip_count_{0};
+  uint64_t sliding_window_smoothness_factor_skip_count_{0};
+  uint64_t sliding_window_imu_factor_skip_count_{0};
+  uint64_t sliding_window_optimization_skip_count_{0};
   uint64_t trajectory_deskew_queries_{0};
   uint64_t trajectory_deskew_hits_{0};
   gaussian_lic_tracking::LidarFactor lidar_factor_;
