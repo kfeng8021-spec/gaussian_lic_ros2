@@ -72,6 +72,10 @@ public:
     lidar_time_mode_ = declare_parameter<std::string>("lidar_time_mode", "auto");
     imu_history_size_ = declare_parameter<int>("imu_history_size", 4000);
     enable_sliding_window_optimizer_ = declare_parameter<bool>("enable_sliding_window_optimizer", false);
+    enable_gaussian_snapshot_lidar_factor_ =
+      declare_parameter<bool>("enable_gaussian_snapshot_lidar_factor", true);
+    gaussian_snapshot_lidar_min_opacity_ =
+      declare_parameter<double>("gaussian_snapshot_lidar_min_opacity", 0.01);
     sliding_window_max_states_ = declare_parameter<int>("sliding_window_max_states", 12);
     sliding_window_max_iterations_ = declare_parameter<int>("sliding_window_max_iterations", 3);
     sliding_window_imu_weight_ = declare_parameter<double>("sliding_window_imu_weight", 1.0);
@@ -312,12 +316,25 @@ private:
     }
     pointcloud_pub_->publish(output_cloud);
 
-    gaussian_lic_tracking::SlidingWindowPointToPointFactor lidar_window_factor;
-    bool has_lidar_window_factor = false;
+    std::vector<gaussian_lic_tracking::SlidingWindowPointToPointFactor> window_point_factors;
     if (enable_lio_factor_) {
       if (enable_sliding_window_optimizer_) {
-        lidar_window_factor = lidar_factor_.build_point_to_point_factor(lidar_points, tracking_pose);
-        has_lidar_window_factor = !lidar_window_factor.frame_points_i.empty();
+        auto lidar_window_factor = lidar_factor_.build_point_to_point_factor(lidar_points, tracking_pose);
+        if (!lidar_window_factor.frame_points_i.empty()) {
+          window_point_factors.push_back(std::move(lidar_window_factor));
+        }
+        if (enable_gaussian_snapshot_lidar_factor_ && gaussian_snapshot_.complete()) {
+          auto gaussian_window_factor = gaussian_snapshot_.build_point_to_point_factor(
+            lidar_points,
+            tracking_pose,
+            static_cast<size_t>(std::max(lidar_min_points_, 1)),
+            static_cast<size_t>(std::max(lidar_max_frame_points_, 1)),
+            lidar_nearest_distance_m_,
+            gaussian_snapshot_lidar_min_opacity_);
+          if (!gaussian_window_factor.frame_points_i.empty()) {
+            window_point_factors.push_back(std::move(gaussian_window_factor));
+          }
+        }
       }
       const auto correction = lidar_factor_.compute_pose_correction(lidar_points, tracking_pose);
       if (correction.applied) {
@@ -334,7 +351,7 @@ private:
     if (enable_sliding_window_optimizer_) {
       tracking_pose = update_sliding_window(
         tracking_pose,
-        has_lidar_window_factor ? &lidar_window_factor : nullptr);
+        window_point_factors);
     }
 
     geometry_msgs::msg::PoseStamped pose;
@@ -382,7 +399,7 @@ private:
 
   gaussian_lic_tracking::TrajectoryPose update_sliding_window(
     const gaussian_lic_tracking::TrajectoryPose & input_pose,
-    const gaussian_lic_tracking::SlidingWindowPointToPointFactor * lidar_factor)
+    const std::vector<gaussian_lic_tracking::SlidingWindowPointToPointFactor> & point_factors)
   {
     gaussian_lic_tracking::TrajectoryPose output_pose = input_pose;
     gaussian_lic_tracking::ImuState imu_state;
@@ -410,13 +427,13 @@ private:
     prior.translation_weight = sliding_window_pose_translation_weight_;
     prior.rotation_weight = sliding_window_pose_rotation_weight_;
     sliding_window_optimizer_.add_pose_prior(prior);
-    if (lidar_factor != nullptr) {
+    for (const auto & point_factor : point_factors) {
       try {
-        sliding_window_optimizer_.add_point_to_point_factor(*lidar_factor);
+        sliding_window_optimizer_.add_point_to_point_factor(point_factor);
       } catch (const std::exception & ex) {
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "sliding window LiDAR factor skipped: %s", ex.what());
+          "sliding window point factor skipped: %s", ex.what());
       }
     }
 
@@ -865,12 +882,14 @@ private:
   bool enable_lio_factor_{true};
   bool enable_lidar_deskew_{true};
   bool enable_sliding_window_optimizer_{false};
+  bool enable_gaussian_snapshot_lidar_factor_{true};
   std::string lidar_time_field_{"auto"};
   std::string lidar_time_unit_{"auto"};
   std::string lidar_time_mode_{"auto"};
   int imu_history_size_{4000};
   int sliding_window_max_states_{12};
   int sliding_window_max_iterations_{3};
+  double gaussian_snapshot_lidar_min_opacity_{0.01};
   double sliding_window_imu_weight_{1.0};
   double sliding_window_bias_weight_{1.0};
   double sliding_window_pose_translation_weight_{2.0};

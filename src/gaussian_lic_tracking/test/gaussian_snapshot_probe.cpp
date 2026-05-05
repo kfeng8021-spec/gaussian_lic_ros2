@@ -65,6 +65,25 @@ int main()
     std::cerr << "Gaussian snapshot aggregate statistics are wrong\n";
     return 1;
   }
+
+  gaussian_lic_tracking::TrajectoryPose predicted_pose;
+  predicted_pose.stamp_ns = 77;
+  predicted_pose.q_w_i = Eigen::Quaterniond::Identity();
+  std::vector<Eigen::Vector3d> frame_points{
+    Eigen::Vector3d{0.0, 0.0, 0.0},
+    Eigen::Vector3d{1.0, 0.0, 0.0},
+    Eigen::Vector3d{0.0, 1.0, 2.0}};
+  const auto point_factor = snapshot.build_point_to_point_factor(
+    frame_points, predicted_pose, 2U, 100U, 0.05, 0.1);
+  std::cout << "gaussian_snapshot_point_factor correspondences="
+            << point_factor.frame_points_i.size()
+            << " weight=" << point_factor.weight << "\n";
+  if (point_factor.frame_points_i.size() != frame_points.size() ||
+    point_factor.frame_points_i.size() != point_factor.target_points_w.size())
+  {
+    std::cerr << "Gaussian snapshot point-to-point factor is invalid\n";
+    return 1;
+  }
   std::cout << "gaussian_snapshot_probe OK\n";
   return 0;
 }

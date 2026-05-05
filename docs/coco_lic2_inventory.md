@@ -75,8 +75,9 @@ Current ROS2 implementation status:
   against incoming camera frames.
 - `tracking_node` also subscribes to `/gaussian_lic/gaussian_map`
   `GaussianArray` chunks and caches chunk-complete Gaussian snapshots, giving
-  the frontend a native Gaussian-map reverse channel for later photometric
-  joint optimization.
+  the frontend a native Gaussian-map reverse channel. Cached Gaussian centers
+  can now generate optional point-to-point tracking-window factors while the
+  full photometric Gaussian residual is ported.
 - Production sliding-window BA, VIO Jacobians, robust IMU bias observability
   from LIO/VIO factors, true Schur-complement marginalization, and
   Coco-LIC2-grade IMU/LiDAR/camera joint optimization still need to be ported

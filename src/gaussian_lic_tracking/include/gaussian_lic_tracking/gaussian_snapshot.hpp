@@ -9,6 +9,8 @@
 #include <Eigen/Core>
 
 #include <gaussian_lic_msgs/msg/gaussian_array.hpp>
+#include <gaussian_lic_tracking/sliding_window_optimizer.hpp>
+#include <gaussian_lic_tracking/trajectory_manager.hpp>
 
 namespace gaussian_lic_tracking
 {
@@ -39,6 +41,13 @@ public:
 
   Eigen::Vector3d centroid() const;
   double mean_opacity() const;
+  SlidingWindowPointToPointFactor build_point_to_point_factor(
+    const std::vector<Eigen::Vector3d> & frame_points_i,
+    const TrajectoryPose & predicted_pose,
+    size_t min_points,
+    size_t max_frame_points,
+    double nearest_distance_m,
+    double min_opacity) const;
 
 private:
   void reset_sequence(int64_t stamp_ns, uint32_t total_count, uint32_t chunk_count);

@@ -4,6 +4,8 @@
 #include <gaussian_lic_tracking/time.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace gaussian_lic_tracking
 {
@@ -105,6 +107,54 @@ double GaussianSnapshot::mean_opacity() const
     sum += point.opacity;
   }
   return sum / static_cast<double>(points_.size());
+}
+
+SlidingWindowPointToPointFactor GaussianSnapshot::build_point_to_point_factor(
+  const std::vector<Eigen::Vector3d> & frame_points_i,
+  const TrajectoryPose & predicted_pose,
+  const size_t min_points,
+  const size_t max_frame_points,
+  const double nearest_distance_m,
+  const double min_opacity) const
+{
+  SlidingWindowPointToPointFactor factor;
+  factor.stamp_ns = predicted_pose.stamp_ns;
+  if (!complete() || frame_points_i.size() < min_points || points_.size() < min_points ||
+    nearest_distance_m <= 0.0)
+  {
+    return factor;
+  }
+
+  const size_t stride = max_frame_points > 0U && frame_points_i.size() > max_frame_points
+    ? static_cast<size_t>(std::ceil(static_cast<double>(frame_points_i.size()) / static_cast<double>(max_frame_points)))
+    : 1U;
+  const double max_distance_sq = nearest_distance_m * nearest_distance_m;
+  factor.weight = 1.0 / std::max(max_distance_sq, 1.0e-12);
+  for (size_t point_index = 0; point_index < frame_points_i.size(); point_index += stride) {
+    const auto & point_i = frame_points_i[point_index];
+    const Eigen::Vector3d point_w = predicted_pose.q_w_i * point_i + predicted_pose.p_w_i;
+    double best_distance_sq = std::numeric_limits<double>::infinity();
+    Eigen::Vector3d best_point_w = Eigen::Vector3d::Zero();
+    for (const auto & gaussian : points_) {
+      if (gaussian.opacity < min_opacity) {
+        continue;
+      }
+      const double distance_sq = (gaussian.xyz - point_w).squaredNorm();
+      if (distance_sq < best_distance_sq) {
+        best_distance_sq = distance_sq;
+        best_point_w = gaussian.xyz;
+      }
+    }
+    if (best_distance_sq <= max_distance_sq) {
+      factor.frame_points_i.push_back(point_i);
+      factor.target_points_w.push_back(best_point_w);
+    }
+  }
+  if (factor.frame_points_i.size() < min_points) {
+    factor.frame_points_i.clear();
+    factor.target_points_w.clear();
+  }
+  return factor;
 }
 
 }  // namespace gaussian_lic_tracking
