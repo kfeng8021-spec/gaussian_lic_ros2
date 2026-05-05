@@ -102,6 +102,7 @@ def generate_launch_description():
     sliding_window_min_normal_equation_rank_ratio = LaunchConfiguration(
         "sliding_window_min_normal_equation_rank_ratio"
     )
+    sliding_window_max_state_gap_s = LaunchConfiguration("sliding_window_max_state_gap_s")
     sliding_window_imu_weight = LaunchConfiguration("sliding_window_imu_weight")
     sliding_window_imu_rotation_weight = LaunchConfiguration("sliding_window_imu_rotation_weight")
     sliding_window_imu_velocity_weight = LaunchConfiguration("sliding_window_imu_velocity_weight")
@@ -190,6 +191,7 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_max_bias_step", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_max_normal_equation_condition", default_value="1000000000000.0"),
             DeclareLaunchArgument("sliding_window_min_normal_equation_rank_ratio", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_imu_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_imu_rotation_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_imu_velocity_weight", default_value="1.0"),
@@ -280,6 +282,7 @@ def generate_launch_description():
                         "sliding_window_max_bias_step": sliding_window_max_bias_step,
                         "sliding_window_max_normal_equation_condition": sliding_window_max_normal_equation_condition,
                         "sliding_window_min_normal_equation_rank_ratio": sliding_window_min_normal_equation_rank_ratio,
+                        "sliding_window_max_state_gap_s": sliding_window_max_state_gap_s,
                         "sliding_window_imu_weight": sliding_window_imu_weight,
                         "sliding_window_imu_rotation_weight": sliding_window_imu_rotation_weight,
                         "sliding_window_imu_velocity_weight": sliding_window_imu_velocity_weight,

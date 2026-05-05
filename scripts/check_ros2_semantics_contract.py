@@ -296,6 +296,10 @@ def main() -> int:
         errors.append("tracking_node/optimizer must gate IMU preintegration span against factor timestamps")
     if "orphan_factor_count" not in sliding_window_text or "count_orphan_factors" not in sliding_window_text:
         errors.append("sliding_window_optimizer must expose and gate orphan factor references")
+    if "max_state_gap_s" not in sliding_window_text or "state_gap_degenerate" not in sliding_window_text:
+        errors.append("sliding_window_optimizer must expose and gate oversized state time gaps")
+    if 'DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0")' not in tracking_launch_text:
+        errors.append("tracking.launch.py must expose the sliding-window max state gap")
     if 'DeclareLaunchArgument("sliding_window_imu_max_extrapolation_s", default_value="0.02")' not in tracking_launch_text:
         errors.append("tracking.launch.py must expose bounded IMU preintegration extrapolation")
     for field in [
@@ -341,10 +345,13 @@ def main() -> int:
         "sliding_window_normal_equation_rows",
         "sliding_window_normal_equation_cols",
         "sliding_window_normal_equation_rank",
+        "sliding_window_min_state_dt_s",
+        "sliding_window_max_state_dt_s",
         "sliding_window_normal_equation_min_singular_value",
         "sliding_window_normal_equation_max_singular_value",
         "sliding_window_normal_equation_condition_number",
         "sliding_window_normal_equation_degenerate",
+        "sliding_window_state_gap_degenerate",
         "sliding_window_last_step_norm",
         "sliding_window_last_step_scale",
         "sliding_window_last_damping",

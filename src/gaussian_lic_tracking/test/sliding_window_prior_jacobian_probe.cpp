@@ -189,6 +189,32 @@ int main()
       return 1;
     }
   }
+  {
+    gaussian_lic_tracking::SlidingWindowConfig gap_config;
+    gap_config.max_state_gap_s = 0.5;
+    gaussian_lic_tracking::SlidingWindowOptimizer gap_optimizer(gap_config);
+    gaussian_lic_tracking::SlidingWindowState start_state = state;
+    start_state.stamp_ns = 0;
+    start_state.fixed = true;
+    gaussian_lic_tracking::SlidingWindowState end_state = state;
+    end_state.stamp_ns = 1000000000LL;
+    end_state.p_w_i.x() = 0.1;
+    gap_optimizer.add_or_update_state(start_state);
+    gap_optimizer.add_or_update_state(end_state);
+    gaussian_lic_tracking::SlidingWindowPosePrior prior;
+    prior.stamp_ns = end_state.stamp_ns;
+    prior.p_w_i = end_state.p_w_i;
+    prior.q_w_i = end_state.q_w_i;
+    gap_optimizer.add_pose_prior(prior);
+    const auto gap_summary = gap_optimizer.optimize();
+    if (!gap_summary.state_gap_degenerate ||
+      !gap_summary.normal_equation_degenerate ||
+      gap_summary.max_state_dt_s < 1.0)
+    {
+      std::cerr << "sliding window optimizer did not gate oversized state gaps\n";
+      return 1;
+    }
+  }
   validation_ok &= expect_throw("zero pose-prior quaternion", [pose_prior, zero_quaternion]() {
     gaussian_lic_tracking::SlidingWindowOptimizer invalid_optimizer;
     auto invalid_prior = pose_prior;

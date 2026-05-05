@@ -215,6 +215,9 @@ status_matches() {
     rg -q "sliding_window_orphan_factors: 0" "${status_file}" &&
     rg -q "sliding_window_dense_prior_rank: [1-9]" "${status_file}" &&
     rg -q "sliding_window_dense_prior_max_singular_value: .*[1-9]" "${status_file}" &&
+    rg -q "sliding_window_min_state_dt_s: .*[1-9]" "${status_file}" &&
+    rg -q "sliding_window_max_state_dt_s: .*[1-9]" "${status_file}" &&
+    rg -q "sliding_window_state_gap_degenerate: false" "${status_file}" &&
     rg -q "trajectory_control_poses: [1-9]" "${status_file}" &&
     rg -q "trajectory_control_pose_skip_count: 0" "${status_file}" &&
     rg -q "total_window_point_correspondences: [1-9]" "${status_file}" &&

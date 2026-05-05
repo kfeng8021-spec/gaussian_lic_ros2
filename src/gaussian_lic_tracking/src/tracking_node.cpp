@@ -226,6 +226,9 @@ public:
     sliding_window_min_normal_equation_rank_ratio_ = finite_unit_interval_parameter(
       "sliding_window_min_normal_equation_rank_ratio",
       declare_parameter<double>("sliding_window_min_normal_equation_rank_ratio", 0.0));
+    sliding_window_max_state_gap_s_ = finite_nonnegative_parameter(
+      "sliding_window_max_state_gap_s",
+      declare_parameter<double>("sliding_window_max_state_gap_s", 1.0));
     sliding_window_imu_weight_ = finite_nonnegative_parameter(
       "sliding_window_imu_weight",
       declare_parameter<double>("sliding_window_imu_weight", 1.0));
@@ -278,6 +281,7 @@ public:
     window_config.max_bias_step = sliding_window_max_bias_step_;
     window_config.max_normal_equation_condition = sliding_window_max_normal_equation_condition_;
     window_config.min_normal_equation_rank_ratio = sliding_window_min_normal_equation_rank_ratio_;
+    window_config.max_state_gap_s = sliding_window_max_state_gap_s_;
     sliding_window_optimizer_.set_config(window_config);
 
     gaussian_lic_tracking::LidarFactorConfig lidar_config;
@@ -2098,6 +2102,8 @@ private:
     status.sliding_window_last_damping = summary.last_damping;
     status.sliding_window_dense_prior_min_singular_value = summary.dense_prior_min_singular_value;
     status.sliding_window_dense_prior_max_singular_value = summary.dense_prior_max_singular_value;
+    status.sliding_window_min_state_dt_s = summary.min_state_dt_s;
+    status.sliding_window_max_state_dt_s = summary.max_state_dt_s;
     status.sliding_window_normal_equation_min_singular_value =
       summary.normal_equation_min_singular_value;
     status.sliding_window_normal_equation_max_singular_value =
@@ -2110,6 +2116,7 @@ private:
     status.sliding_window_accel_bias_observability = summary.accel_bias_observability;
     status.sliding_window_converged = summary.converged;
     status.sliding_window_normal_equation_degenerate = summary.normal_equation_degenerate;
+    status.sliding_window_state_gap_degenerate = summary.state_gap_degenerate;
     status.sliding_window_imu_reanchors = num_sliding_window_imu_reanchors_;
     status.trajectory_control_poses = static_cast<uint64_t>(trajectory_manager_.size());
     status.trajectory_deskew_queries = trajectory_deskew_queries_;
@@ -2256,6 +2263,7 @@ private:
   double sliding_window_max_bias_step_{1.0};
   double sliding_window_max_normal_equation_condition_{1.0e12};
   double sliding_window_min_normal_equation_rank_ratio_{0.0};
+  double sliding_window_max_state_gap_s_{1.0};
   double gaussian_snapshot_lidar_min_opacity_{0.01};
   double sliding_window_imu_weight_{1.0};
   double sliding_window_imu_rotation_weight_{1.0};

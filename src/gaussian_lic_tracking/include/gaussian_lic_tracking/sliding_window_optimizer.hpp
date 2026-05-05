@@ -29,6 +29,7 @@ struct SlidingWindowConfig
   double max_bias_step{0.0};
   double max_normal_equation_condition{1.0e12};
   double min_normal_equation_rank_ratio{0.0};
+  double max_state_gap_s{1.0};
 };
 
 struct SlidingWindowState
@@ -172,6 +173,8 @@ struct SlidingWindowSummary
   double last_damping{0.0};
   double dense_prior_min_singular_value{0.0};
   double dense_prior_max_singular_value{0.0};
+  double min_state_dt_s{0.0};
+  double max_state_dt_s{0.0};
   double normal_equation_min_singular_value{0.0};
   double normal_equation_max_singular_value{0.0};
   double normal_equation_condition_number{0.0};
@@ -181,6 +184,7 @@ struct SlidingWindowSummary
   double accel_bias_observability{0.0};
   bool converged{false};
   bool normal_equation_degenerate{false};
+  bool state_gap_degenerate{false};
 };
 
 struct SchurComplementResult

@@ -137,6 +137,8 @@ sliding_window_last_step_scale
 sliding_window_last_damping
 sliding_window_dense_prior_min_singular_value
 sliding_window_dense_prior_max_singular_value
+sliding_window_min_state_dt_s
+sliding_window_max_state_dt_s
 sliding_window_normal_equation_min_singular_value
 sliding_window_normal_equation_max_singular_value
 sliding_window_normal_equation_condition_number
@@ -146,6 +148,7 @@ sliding_window_gyro_bias_observability
 sliding_window_accel_bias_observability
 sliding_window_converged
 sliding_window_normal_equation_degenerate
+sliding_window_state_gap_degenerate
 sliding_window_imu_reanchors
 trajectory_control_poses
 trajectory_deskew_queries
@@ -190,6 +193,9 @@ and damping for runtime diagnosis.
 It also reports and gates orphan factors whose referenced states are no longer
 inside the active window, preventing silently skipped residual blocks from
 looking like healthy optimization.
+State-cadence fields report the active-window min/max signed-nanosecond spacing
+and mark oversized gaps as degraded before solving, which catches rosbag2 replay
+or synchronization stalls that would otherwise look like an ordinary BA solve.
 It also gates nonzero trajectory smoothness factors, which constrain adjacent
 three-state rotation-rate, position-rate, velocity-acceleration, and bias-rate
 continuity in the native joint BA window.

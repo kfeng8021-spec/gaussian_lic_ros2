@@ -432,9 +432,11 @@ void SlidingWindowOptimizer::set_config(const SlidingWindowConfig & config)
   }
   if (!std::isfinite(config.max_normal_equation_condition) ||
     !std::isfinite(config.min_normal_equation_rank_ratio) ||
+    !std::isfinite(config.max_state_gap_s) ||
     config.max_normal_equation_condition < 0.0 ||
     config.min_normal_equation_rank_ratio < 0.0 ||
-    config.min_normal_equation_rank_ratio > 1.0)
+    config.min_normal_equation_rank_ratio > 1.0 ||
+    config.max_state_gap_s < 0.0)
   {
     throw std::runtime_error(
       "sliding window normal-equation health gates must be finite and in range");
@@ -1716,6 +1718,21 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   summary.se3_photometric_factor_count = se3_photometric_factors_.size();
   summary.smoothness_factor_count = smoothness_factors_.size();
   summary.orphan_factor_count = count_orphan_factors();
+  if (states_.size() >= 2U) {
+    summary.min_state_dt_s = std::numeric_limits<double>::infinity();
+    for (size_t index = 1U; index < states_.size(); ++index) {
+      const double dt_s = static_cast<double>(
+        states_[index].stamp_ns - states_[index - 1U].stamp_ns) / 1.0e9;
+      summary.min_state_dt_s = std::min(summary.min_state_dt_s, dt_s);
+      summary.max_state_dt_s = std::max(summary.max_state_dt_s, dt_s);
+      if (dt_s <= 0.0 || (config_.max_state_gap_s > 0.0 && dt_s > config_.max_state_gap_s)) {
+        summary.state_gap_degenerate = true;
+      }
+    }
+    if (!std::isfinite(summary.min_state_dt_s)) {
+      summary.min_state_dt_s = 0.0;
+    }
+  }
   Eigen::VectorXd residual = build_residual(states_);
   summary.initial_cost = compute_cost(residual);
   summary.final_cost = summary.initial_cost;
@@ -1859,6 +1876,12 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
              summary.normal_equation_condition_number > config_.max_normal_equation_condition;
     };
   if (summary.orphan_factor_count > 0U) {
+    summary.normal_equation_degenerate = true;
+    ++summary.rejected_steps;
+    refresh_bias_summary();
+    return summary;
+  }
+  if (summary.state_gap_degenerate) {
     summary.normal_equation_degenerate = true;
     ++summary.rejected_steps;
     refresh_bias_summary();
