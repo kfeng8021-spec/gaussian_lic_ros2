@@ -83,6 +83,39 @@ VisualSe3PhotometricJacobian linearize_se3_photometric_pixel(
   return output;
 }
 
+VisualSe3PhotometricLinearization linearize_se3_photometric_samples(
+  const VisualCameraIntrinsics & intrinsics,
+  const std::vector<VisualSe3PhotometricSample> & samples)
+{
+  VisualSe3PhotometricLinearization output;
+  for (const auto & sample : samples) {
+    if (sample.weight <= 0.0 || !std::isfinite(sample.residual)) {
+      continue;
+    }
+    const auto jacobian = linearize_se3_photometric_pixel(
+      intrinsics, sample.point_camera, sample.image_gradient);
+    if (!jacobian.valid) {
+      continue;
+    }
+    const double weight = sample.weight;
+    output.hessian.noalias() += weight * jacobian.intensity_jacobian.transpose() *
+      jacobian.intensity_jacobian;
+    output.rhs.noalias() -= weight * jacobian.intensity_jacobian.transpose() * sample.residual;
+    output.cost += 0.5 * weight * sample.residual * sample.residual;
+    ++output.sample_count;
+  }
+  if (output.sample_count == 0U || !output.hessian.allFinite() || !output.rhs.allFinite()) {
+    return output;
+  }
+  const Eigen::LDLT<Eigen::Matrix<double, 6, 6>> ldlt(output.hessian);
+  if (ldlt.info() != Eigen::Success) {
+    return output;
+  }
+  output.gauss_newton_step = ldlt.solve(output.rhs);
+  output.valid = output.gauss_newton_step.allFinite();
+  return output;
+}
+
 VisualPhotometricLinearization VisualFactor::linearize_translation(
   const VisualFrame & reference,
   const VisualFrame & candidate) const

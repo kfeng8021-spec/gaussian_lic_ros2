@@ -64,10 +64,32 @@ struct VisualSe3PhotometricJacobian
   Eigen::Matrix<double, 1, 6> intensity_jacobian{Eigen::Matrix<double, 1, 6>::Zero()};
 };
 
+struct VisualSe3PhotometricSample
+{
+  Eigen::Vector3d point_camera{Eigen::Vector3d::Zero()};
+  Eigen::Vector2d image_gradient{Eigen::Vector2d::Zero()};
+  double residual{0.0};
+  double weight{1.0};
+};
+
+struct VisualSe3PhotometricLinearization
+{
+  bool valid{false};
+  size_t sample_count{0};
+  double cost{0.0};
+  Eigen::Matrix<double, 6, 6> hessian{Eigen::Matrix<double, 6, 6>::Zero()};
+  Eigen::Matrix<double, 6, 1> rhs{Eigen::Matrix<double, 6, 1>::Zero()};
+  Eigen::Matrix<double, 6, 1> gauss_newton_step{Eigen::Matrix<double, 6, 1>::Zero()};
+};
+
 VisualSe3PhotometricJacobian linearize_se3_photometric_pixel(
   const VisualCameraIntrinsics & intrinsics,
   const Eigen::Vector3d & point_camera,
   const Eigen::Vector2d & image_gradient);
+
+VisualSe3PhotometricLinearization linearize_se3_photometric_samples(
+  const VisualCameraIntrinsics & intrinsics,
+  const std::vector<VisualSe3PhotometricSample> & samples);
 
 class VisualFactor
 {

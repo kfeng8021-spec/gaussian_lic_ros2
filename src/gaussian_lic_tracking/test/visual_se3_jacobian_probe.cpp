@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 #include <Eigen/Geometry>
 
@@ -66,6 +67,40 @@ int main()
     std::cerr << "SE3 photometric Jacobian does not match finite differences\n";
     return 1;
   }
+
+  Eigen::Matrix<double, 6, 1> expected_step;
+  expected_step << 0.001, -0.002, 0.0015, 0.01, -0.015, 0.02;
+  std::vector<gaussian_lic_tracking::VisualSe3PhotometricSample> samples;
+  for (int iy = 0; iy < 6; ++iy) {
+    for (int ix = 0; ix < 6; ++ix) {
+      gaussian_lic_tracking::VisualSe3PhotometricSample sample;
+      sample.point_camera = Eigen::Vector3d{
+        (static_cast<double>(ix) - 2.5) * 0.08,
+        (static_cast<double>(iy) - 2.5) * 0.06,
+        1.4 + 0.05 * static_cast<double>((ix + 2 * iy) % 5)};
+      sample.image_gradient = Eigen::Vector2d{
+        0.2 + 0.05 * static_cast<double>(ix),
+        -0.18 + 0.04 * static_cast<double>(iy)};
+      sample.weight = 0.5 + 0.1 * static_cast<double>((ix + iy) % 3);
+      const auto sample_jacobian = gaussian_lic_tracking::linearize_se3_photometric_pixel(
+        intrinsics, sample.point_camera, sample.image_gradient);
+      sample.residual = -(sample_jacobian.intensity_jacobian * expected_step)(0);
+      samples.push_back(sample);
+    }
+  }
+  const auto linearization =
+    gaussian_lic_tracking::linearize_se3_photometric_samples(intrinsics, samples);
+  const double step_error = (linearization.gauss_newton_step - expected_step).norm();
+  std::cout << " se3_samples=" << linearization.sample_count
+            << " se3_step=" << linearization.gauss_newton_step.transpose()
+            << " se3_step_error=" << step_error;
+  if (!linearization.valid || linearization.sample_count != samples.size() ||
+    step_error > 1.0e-6)
+  {
+    std::cerr << "SE3 photometric sample linearization failed to recover the synthetic step\n";
+    return 1;
+  }
+
   const auto invalid = gaussian_lic_tracking::linearize_se3_photometric_pixel(
     intrinsics, Eigen::Vector3d{0.0, 0.0, 0.0}, image_gradient);
   if (invalid.valid) {
