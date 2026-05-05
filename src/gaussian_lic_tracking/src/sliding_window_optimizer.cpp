@@ -643,8 +643,11 @@ void SlidingWindowOptimizer::add_dense_prior(const SlidingWindowDensePrior & pri
 
 void SlidingWindowOptimizer::add_point_to_point_factor(const SlidingWindowPointToPointFactor & factor)
 {
-  if (!std::isfinite(factor.weight) || factor.weight <= 0.0) {
-    throw std::runtime_error("point-to-point factor weight must be finite and positive");
+  if (!std::isfinite(factor.weight) || !std::isfinite(factor.huber_delta_m) ||
+    factor.weight <= 0.0 || factor.huber_delta_m < 0.0)
+  {
+    throw std::runtime_error(
+      "point-to-point factor weight must be positive and Huber delta must be non-negative");
   }
   if (factor.frame_points_i.size() != factor.target_points_w.size()) {
     throw std::runtime_error("point-to-point factor source/target sizes must match");
@@ -672,8 +675,11 @@ void SlidingWindowOptimizer::add_point_to_point_factor(const SlidingWindowPointT
 
 void SlidingWindowOptimizer::add_point_to_plane_factor(const SlidingWindowPointToPlaneFactor & factor)
 {
-  if (!std::isfinite(factor.weight) || factor.weight <= 0.0) {
-    throw std::runtime_error("point-to-plane factor weight must be finite and positive");
+  if (!std::isfinite(factor.weight) || !std::isfinite(factor.huber_delta_m) ||
+    factor.weight <= 0.0 || factor.huber_delta_m < 0.0)
+  {
+    throw std::runtime_error(
+      "point-to-plane factor weight must be positive and Huber delta must be non-negative");
   }
   if (factor.frame_points_i.size() != factor.target_points_w.size() ||
     factor.frame_points_i.size() != factor.target_normals_w.size())
@@ -1065,13 +1071,14 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     }
     const auto & state = states[static_cast<size_t>(index)];
     for (size_t point_index = 0; point_index < factor.frame_points_i.size(); ++point_index) {
-      const double robust_weight = factor.point_weights.empty()
+      const double base_weight = factor.point_weights.empty()
         ? 1.0
         : std::max(0.0, factor.point_weights[point_index]);
-      const double scale = std::sqrt(factor.weight * robust_weight);
       Eigen::Vector3d residual =
         state.q_w_i * factor.frame_points_i[point_index] + state.p_w_i -
         factor.target_points_w[point_index];
+      const double robust_weight = huber_weight(residual.norm(), factor.huber_delta_m);
+      const double scale = std::sqrt(factor.weight * base_weight * robust_weight);
       append(scale * residual);
     }
   }
@@ -1084,15 +1091,16 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     const auto & state = states[static_cast<size_t>(index)];
     Eigen::VectorXd residual(static_cast<Eigen::Index>(factor.frame_points_i.size()));
     for (size_t point_index = 0; point_index < factor.frame_points_i.size(); ++point_index) {
-      const double robust_weight = factor.point_weights.empty()
+      const double base_weight = factor.point_weights.empty()
         ? 1.0
         : std::max(0.0, factor.point_weights[point_index]);
-      const double scale = std::sqrt(factor.weight * robust_weight);
       const Eigen::Vector3d point_w =
         state.q_w_i * factor.frame_points_i[point_index] + state.p_w_i;
-      residual[static_cast<Eigen::Index>(point_index)] =
-        scale * factor.target_normals_w[point_index].normalized().dot(
+      const double point_residual = factor.target_normals_w[point_index].normalized().dot(
         point_w - factor.target_points_w[point_index]);
+      const double robust_weight = huber_weight(std::abs(point_residual), factor.huber_delta_m);
+      const double scale = std::sqrt(factor.weight * base_weight * robust_weight);
+      residual[static_cast<Eigen::Index>(point_index)] = scale * point_residual;
     }
     append(residual);
   }
@@ -1358,11 +1366,14 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
         return fallback_to_numeric();
       }
       if (offset >= 0) {
-        const double robust_weight = factor.point_weights.empty()
+        const double base_weight = factor.point_weights.empty()
           ? 1.0
           : std::max(0.0, factor.point_weights[point_index]);
-        const double scale = std::sqrt(factor.weight * robust_weight);
         const Eigen::Vector3d rotated_point = state.q_w_i * factor.frame_points_i[point_index];
+        const Eigen::Vector3d residual =
+          rotated_point + state.p_w_i - factor.target_points_w[point_index];
+        const double robust_weight = huber_weight(residual.norm(), factor.huber_delta_m);
+        const double scale = std::sqrt(factor.weight * base_weight * robust_weight);
         jacobian.template block<3, 3>(row, offset) =
           scale * -skew_symmetric(rotated_point);
         jacobian.template block<3, 3>(row, offset + 6) =
@@ -1384,12 +1395,15 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
         return fallback_to_numeric();
       }
       if (offset >= 0) {
-        const double robust_weight = factor.point_weights.empty()
+        const double base_weight = factor.point_weights.empty()
           ? 1.0
           : std::max(0.0, factor.point_weights[point_index]);
-        const double scale = std::sqrt(factor.weight * robust_weight);
         const Eigen::Vector3d normal = factor.target_normals_w[point_index].normalized();
         const Eigen::Vector3d rotated_point = state.q_w_i * factor.frame_points_i[point_index];
+        const double residual = normal.dot(
+          rotated_point + state.p_w_i - factor.target_points_w[point_index]);
+        const double robust_weight = huber_weight(std::abs(residual), factor.huber_delta_m);
+        const double scale = std::sqrt(factor.weight * base_weight * robust_weight);
         jacobian.template block<1, 3>(row, offset) =
           scale * -normal.transpose() * skew_symmetric(rotated_point);
         jacobian.template block<1, 3>(row, offset + 6) =

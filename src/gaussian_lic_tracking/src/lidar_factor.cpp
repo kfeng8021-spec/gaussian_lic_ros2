@@ -278,6 +278,7 @@ SlidingWindowPointToPointFactor LidarFactor::build_point_to_point_factor(
   factor.target_points_w.reserve(sampled.size());
   factor.point_weights.reserve(sampled.size());
   factor.weight = 1.0 / std::max(config_.nearest_distance_m * config_.nearest_distance_m, 1.0e-12);
+  factor.huber_delta_m = config_.robust_kernel_m;
 
   for (const auto & point_i : sampled) {
     const Eigen::Vector3d point_w = predicted_pose.q_w_i * point_i + predicted_pose.p_w_i;
@@ -294,7 +295,7 @@ SlidingWindowPointToPointFactor LidarFactor::build_point_to_point_factor(
       const double residual_norm = std::sqrt(best_distance_sq);
       factor.frame_points_i.push_back(point_i);
       factor.target_points_w.push_back(best_point_w);
-      factor.point_weights.push_back(std::min(1.0, config_.robust_kernel_m / std::max(residual_norm, 1.0e-12)));
+      factor.point_weights.push_back(1.0);
     }
   }
   if (factor.frame_points_i.size() < config_.min_points) {
@@ -325,6 +326,7 @@ SlidingWindowPointToPlaneFactor LidarFactor::build_point_to_plane_factor(
   factor.target_normals_w.reserve(sampled.size());
   factor.point_weights.reserve(sampled.size());
   factor.weight = 1.0 / std::max(config_.nearest_distance_m * config_.nearest_distance_m, 1.0e-12);
+  factor.huber_delta_m = config_.robust_kernel_m;
 
   for (const auto & point_i : sampled) {
     const Eigen::Vector3d point_w = predicted_pose.q_w_i * point_i + predicted_pose.p_w_i;
@@ -382,8 +384,7 @@ SlidingWindowPointToPlaneFactor LidarFactor::build_point_to_plane_factor(
     factor.frame_points_i.push_back(point_i);
     factor.target_points_w.push_back(centroid);
     factor.target_normals_w.push_back(normal);
-    factor.point_weights.push_back(
-      std::min(1.0, config_.robust_kernel_m / std::max(std::abs(signed_distance), 1.0e-12)));
+    factor.point_weights.push_back(1.0);
   }
   if (factor.frame_points_i.size() < config_.min_points) {
     factor.frame_points_i.clear();

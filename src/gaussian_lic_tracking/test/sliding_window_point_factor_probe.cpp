@@ -57,6 +57,55 @@ int main()
     std::cerr << "sliding window point-to-point factor failed to recover the pose\n";
     return 1;
   }
+
+  gaussian_lic_tracking::SlidingWindowOptimizer robust_optimizer(config);
+  gaussian_lic_tracking::SlidingWindowState robust_state;
+  robust_state.stamp_ns = 200;
+  robust_optimizer.add_or_update_state(robust_state);
+  gaussian_lic_tracking::SlidingWindowPosePrior rotation_prior;
+  rotation_prior.stamp_ns = robust_state.stamp_ns;
+  rotation_prior.q_w_i = Eigen::Quaterniond::Identity();
+  rotation_prior.rotation_weight = 100.0;
+  rotation_prior.translation_weight = 0.0;
+  robust_optimizer.add_pose_prior(rotation_prior);
+
+  gaussian_lic_tracking::SlidingWindowPointToPointFactor robust_factor;
+  robust_factor.stamp_ns = robust_state.stamp_ns;
+  robust_factor.weight = 80.0;
+  robust_factor.huber_delta_m = 0.05;
+  const Eigen::Vector3d robust_true_p{0.35, -0.2, 0.1};
+  for (int i = 0; i < 24; ++i) {
+    const Eigen::Vector3d point_i{
+      0.02 * static_cast<double>(i % 6),
+      0.03 * static_cast<double>(i / 6),
+      0.01 * static_cast<double>(i % 3)};
+    robust_factor.frame_points_i.push_back(point_i);
+    robust_factor.target_points_w.push_back(point_i + robust_true_p);
+    robust_factor.point_weights.push_back(1.0);
+  }
+  robust_factor.frame_points_i.emplace_back(0.1, -0.2, 0.05);
+  robust_factor.target_points_w.emplace_back(4.0, -3.0, 2.0);
+  robust_factor.point_weights.push_back(1.0);
+  robust_optimizer.add_point_to_point_factor(robust_factor);
+
+  const auto robust_summary = robust_optimizer.optimize();
+  gaussian_lic_tracking::SlidingWindowState robust_optimized;
+  if (!robust_optimizer.get_state(robust_state.stamp_ns, robust_optimized)) {
+    std::cerr << "robust optimized point-factor state is missing\n";
+    return 1;
+  }
+  const double robust_position_error = (robust_optimized.p_w_i - robust_true_p).norm();
+  std::cout << "sliding_window_point_factor_robust_probe initial_cost="
+            << robust_summary.initial_cost
+            << " final_cost=" << robust_summary.final_cost
+            << " position_error=" << robust_position_error << "\n";
+  if (!robust_summary.converged || robust_summary.final_cost >= robust_summary.initial_cost ||
+    robust_position_error > 0.03)
+  {
+    std::cerr << "dynamic Huber point-to-point weighting failed to reject an outlier\n";
+    return 1;
+  }
+
   std::cout << "sliding_window_point_factor_probe OK\n";
   return 0;
 }

@@ -93,7 +93,15 @@ int main()
   } catch (const std::exception &) {
     rejected_bad_weight = true;
   }
-  if (!rejected_bad_plane || !rejected_bad_weight) {
+  bool rejected_bad_huber = false;
+  try {
+    auto bad_point = point_factor;
+    bad_point.huber_delta_m = -0.01;
+    optimizer.add_point_to_point_factor(bad_point);
+  } catch (const std::exception &) {
+    rejected_bad_huber = true;
+  }
+  if (!rejected_bad_plane || !rejected_bad_weight || !rejected_bad_huber) {
     std::cerr << "geometric factor validation failed to reject invalid inputs\n";
     return 1;
   }

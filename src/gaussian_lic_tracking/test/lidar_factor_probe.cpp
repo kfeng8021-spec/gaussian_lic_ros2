@@ -177,26 +177,22 @@ int main()
   const auto point_factor = factor.build_point_to_point_factor(structured_scan, rotated_prediction);
   std::cout << "lidar_point_factor correspondences=" << point_factor.frame_points_i.size()
             << " weight=" << point_factor.weight
-            << " robust_weights=" << point_factor.point_weights.size() << "\n";
+            << " robust_weights=" << point_factor.point_weights.size()
+            << " huber_delta_m=" << point_factor.huber_delta_m << "\n";
   if (point_factor.stamp_ns != rotated_prediction.stamp_ns ||
     point_factor.frame_points_i.size() < config.min_points ||
     point_factor.frame_points_i.size() != point_factor.target_points_w.size() ||
-    point_factor.point_weights.size() != point_factor.frame_points_i.size())
+    point_factor.point_weights.size() != point_factor.frame_points_i.size() ||
+    std::abs(point_factor.huber_delta_m - config.robust_kernel_m) > 1.0e-12)
   {
     std::cerr << "LiDAR point-to-point window factor is invalid\n";
     return 1;
   }
-  bool saw_downweighted_match = false;
   for (const double weight : point_factor.point_weights) {
     if (weight <= 0.0 || weight > 1.0) {
-      std::cerr << "LiDAR robust point weight is outside (0, 1]\n";
+      std::cerr << "LiDAR base point weight is outside (0, 1]\n";
       return 1;
     }
-    saw_downweighted_match = saw_downweighted_match || weight < 1.0;
-  }
-  if (!saw_downweighted_match) {
-    std::cerr << "LiDAR robust kernel did not downweight any nonzero residual\n";
-    return 1;
   }
 
   std::vector<Eigen::Vector3d> plane_scan;
@@ -213,11 +209,13 @@ int main()
   plane_prediction.p_w_i = Eigen::Vector3d{0.0, 0.0, 0.05};
   const auto plane_factor = factor.build_point_to_plane_factor(plane_scan, plane_prediction);
   std::cout << " lidar_plane_factor correspondences=" << plane_factor.frame_points_i.size()
-            << " normals=" << plane_factor.target_normals_w.size() << "\n";
+            << " normals=" << plane_factor.target_normals_w.size()
+            << " huber_delta_m=" << plane_factor.huber_delta_m << "\n";
   if (plane_factor.frame_points_i.size() < config.min_points ||
     plane_factor.frame_points_i.size() != plane_factor.target_points_w.size() ||
     plane_factor.frame_points_i.size() != plane_factor.target_normals_w.size() ||
-    plane_factor.point_weights.size() != plane_factor.frame_points_i.size())
+    plane_factor.point_weights.size() != plane_factor.frame_points_i.size() ||
+    std::abs(plane_factor.huber_delta_m - config.robust_kernel_m) > 1.0e-12)
   {
     std::cerr << "LiDAR point-to-plane window factor is invalid\n";
     return 1;

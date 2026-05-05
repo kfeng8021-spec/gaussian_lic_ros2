@@ -88,6 +88,7 @@ struct SlidingWindowPointToPointFactor
   std::vector<Eigen::Vector3d> target_points_w;
   std::vector<double> point_weights;
   double weight{1.0};
+  double huber_delta_m{0.0};
 };
 
 struct SlidingWindowPointToPlaneFactor
@@ -98,6 +99,7 @@ struct SlidingWindowPointToPlaneFactor
   std::vector<Eigen::Vector3d> target_normals_w;
   std::vector<double> point_weights;
   double weight{1.0};
+  double huber_delta_m{0.0};
 };
 
 struct SlidingWindowVisualAlignmentFactor
