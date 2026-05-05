@@ -1986,11 +1986,26 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   for (size_t iteration = 0; iteration < config_.max_iterations; ++iteration) {
     const auto normal_equation = linearize(states_, variables, damping);
     if (!normal_equation.valid) {
+      ++summary.linearization_failure_count;
+      ++summary.rejected_steps;
+      summary.normal_equation_degenerate = true;
       break;
     }
     const double current_cost = normal_equation.cost;
-    const Eigen::VectorXd step = normal_equation.hessian.ldlt().solve(normal_equation.rhs);
+    const Eigen::LDLT<Eigen::MatrixXd> ldlt(normal_equation.hessian);
+    if (ldlt.info() != Eigen::Success) {
+      ++summary.linear_solve_failure_count;
+      ++summary.rejected_steps;
+      summary.normal_equation_degenerate = true;
+      summary.final_cost = current_cost;
+      break;
+    }
+    const Eigen::VectorXd step = ldlt.solve(normal_equation.rhs);
     if (!step.allFinite()) {
+      ++summary.linear_solve_failure_count;
+      ++summary.rejected_steps;
+      summary.normal_equation_degenerate = true;
+      summary.final_cost = current_cost;
       break;
     }
 

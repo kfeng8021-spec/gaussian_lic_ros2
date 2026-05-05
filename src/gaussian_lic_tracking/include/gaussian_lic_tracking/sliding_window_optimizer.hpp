@@ -170,6 +170,8 @@ struct SlidingWindowSummary
   size_t rejected_steps{0};
   size_t limited_steps{0};
   size_t invalid_candidate_steps{0};
+  size_t linearization_failure_count{0};
+  size_t linear_solve_failure_count{0};
   double initial_cost{0.0};
   double final_cost{0.0};
   double last_step_norm{0.0};

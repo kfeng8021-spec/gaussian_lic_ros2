@@ -2103,6 +2103,10 @@ private:
     status.sliding_window_limited_steps = static_cast<uint64_t>(summary.limited_steps);
     status.sliding_window_invalid_candidate_steps =
       static_cast<uint64_t>(summary.invalid_candidate_steps);
+    status.sliding_window_linearization_failure_count =
+      static_cast<uint64_t>(summary.linearization_failure_count);
+    status.sliding_window_linear_solve_failure_count =
+      static_cast<uint64_t>(summary.linear_solve_failure_count);
     status.sliding_window_initial_cost = summary.initial_cost;
     status.sliding_window_final_cost = summary.final_cost;
     status.sliding_window_last_step_norm = summary.last_step_norm;

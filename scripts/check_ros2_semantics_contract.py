@@ -288,6 +288,8 @@ def main() -> int:
         errors.append("tracking_node must reject invalid optimized sliding-window states before feedback")
     if "invalid_candidate_steps" not in sliding_window_text or "states_are_finite(candidate_states)" not in sliding_window_text:
         errors.append("sliding_window_optimizer must explicitly reject invalid candidate states")
+    if "linearization_failure_count" not in sliding_window_text or "linear_solve_failure_count" not in sliding_window_text:
+        errors.append("sliding_window_optimizer must publish linearization/linear-solve failure counters")
     if "trajectory_control_pose_skip_count_" not in tracking_node_text:
         errors.append("tracking_node must publish trajectory-control pose rejection counters")
     if "last_sliding_window_imu_preintegration_samples_" not in tracking_node_text:
@@ -372,6 +374,8 @@ def main() -> int:
         "sliding_window_last_step_scale",
         "sliding_window_last_damping",
         "sliding_window_invalid_candidate_steps",
+        "sliding_window_linearization_failure_count",
+        "sliding_window_linear_solve_failure_count",
         "trajectory_control_poses",
         "trajectory_deskew_queries",
         "trajectory_deskew_hits",

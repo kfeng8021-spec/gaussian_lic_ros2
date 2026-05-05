@@ -60,6 +60,8 @@ int main()
             << " velocity_error=" << velocity_error << "\n";
 
   if (!summary.converged || summary.final_cost >= summary.initial_cost ||
+    summary.linearization_failure_count != 0U ||
+    summary.linear_solve_failure_count != 0U ||
     position_error > 1.0e-8 || velocity_error > 1.0e-8)
   {
     std::cerr << "sliding window optimizer failed to close the IMU factor\n";

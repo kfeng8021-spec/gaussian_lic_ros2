@@ -191,6 +191,8 @@ status_matches() {
     rg -q "sliding_window_rejected_steps:" "${status_file}" &&
     rg -q "sliding_window_limited_steps:" "${status_file}" &&
     rg -q "sliding_window_invalid_candidate_steps: 0" "${status_file}" &&
+    rg -q "sliding_window_linearization_failure_count: 0" "${status_file}" &&
+    rg -q "sliding_window_linear_solve_failure_count: 0" "${status_file}" &&
     rg -q "sliding_window_point_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_plane_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_visual_factor_skip_count:" "${status_file}" &&
