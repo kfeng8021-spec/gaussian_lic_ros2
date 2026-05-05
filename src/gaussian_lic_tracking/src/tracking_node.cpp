@@ -1706,6 +1706,7 @@ private:
   {
     std::vector<DecodedLidarPoint> points;
     if (msg.is_bigendian) {
+      ++lidar_invalid_frames_;
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
         "big-endian PointCloud2 is not supported by the native tracking LiDAR factor");
@@ -1732,6 +1733,7 @@ private:
       fields.y_field->datatype == sensor_msgs::msg::PointField::FLOAT32 &&
       fields.z_field->datatype == sensor_msgs::msg::PointField::FLOAT32;
     if (fields.x_offset < 0 || fields.y_offset < 0 || fields.z_offset < 0) {
+      ++lidar_invalid_frames_;
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
         "PointCloud2 must expose numeric x/y/z fields for the native tracking LiDAR factor");
@@ -1750,6 +1752,7 @@ private:
       max_offset = std::max(max_offset, field->offset + static_cast<uint32_t>(scalar_size));
     }
     if (msg.point_step < max_offset || msg.point_step == 0U) {
+      ++lidar_invalid_frames_;
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
         "PointCloud2 point_step is too small for x/y/z fields");
@@ -1944,6 +1947,7 @@ private:
     status.num_lidar_keyframes = num_lidar_keyframes_;
     status.lidar_map_points = static_cast<uint64_t>(lidar_factor_.map_size());
     status.last_lidar_points = static_cast<uint64_t>(last_lidar_points_);
+    status.lidar_invalid_frames = lidar_invalid_frames_;
     status.lidar_invalid_points = lidar_invalid_points_;
     status.lidar_invalid_point_times = lidar_invalid_point_times_;
     status.lidar_out_of_range_point_times = lidar_out_of_range_point_times_;
@@ -2297,6 +2301,7 @@ private:
   uint64_t depth_invalid_frames_{0};
   uint64_t rendered_invalid_frames_{0};
   uint64_t num_lidar_keyframes_{0};
+  uint64_t lidar_invalid_frames_{0};
   size_t last_lidar_points_{0};
   size_t last_lidar_matches_{0};
   size_t last_window_point_correspondences_{0};

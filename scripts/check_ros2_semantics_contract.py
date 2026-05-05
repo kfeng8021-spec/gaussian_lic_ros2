@@ -278,6 +278,8 @@ def main() -> int:
         errors.append("tracking_node must reject non-finite IMU measurements before propagation")
     if "lidar_invalid_points_" not in tracking_node_text or "invalid_point_times" not in tracking_node_text:
         errors.append("tracking_node must publish LiDAR invalid point and point-time counters")
+    if "lidar_invalid_frames_" not in tracking_node_text:
+        errors.append("tracking_node must publish malformed LiDAR frame counters")
     if "lidar_out_of_range_point_times_" not in tracking_node_text or "lidar_max_abs_point_time_offset_s" not in tracking_node_text:
         errors.append("tracking_node must gate out-of-range LiDAR per-point time offsets")
     if "camera_info_invalid_intrinsics_" not in tracking_node_text or "image_invalid_frames_" not in tracking_node_text:
@@ -304,6 +306,7 @@ def main() -> int:
         "depth_invalid_frames",
         "rendered_invalid_frames",
         "lidar_invalid_points",
+        "lidar_invalid_frames",
         "lidar_invalid_point_times",
         "lidar_out_of_range_point_times",
         "last_lidar_max_abs_point_time_offset_s",

@@ -176,6 +176,7 @@ baseline_manifest.json
 - [x] Add a native ROS2 tracking node surface that publishes mapper input topics plus odometry, path, and optional TF.
 - [x] Add a native LiDAR nearest-neighbor residual factor with bounded local map, PointCloud2 parsing, bounded 6-DoF pose correction, and deterministic correction probes.
 - [x] Publish LiDAR invalid xyz and per-point timestamp rejection counters so degraded point/factor counts are visible in native tracking status.
+- [x] Publish malformed PointCloud2 frame rejection counters for unsupported layout/endian/field contracts.
 - [x] Gate out-of-range LiDAR per-point timestamp offsets before deskew and publish rejection/max-offset diagnostics.
 - [x] Add ROS2-configurable LiDAR-to-IMU extrinsics before LIO, deskew, and mapper point publication.
 - [x] Reject malformed or non-finite LiDAR-to-IMU and camera-to-IMU extrinsics before tracker startup.

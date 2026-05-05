@@ -82,6 +82,7 @@ num_published_poses
 num_lidar_keyframes
 lidar_map_points
 last_lidar_points
+lidar_invalid_frames
 lidar_invalid_points
 lidar_invalid_point_times
 lidar_out_of_range_point_times
