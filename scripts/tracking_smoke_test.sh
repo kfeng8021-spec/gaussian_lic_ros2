@@ -244,6 +244,10 @@ status_matches() {
     rg -q "sliding_window_point_factors: [1-9]" "${status_file}" &&
     rg -q "sliding_window_smoothness_factors: [1-9]" "${status_file}" &&
     rg -q "sliding_window_imu_factor_replacement_count:" "${status_file}" &&
+    rg -q "sliding_window_point_factor_replacement_count:" "${status_file}" &&
+    rg -q "sliding_window_plane_factor_replacement_count:" "${status_file}" &&
+    rg -q "sliding_window_visual_factor_replacement_count:" "${status_file}" &&
+    rg -q "sliding_window_se3_photometric_factor_replacement_count:" "${status_file}" &&
     rg -q "sliding_window_smoothness_factor_replacement_count:" "${status_file}" &&
     rg -q "sliding_window_orphan_factors: 0" "${status_file}" &&
     rg -q "sliding_window_dense_prior_rank: [1-9]" "${status_file}" &&

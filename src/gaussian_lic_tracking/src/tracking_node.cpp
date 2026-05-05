@@ -900,6 +900,7 @@ private:
       if (pending_factor_stamp_is_fresh(pending_visual_alignment_stamp_ns_, tracking_pose.stamp_ns)) {
         gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor visual_factor;
         visual_factor.stamp_ns = tracking_pose.stamp_ns;
+        visual_factor.source_id = 1U;
         visual_factor.reference_p_w_i = tracking_pose.p_w_i;
         visual_factor.measured_shift_px = Eigen::Vector2d{
           pending_visual_alignment_.subpixel_dx,
@@ -922,6 +923,7 @@ private:
       {
         gaussian_lic_tracking::SlidingWindowSe3PhotometricFactor factor;
         factor.stamp_ns = tracking_pose.stamp_ns;
+        factor.source_id = 1U;
         factor.reference_p_w_i = tracking_pose.p_w_i;
         factor.reference_q_w_i = tracking_pose.q_w_i;
         factor.target_delta = gaussian_lic_tracking::transform_camera_delta_to_body(
@@ -2069,6 +2071,14 @@ private:
       static_cast<uint64_t>(summary.smoothness_factor_count);
     status.sliding_window_imu_factor_replacement_count =
       static_cast<uint64_t>(summary.imu_factor_replacement_count);
+    status.sliding_window_point_factor_replacement_count =
+      static_cast<uint64_t>(summary.point_factor_replacement_count);
+    status.sliding_window_plane_factor_replacement_count =
+      static_cast<uint64_t>(summary.plane_factor_replacement_count);
+    status.sliding_window_visual_factor_replacement_count =
+      static_cast<uint64_t>(summary.visual_factor_replacement_count);
+    status.sliding_window_se3_photometric_factor_replacement_count =
+      static_cast<uint64_t>(summary.se3_photometric_factor_replacement_count);
     status.sliding_window_smoothness_factor_replacement_count =
       static_cast<uint64_t>(summary.smoothness_factor_replacement_count);
     status.sliding_window_orphan_factors = static_cast<uint64_t>(summary.orphan_factor_count);

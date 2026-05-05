@@ -18,6 +18,7 @@ RUN_BAG_LAUNCH = ROOT / "src" / "gaussian_lic_bringup" / "launch" / "run_bag.lau
 TRACKING_LAUNCH = ROOT / "src" / "gaussian_lic_bringup" / "launch" / "tracking.launch.py"
 TRACKING_NODE = ROOT / "src" / "gaussian_lic_tracking" / "src" / "tracking_node.cpp"
 SLIDING_WINDOW_OPTIMIZER = ROOT / "src" / "gaussian_lic_tracking" / "src" / "sliding_window_optimizer.cpp"
+SLIDING_WINDOW_HEADER = ROOT / "src" / "gaussian_lic_tracking" / "include" / "gaussian_lic_tracking" / "sliding_window_optimizer.hpp"
 TRACKING_STATUS_MSG = ROOT / "src" / "gaussian_lic_msgs" / "msg" / "TrackingStatus.msg"
 SEMANTICS_DOC = ROOT / "docs" / "ROS2_SEMANTICS.md"
 TIMING_AUDIT = ROOT / "scripts" / "rosbag2_timing_audit.py"
@@ -61,6 +62,7 @@ def main() -> int:
     tracking_launch_text = read(TRACKING_LAUNCH)
     tracking_node_text = read(TRACKING_NODE)
     sliding_window_text = read(SLIDING_WINDOW_OPTIMIZER)
+    sliding_window_header_text = read(SLIDING_WINDOW_HEADER)
     tracking_status_msg_text = read(TRACKING_STATUS_MSG)
     timing_audit_text = read(TIMING_AUDIT)
 
@@ -314,6 +316,8 @@ def main() -> int:
         errors.append("sliding_window_optimizer must replace same-stamp pose/state priors instead of accumulating duplicates")
     if "candidate.from_stamp_ns == factor.from_stamp_ns" not in sliding_window_text or "candidate.previous_stamp_ns == factor.previous_stamp_ns" not in sliding_window_text:
         errors.append("sliding_window_optimizer must replace duplicate IMU spans and smoothness triplets instead of accumulating residual weight")
+    if "source_id{0}" not in sliding_window_header_text or "candidate.source_id == factor.source_id" not in sliding_window_text:
+        errors.append("sliding_window_optimizer must distinguish same-stamp factor sources before replacement")
     if "imu_factor_replacement_count_" not in sliding_window_text or "sliding_window_smoothness_factor_replacement_count" not in tracking_node_text:
         errors.append("tracking status must publish duplicate IMU/smoothness replacement counters")
     if 'DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0")' not in tracking_launch_text:
@@ -353,6 +357,10 @@ def main() -> int:
         "sliding_window_orphan_factors",
         "sliding_window_imu_factor_skip_count",
         "sliding_window_imu_factor_replacement_count",
+        "sliding_window_point_factor_replacement_count",
+        "sliding_window_plane_factor_replacement_count",
+        "sliding_window_visual_factor_replacement_count",
+        "sliding_window_se3_photometric_factor_replacement_count",
         "sliding_window_smoothness_factor_replacement_count",
         "sliding_window_imu_time_gap_skip_count",
         "sliding_window_last_imu_preintegration_samples",

@@ -28,6 +28,7 @@ int main()
     }
   }
   optimizer.add_point_to_plane_factor(factor);
+  optimizer.add_point_to_plane_factor(factor);
 
   const auto summary = optimizer.optimize();
   gaussian_lic_tracking::SlidingWindowState optimized;
@@ -41,6 +42,7 @@ int main()
             << " final_cost=" << summary.final_cost
             << " z_error=" << z_error << "\n";
   if (!summary.converged || summary.plane_factor_count != 1U ||
+    summary.plane_factor_replacement_count != 1U ||
     summary.final_cost >= summary.initial_cost || z_error > 1.0e-8)
   {
     std::cerr << "point-to-plane factor failed to constrain plane distance\n";

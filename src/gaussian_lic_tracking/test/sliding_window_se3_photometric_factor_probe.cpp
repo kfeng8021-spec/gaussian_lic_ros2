@@ -25,6 +25,7 @@ int main()
   factor.sqrt_information.setIdentity();
   factor.weight = 25.0;
   optimizer.add_se3_photometric_factor(factor);
+  optimizer.add_se3_photometric_factor(factor);
 
   const auto summary = optimizer.optimize();
   gaussian_lic_tracking::SlidingWindowState optimized;
@@ -50,6 +51,7 @@ int main()
             << " optimized_p=" << optimized.p_w_i.transpose() << "\n";
 
   if (!summary.converged || summary.se3_photometric_factor_count != 1U ||
+    summary.se3_photometric_factor_replacement_count != 1U ||
     summary.final_cost >= summary.initial_cost ||
     rotation_error > 1.0e-6 || translation_error > 1.0e-8)
   {
@@ -74,6 +76,7 @@ int main()
   robust_optimizer.add_se3_photometric_factor(inlier);
 
   gaussian_lic_tracking::SlidingWindowSe3PhotometricFactor outlier = inlier;
+  outlier.source_id = 1U;
   outlier.target_delta[3] = 2.0;
   robust_optimizer.add_se3_photometric_factor(outlier);
 

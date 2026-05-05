@@ -23,6 +23,7 @@ int main()
   factor.meters_per_pixel = 0.01;
   factor.weight = 50.0;
   optimizer.add_visual_alignment_factor(factor);
+  optimizer.add_visual_alignment_factor(factor);
 
   const auto summary = optimizer.optimize();
   gaussian_lic_tracking::SlidingWindowState optimized;
@@ -41,6 +42,7 @@ int main()
             << " optimized_p=" << optimized.p_w_i.transpose() << "\n";
 
   if (!summary.converged || summary.visual_factor_count != 1U ||
+    summary.visual_factor_replacement_count != 1U ||
     summary.final_cost >= summary.initial_cost || xy_error > 1.0e-8)
   {
     std::cerr << "sliding window visual alignment factor failed to recover planar correction\n";
@@ -63,6 +65,7 @@ int main()
   robust_optimizer.add_visual_alignment_factor(inlier);
 
   gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor outlier = inlier;
+  outlier.source_id = 1U;
   outlier.measured_shift_px = Eigen::Vector2d{200.0, 0.0};
   robust_optimizer.add_visual_alignment_factor(outlier);
 

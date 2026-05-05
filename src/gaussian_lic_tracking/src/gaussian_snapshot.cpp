@@ -119,6 +119,7 @@ SlidingWindowPointToPointFactor GaussianSnapshot::build_point_to_point_factor(
 {
   SlidingWindowPointToPointFactor factor;
   factor.stamp_ns = predicted_pose.stamp_ns;
+  factor.source_id = 2U;
   if (!complete() || frame_points_i.size() < min_points || points_.size() < min_points ||
     nearest_distance_m <= 0.0)
   {

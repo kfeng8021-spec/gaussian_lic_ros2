@@ -457,6 +457,10 @@ void SlidingWindowOptimizer::clear()
   se3_photometric_factors_.clear();
   smoothness_factors_.clear();
   imu_factor_replacement_count_ = 0U;
+  point_factor_replacement_count_ = 0U;
+  plane_factor_replacement_count_ = 0U;
+  visual_factor_replacement_count_ = 0U;
+  se3_photometric_factor_replacement_count_ = 0U;
   smoothness_factor_replacement_count_ = 0U;
   marginalized_state_count_ = 0U;
   schur_marginalization_count_ = 0U;
@@ -669,7 +673,17 @@ void SlidingWindowOptimizer::add_point_to_point_factor(const SlidingWindowPointT
   if (factor.frame_points_i.empty()) {
     return;
   }
-  point_factors_.push_back(factor);
+  const auto existing = std::find_if(
+    point_factors_.begin(), point_factors_.end(),
+    [&factor](const SlidingWindowPointToPointFactor & candidate) {
+      return candidate.stamp_ns == factor.stamp_ns && candidate.source_id == factor.source_id;
+    });
+  if (existing == point_factors_.end()) {
+    point_factors_.push_back(factor);
+  } else {
+    *existing = factor;
+    ++point_factor_replacement_count_;
+  }
   enforce_window_size();
 }
 
@@ -708,7 +722,17 @@ void SlidingWindowOptimizer::add_point_to_plane_factor(const SlidingWindowPointT
   if (factor.frame_points_i.empty()) {
     return;
   }
-  plane_factors_.push_back(factor);
+  const auto existing = std::find_if(
+    plane_factors_.begin(), plane_factors_.end(),
+    [&factor](const SlidingWindowPointToPlaneFactor & candidate) {
+      return candidate.stamp_ns == factor.stamp_ns && candidate.source_id == factor.source_id;
+    });
+  if (existing == plane_factors_.end()) {
+    plane_factors_.push_back(factor);
+  } else {
+    *existing = factor;
+    ++plane_factor_replacement_count_;
+  }
   enforce_window_size();
 }
 
@@ -726,7 +750,17 @@ void SlidingWindowOptimizer::add_visual_alignment_factor(const SlidingWindowVisu
   if (!factor.measured_shift_px.allFinite() || !factor.reference_p_w_i.allFinite()) {
     throw std::runtime_error("visual alignment factor values must be finite");
   }
-  visual_factors_.push_back(factor);
+  const auto existing = std::find_if(
+    visual_factors_.begin(), visual_factors_.end(),
+    [&factor](const SlidingWindowVisualAlignmentFactor & candidate) {
+      return candidate.stamp_ns == factor.stamp_ns && candidate.source_id == factor.source_id;
+    });
+  if (existing == visual_factors_.end()) {
+    visual_factors_.push_back(factor);
+  } else {
+    *existing = factor;
+    ++visual_factor_replacement_count_;
+  }
   enforce_window_size();
 }
 
@@ -746,7 +780,18 @@ void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3Ph
   }
   SlidingWindowSe3PhotometricFactor normalized = factor;
   normalized.reference_q_w_i.normalize();
-  se3_photometric_factors_.push_back(normalized);
+  const auto existing = std::find_if(
+    se3_photometric_factors_.begin(), se3_photometric_factors_.end(),
+    [&normalized](const SlidingWindowSe3PhotometricFactor & candidate) {
+      return candidate.stamp_ns == normalized.stamp_ns &&
+             candidate.source_id == normalized.source_id;
+    });
+  if (existing == se3_photometric_factors_.end()) {
+    se3_photometric_factors_.push_back(normalized);
+  } else {
+    *existing = normalized;
+    ++se3_photometric_factor_replacement_count_;
+  }
   enforce_window_size();
 }
 
@@ -1814,6 +1859,10 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   summary.se3_photometric_factor_count = se3_photometric_factors_.size();
   summary.smoothness_factor_count = smoothness_factors_.size();
   summary.imu_factor_replacement_count = imu_factor_replacement_count_;
+  summary.point_factor_replacement_count = point_factor_replacement_count_;
+  summary.plane_factor_replacement_count = plane_factor_replacement_count_;
+  summary.visual_factor_replacement_count = visual_factor_replacement_count_;
+  summary.se3_photometric_factor_replacement_count = se3_photometric_factor_replacement_count_;
   summary.smoothness_factor_replacement_count = smoothness_factor_replacement_count_;
   summary.orphan_factor_count = count_orphan_factors();
   if (states_.size() >= 2U) {

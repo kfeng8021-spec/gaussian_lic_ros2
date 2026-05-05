@@ -34,6 +34,7 @@ int main()
     factor.target_points_w.push_back(true_q * point_i + true_p);
   }
   optimizer.add_point_to_point_factor(factor);
+  optimizer.add_point_to_point_factor(factor);
 
   const auto summary = optimizer.optimize();
   gaussian_lic_tracking::SlidingWindowState optimized;
@@ -51,6 +52,7 @@ int main()
             << " rotation_error_norm=" << rotation_error_norm << "\n";
 
   if (!summary.converged || summary.point_factor_count != 1U ||
+    summary.point_factor_replacement_count != 1U ||
     summary.final_cost >= summary.initial_cost ||
     summary.point_factor_cost > 1.0e-18 ||
     position_error > 1.0e-7 || rotation_error_norm > 1.0e-7)

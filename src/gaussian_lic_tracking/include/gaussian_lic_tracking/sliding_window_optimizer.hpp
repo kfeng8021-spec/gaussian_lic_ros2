@@ -84,6 +84,7 @@ struct SlidingWindowStatePrior
 struct SlidingWindowPointToPointFactor
 {
   int64_t stamp_ns{0};
+  uint8_t source_id{0};
   std::vector<Eigen::Vector3d> frame_points_i;
   std::vector<Eigen::Vector3d> target_points_w;
   std::vector<double> point_weights;
@@ -94,6 +95,7 @@ struct SlidingWindowPointToPointFactor
 struct SlidingWindowPointToPlaneFactor
 {
   int64_t stamp_ns{0};
+  uint8_t source_id{0};
   std::vector<Eigen::Vector3d> frame_points_i;
   std::vector<Eigen::Vector3d> target_points_w;
   std::vector<Eigen::Vector3d> target_normals_w;
@@ -105,6 +107,7 @@ struct SlidingWindowPointToPlaneFactor
 struct SlidingWindowVisualAlignmentFactor
 {
   int64_t stamp_ns{0};
+  uint8_t source_id{0};
   Eigen::Vector2d measured_shift_px{Eigen::Vector2d::Zero()};
   Eigen::Vector3d reference_p_w_i{Eigen::Vector3d::Zero()};
   double meters_per_pixel{0.01};
@@ -115,6 +118,7 @@ struct SlidingWindowVisualAlignmentFactor
 struct SlidingWindowSe3PhotometricFactor
 {
   int64_t stamp_ns{0};
+  uint8_t source_id{0};
   Eigen::Vector3d reference_p_w_i{Eigen::Vector3d::Zero()};
   Eigen::Quaterniond reference_q_w_i{Eigen::Quaterniond::Identity()};
   Eigen::Matrix<double, 6, 1> target_delta{Eigen::Matrix<double, 6, 1>::Zero()};
@@ -169,6 +173,10 @@ struct SlidingWindowSummary
   size_t se3_photometric_factor_count{0};
   size_t smoothness_factor_count{0};
   size_t imu_factor_replacement_count{0};
+  size_t point_factor_replacement_count{0};
+  size_t plane_factor_replacement_count{0};
+  size_t visual_factor_replacement_count{0};
+  size_t se3_photometric_factor_replacement_count{0};
   size_t smoothness_factor_replacement_count{0};
   size_t orphan_factor_count{0};
   size_t marginalized_state_count{0};
@@ -327,6 +335,10 @@ private:
   std::vector<SlidingWindowSe3PhotometricFactor> se3_photometric_factors_;
   std::vector<SlidingWindowTrajectorySmoothnessFactor> smoothness_factors_;
   size_t imu_factor_replacement_count_{0};
+  size_t point_factor_replacement_count_{0};
+  size_t plane_factor_replacement_count_{0};
+  size_t visual_factor_replacement_count_{0};
+  size_t se3_photometric_factor_replacement_count_{0};
   size_t smoothness_factor_replacement_count_{0};
   size_t marginalized_state_count_{0};
   size_t schur_marginalization_count_{0};

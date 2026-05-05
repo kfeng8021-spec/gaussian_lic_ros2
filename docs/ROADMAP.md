@@ -227,6 +227,8 @@ baseline_manifest.json
 - [x] Replace same-stamp pose/state priors instead of accumulating duplicate residual weight.
 - [x] Replace duplicate IMU spans and smoothness triplets while preserving legitimate same-frame LiDAR/visual residual blocks.
 - [x] Publish duplicate IMU span and smoothness triplet replacement counters through `/gaussian_lic/frontend/status`.
+- [x] Replace same-source LiDAR point/plane, visual-alignment, and SE3 photometric window factors by `(stamp, source_id)` so repeated rosbag frames or relinearized runtime observations do not silently double-weight BA residuals.
+- [x] Publish same-source LiDAR/visual/SE3 factor replacement counters through `/gaussian_lic/frontend/status` and offline metrics.
 - [x] Reject non-finite LiDAR point/plane correspondences, zero plane normals, and invalid robust weights before they enter the BA normal equation.
 - [x] Bound LiDAR/Gaussian robust correspondence weights to `(0, 1]` so bad external factors cannot amplify outliers.
 - [x] Filter non-finite LiDAR keyframe/factor samples and reject invalid-pose LiDAR factors before they contaminate the map or BA window.

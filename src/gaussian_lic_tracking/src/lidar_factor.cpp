@@ -265,6 +265,7 @@ SlidingWindowPointToPointFactor LidarFactor::build_point_to_point_factor(
 {
   SlidingWindowPointToPointFactor factor;
   factor.stamp_ns = predicted_pose.stamp_ns;
+  factor.source_id = 1U;
   if (!pose_is_finite(predicted_pose)) {
     return factor;
   }
@@ -312,6 +313,7 @@ SlidingWindowPointToPlaneFactor LidarFactor::build_point_to_plane_factor(
 {
   SlidingWindowPointToPlaneFactor factor;
   factor.stamp_ns = predicted_pose.stamp_ns;
+  factor.source_id = 1U;
   if (!pose_is_finite(predicted_pose)) {
     return factor;
   }
