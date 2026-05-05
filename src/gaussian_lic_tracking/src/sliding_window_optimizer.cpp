@@ -519,6 +519,11 @@ void SlidingWindowOptimizer::add_imu_factor(const SlidingWindowImuFactor & facto
   {
     throw std::runtime_error("IMU factor must keep at least one residual block active");
   }
+  if (factor.preintegration.start_stamp_ns() != factor.from_stamp_ns ||
+    factor.preintegration.end_stamp_ns() != factor.to_stamp_ns)
+  {
+    throw std::runtime_error("IMU factor preintegration span must match factor timestamps");
+  }
   if (!factor.gravity_w.allFinite() || !factor.preintegration.delta_q().coeffs().allFinite() ||
     factor.preintegration.delta_q().norm() <= std::numeric_limits<double>::epsilon() ||
     !factor.preintegration.delta_v().allFinite() || !factor.preintegration.delta_p().allFinite() ||

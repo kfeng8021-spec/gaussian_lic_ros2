@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -237,6 +238,9 @@ public:
     sliding_window_imu_position_weight_ = finite_nonnegative_parameter(
       "sliding_window_imu_position_weight",
       declare_parameter<double>("sliding_window_imu_position_weight", 1.0));
+    sliding_window_imu_max_extrapolation_s_ = finite_nonnegative_parameter(
+      "sliding_window_imu_max_extrapolation_s",
+      declare_parameter<double>("sliding_window_imu_max_extrapolation_s", 0.02));
     sliding_window_bias_weight_ = finite_nonnegative_parameter(
       "sliding_window_bias_weight",
       declare_parameter<double>("sliding_window_bias_weight", 1.0));
@@ -1097,31 +1101,31 @@ private:
     if (has_sliding_window_state_ && sliding_window_preintegrator_initialized_ &&
       sliding_window_preintegrator_.delta_t_s() > 0.0)
     {
-      gaussian_lic_tracking::SlidingWindowImuFactor factor;
-      factor.from_stamp_ns = last_sliding_window_stamp_ns_;
-      factor.to_stamp_ns = input_pose.stamp_ns;
-      factor.preintegration = sliding_window_preintegrator_;
-      factor.gravity_w = imu_propagator_.gravity_w();
-      factor.weight = sliding_window_imu_weight_;
-      factor.rotation_weight = sliding_window_imu_rotation_weight_;
-      factor.velocity_weight = sliding_window_imu_velocity_weight_;
-      factor.position_weight = sliding_window_imu_position_weight_;
-      factor.bias_weight = sliding_window_bias_weight_;
-      last_sliding_window_imu_preintegration_samples_ =
-        static_cast<uint64_t>(sliding_window_preintegrator_.sample_count());
-      last_sliding_window_imu_preintegration_dt_s_ = sliding_window_preintegrator_.delta_t_s();
-      last_sliding_window_imu_preintegration_start_stamp_ns_ =
-        sliding_window_preintegrator_.start_stamp_ns();
-      last_sliding_window_imu_preintegration_end_stamp_ns_ =
-        sliding_window_preintegrator_.end_stamp_ns();
-      try {
-        sliding_window_optimizer_.add_imu_factor(factor);
-        window_factor_added = true;
-      } catch (const std::exception & ex) {
+      gaussian_lic_tracking::ImuPreintegrator preintegration;
+      if (!prepare_sliding_window_imu_preintegration(
+          last_sliding_window_stamp_ns_, input_pose.stamp_ns, preintegration))
+      {
         ++sliding_window_imu_factor_skip_count_;
-        RCLCPP_WARN_THROTTLE(
-          get_logger(), *get_clock(), 2000,
-          "sliding window IMU factor skipped: %s", ex.what());
+      } else {
+        gaussian_lic_tracking::SlidingWindowImuFactor factor;
+        factor.from_stamp_ns = last_sliding_window_stamp_ns_;
+        factor.to_stamp_ns = input_pose.stamp_ns;
+        factor.preintegration = preintegration;
+        factor.gravity_w = imu_propagator_.gravity_w();
+        factor.weight = sliding_window_imu_weight_;
+        factor.rotation_weight = sliding_window_imu_rotation_weight_;
+        factor.velocity_weight = sliding_window_imu_velocity_weight_;
+        factor.position_weight = sliding_window_imu_position_weight_;
+        factor.bias_weight = sliding_window_bias_weight_;
+        try {
+          sliding_window_optimizer_.add_imu_factor(factor);
+          window_factor_added = true;
+        } catch (const std::exception & ex) {
+          ++sliding_window_imu_factor_skip_count_;
+          RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 2000,
+            "sliding window IMU factor skipped: %s", ex.what());
+        }
       }
     }
 
@@ -1189,6 +1193,70 @@ private:
     sliding_window_preintegrator_.reset(input_pose.stamp_ns, sliding_window_bias_);
     sliding_window_preintegrator_initialized_ = true;
     return output_pose;
+  }
+
+  bool prepare_sliding_window_imu_preintegration(
+    const int64_t from_stamp_ns,
+    const int64_t to_stamp_ns,
+    gaussian_lic_tracking::ImuPreintegrator & preintegration)
+  {
+    preintegration = sliding_window_preintegrator_;
+    double extrapolated_dt_s = 0.0;
+    if (preintegration.start_stamp_ns() != from_stamp_ns || preintegration.end_stamp_ns() > to_stamp_ns) {
+      ++sliding_window_imu_time_gap_skip_count_;
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "sliding window IMU factor skipped: preintegration span [%" PRId64 ", %" PRId64
+        "] does not fit factor span [%" PRId64 ", %" PRId64 "]",
+        preintegration.start_stamp_ns(),
+        preintegration.end_stamp_ns(),
+        from_stamp_ns,
+        to_stamp_ns);
+      return false;
+    }
+    if (preintegration.end_stamp_ns() < to_stamp_ns) {
+      const int64_t gap_ns = to_stamp_ns - preintegration.end_stamp_ns();
+      const double gap_s = static_cast<double>(gap_ns) /
+        static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
+      if (gap_s > sliding_window_imu_max_extrapolation_s_ || preintegration.samples().empty()) {
+        ++sliding_window_imu_time_gap_skip_count_;
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "sliding window IMU factor skipped: preintegration end gap %.6fs exceeds %.6fs",
+          gap_s,
+          sliding_window_imu_max_extrapolation_s_);
+        return false;
+      }
+      const auto last_sample = preintegration.samples().back();
+      try {
+        preintegration.add_measurement(
+          to_stamp_ns,
+          last_sample.angular_velocity_rad_s,
+          last_sample.linear_acceleration_m_s2);
+        extrapolated_dt_s = gap_s;
+      } catch (const std::exception & ex) {
+        ++sliding_window_imu_time_gap_skip_count_;
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "sliding window IMU factor skipped while extending preintegration: %s", ex.what());
+        return false;
+      }
+    }
+    last_sliding_window_imu_preintegration_extrapolated_dt_s_ = extrapolated_dt_s;
+    update_last_sliding_window_imu_preintegration_status(preintegration);
+    return preintegration.start_stamp_ns() == from_stamp_ns &&
+      preintegration.end_stamp_ns() == to_stamp_ns &&
+      preintegration.delta_t_s() > 0.0;
+  }
+
+  void update_last_sliding_window_imu_preintegration_status(
+    const gaussian_lic_tracking::ImuPreintegrator & preintegration)
+  {
+    last_sliding_window_imu_preintegration_samples_ =
+      static_cast<uint64_t>(preintegration.sample_count());
+    last_sliding_window_imu_preintegration_dt_s_ = preintegration.delta_t_s();
+    last_sliding_window_imu_preintegration_start_stamp_ns_ = preintegration.start_stamp_ns();
+    last_sliding_window_imu_preintegration_end_stamp_ns_ = preintegration.end_stamp_ns();
   }
 
   void append_trajectory_control_pose(const gaussian_lic_tracking::TrajectoryPose & pose)
@@ -1993,10 +2061,13 @@ private:
     status.sliding_window_smoothness_factor_skip_count =
       sliding_window_smoothness_factor_skip_count_;
     status.sliding_window_imu_factor_skip_count = sliding_window_imu_factor_skip_count_;
+    status.sliding_window_imu_time_gap_skip_count = sliding_window_imu_time_gap_skip_count_;
     status.sliding_window_last_imu_preintegration_samples =
       last_sliding_window_imu_preintegration_samples_;
     status.sliding_window_last_imu_preintegration_dt_s =
       last_sliding_window_imu_preintegration_dt_s_;
+    status.sliding_window_last_imu_preintegration_extrapolated_dt_s =
+      last_sliding_window_imu_preintegration_extrapolated_dt_s_;
     status.sliding_window_last_imu_preintegration_start_stamp_ns =
       last_sliding_window_imu_preintegration_start_stamp_ns_;
     status.sliding_window_last_imu_preintegration_end_stamp_ns =
@@ -2189,6 +2260,7 @@ private:
   double sliding_window_imu_rotation_weight_{1.0};
   double sliding_window_imu_velocity_weight_{1.0};
   double sliding_window_imu_position_weight_{1.0};
+  double sliding_window_imu_max_extrapolation_s_{0.02};
   double sliding_window_bias_weight_{1.0};
   double sliding_window_pose_translation_weight_{2.0};
   double sliding_window_pose_rotation_weight_{2.0};
@@ -2245,8 +2317,10 @@ private:
   uint64_t sliding_window_se3_photometric_factor_skip_count_{0};
   uint64_t sliding_window_smoothness_factor_skip_count_{0};
   uint64_t sliding_window_imu_factor_skip_count_{0};
+  uint64_t sliding_window_imu_time_gap_skip_count_{0};
   uint64_t last_sliding_window_imu_preintegration_samples_{0};
   double last_sliding_window_imu_preintegration_dt_s_{0.0};
+  double last_sliding_window_imu_preintegration_extrapolated_dt_s_{0.0};
   int64_t last_sliding_window_imu_preintegration_start_stamp_ns_{0};
   int64_t last_sliding_window_imu_preintegration_end_stamp_ns_{0};
   uint64_t sliding_window_optimization_skip_count_{0};

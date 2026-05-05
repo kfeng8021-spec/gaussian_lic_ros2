@@ -109,8 +109,10 @@ sliding_window_visual_factor_skip_count
 sliding_window_se3_photometric_factor_skip_count
 sliding_window_smoothness_factor_skip_count
 sliding_window_imu_factor_skip_count
+sliding_window_imu_time_gap_skip_count
 sliding_window_last_imu_preintegration_samples
 sliding_window_last_imu_preintegration_dt_s
+sliding_window_last_imu_preintegration_extrapolated_dt_s
 sliding_window_last_imu_preintegration_start_stamp_ns
 sliding_window_last_imu_preintegration_end_stamp_ns
 sliding_window_optimization_skip_count
@@ -175,8 +177,9 @@ visual_se3_photometric_step_norm
 `scripts/tracking_smoke_test.sh` asserts that the synthetic frontend bag reaches
 `STATE_TRACKING`, publishes frontend odometry/path, and exercises the sliding
 window with callback serialization enabled, nonzero signed-nanosecond image,
-LiDAR, and IMU stamps, last-consumed IMU preintegration sample/dt/span status,
-bounded best-effort sensor QoS, bias-observability, and visual factors.
+LiDAR, and IMU stamps, last-consumed IMU preintegration sample/dt/span status
+plus time-gap skip counts, bounded best-effort sensor QoS, bias-observability,
+and visual factors.
 The sliding-window gate also requires nonzero dense-prior rank and singular
 value coverage after marginalization so retained-state priors are numerically
 observable rather than only present by count; the optimizer itself bounds LM

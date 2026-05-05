@@ -197,8 +197,10 @@ status_matches() {
     rg -q "sliding_window_se3_photometric_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_smoothness_factor_skip_count:" "${status_file}" &&
     rg -q "sliding_window_imu_factor_skip_count:" "${status_file}" &&
+    rg -q "sliding_window_imu_time_gap_skip_count:" "${status_file}" &&
     rg -q "sliding_window_last_imu_preintegration_samples:" "${status_file}" &&
     rg -q "sliding_window_last_imu_preintegration_dt_s:" "${status_file}" &&
+    rg -q "sliding_window_last_imu_preintegration_extrapolated_dt_s:" "${status_file}" &&
     rg -q "sliding_window_last_imu_preintegration_start_stamp_ns:" "${status_file}" &&
     rg -q "sliding_window_last_imu_preintegration_end_stamp_ns:" "${status_file}" &&
     rg -q "sliding_window_optimization_skip_count:" "${status_file}" &&

@@ -292,6 +292,10 @@ def main() -> int:
         errors.append("tracking_node must publish trajectory-control pose rejection counters")
     if "last_sliding_window_imu_preintegration_samples_" not in tracking_node_text:
         errors.append("tracking_node must publish last consumed IMU preintegration block health")
+    if "sliding_window_imu_max_extrapolation_s" not in tracking_node_text or "preintegration span must match factor timestamps" not in sliding_window_text:
+        errors.append("tracking_node/optimizer must gate IMU preintegration span against factor timestamps")
+    if 'DeclareLaunchArgument("sliding_window_imu_max_extrapolation_s", default_value="0.02")' not in tracking_launch_text:
+        errors.append("tracking.launch.py must expose bounded IMU preintegration extrapolation")
     for field in [
         "signed_nanosecond_time_math_enabled",
         "last_image_stamp_ns",
@@ -323,8 +327,10 @@ def main() -> int:
         "sliding_window_se3_photometric_factor_skip_count",
         "sliding_window_smoothness_factor_skip_count",
         "sliding_window_imu_factor_skip_count",
+        "sliding_window_imu_time_gap_skip_count",
         "sliding_window_last_imu_preintegration_samples",
         "sliding_window_last_imu_preintegration_dt_s",
+        "sliding_window_last_imu_preintegration_extrapolated_dt_s",
         "sliding_window_last_imu_preintegration_start_stamp_ns",
         "sliding_window_last_imu_preintegration_end_stamp_ns",
         "sliding_window_optimization_skip_count",

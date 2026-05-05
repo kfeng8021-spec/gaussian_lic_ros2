@@ -158,6 +158,20 @@ int main()
     factor.weight = nan;
     invalid_optimizer.add_imu_factor(factor);
   });
+  validation_ok &= expect_throw("IMU factor preintegration span mismatch", []() {
+    gaussian_lic_tracking::SlidingWindowOptimizer invalid_optimizer;
+    gaussian_lic_tracking::ImuPreintegrator preintegration;
+    preintegration.reset(0);
+    preintegration.add_measurement(
+      1,
+      Eigen::Vector3d::Zero(),
+      Eigen::Vector3d::Zero());
+    gaussian_lic_tracking::SlidingWindowImuFactor factor;
+    factor.from_stamp_ns = 0;
+    factor.to_stamp_ns = 2;
+    factor.preintegration = preintegration;
+    invalid_optimizer.add_imu_factor(factor);
+  });
   validation_ok &= expect_throw("zero pose-prior quaternion", [pose_prior, zero_quaternion]() {
     gaussian_lic_tracking::SlidingWindowOptimizer invalid_optimizer;
     auto invalid_prior = pose_prior;
