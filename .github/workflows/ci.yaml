@@ -100,6 +100,16 @@ jobs:
           set -u
           colcon build --event-handlers console_direct+
 
+      - name: Native tracking probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +u
+          source /opt/ros/${ROS_DISTRO}/setup.bash
+          set -u
+          colcon test --packages-select gaussian_lic_tracking --event-handlers console_direct+
+          colcon test-result --verbose
+
       - name: Jazzy synthetic replay smoke
         if: matrix.ros_distro == 'jazzy'
         shell: bash
