@@ -165,6 +165,22 @@ install(TARGETS trajectory_manager trajectory_manager_probe gaussian_snapshot_pr
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  enable_testing()
+  add_test(NAME trajectory_manager_probe COMMAND $<TARGET_FILE:trajectory_manager_probe>)
+  add_test(NAME gaussian_snapshot_probe COMMAND $<TARGET_FILE:gaussian_snapshot_probe>)
+  add_test(NAME imu_propagator_probe COMMAND $<TARGET_FILE:imu_propagator_probe>)
+  add_test(NAME imu_preintegrator_probe COMMAND $<TARGET_FILE:imu_preintegrator_probe>)
+  add_test(NAME lidar_factor_probe COMMAND $<TARGET_FILE:lidar_factor_probe>)
+  add_test(NAME lidar_deskew_probe COMMAND $<TARGET_FILE:lidar_deskew_probe>)
+  add_test(NAME sliding_window_optimizer_probe COMMAND $<TARGET_FILE:sliding_window_optimizer_probe>)
+  add_test(NAME sliding_window_bias_probe COMMAND $<TARGET_FILE:sliding_window_bias_probe>)
+  add_test(NAME sliding_window_marginalization_probe COMMAND $<TARGET_FILE:sliding_window_marginalization_probe>)
+  add_test(NAME sliding_window_point_factor_probe COMMAND $<TARGET_FILE:sliding_window_point_factor_probe>)
+  add_test(NAME visual_factor_probe COMMAND $<TARGET_FILE:visual_factor_probe>)
+endif()
+
 install(DIRECTORY include/
   DESTINATION include
 )

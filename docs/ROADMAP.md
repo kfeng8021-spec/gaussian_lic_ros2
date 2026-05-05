@@ -169,6 +169,7 @@ baseline_manifest.json
 - [x] Add a native visual photometric residual/alignment factor and subscribe tracking to mapper rendered-image output.
 - [x] Subscribe native tracking to mapper `GaussianArray` snapshot chunks and cache chunk-complete Gaussian-map snapshots for the reverse channel.
 - [x] Build optional Gaussian-map point-to-point tracking-window factors from cached `GaussianArray` snapshots.
+- [x] Register native tracking probes with CTest so `colcon test` runs trajectory, IMU, LiDAR, sliding-window, Gaussian snapshot, and visual checks.
 - [x] Replace dynamic reconfigure/global parameters with ROS2 parameters.
 - [x] Publish odometry, path, TF, and Gaussian mapper input topics natively.
 - [x] Keep any ROS1 bridge mode clearly marked as temporary.

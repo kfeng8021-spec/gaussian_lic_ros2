@@ -28,6 +28,7 @@ Available now:
 - Current executable Bright substitute report with `metrics`, `trajectory`, `point_cloud`, and dedicated Torch Gaussian `gaussian_color` gates passing.
 - Strict FAST-LIVO2 `CBD_Building_01` report with trajectory, PSNR/SSIM/LPIPS, GT-associated render pairs, and Chamfer gates passing locally.
 - SPNet TensorRT engine generation for the local `sm_120` GPU via TensorRT 10.9, with the generated FP16 engine kept outside git.
+- Native tracking probes are registered with CTest, so `colcon test --packages-select gaussian_lic_tracking` runs trajectory, IMU, LiDAR, sliding-window, Gaussian snapshot, and visual checks automatically.
 
 Still pending:
 
@@ -123,6 +124,15 @@ source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ./scripts/smoke_test.sh --tf
 ```
+
+Run the native tracking probe suite:
+
+```bash
+colcon test --packages-select gaussian_lic_tracking --event-handlers console_direct+
+colcon test-result --verbose
+```
+
+Expected local result is `11 tests, 0 errors, 0 failures, 0 skipped`.
 
 Run the full local verification wrapper:
 
