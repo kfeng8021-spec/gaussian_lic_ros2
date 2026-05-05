@@ -59,7 +59,7 @@ cd "${ROOT_DIR}"
 echo "[verify] bash syntax"
 bash -n scripts/build_jazzy.sh scripts/build_ros2.sh scripts/create_synthetic_bag.sh scripts/fetch_upstreams.sh \
   scripts/ci_replay_smoke.sh scripts/smoke_test.sh scripts/upstream_baseline_build_attempt.sh \
-  scripts/verify_artifact_gates.sh scripts/verify_workspace.sh
+  scripts/tracking_smoke_test.sh scripts/verify_artifact_gates.sh scripts/verify_workspace.sh
 
 echo "[verify] python syntax"
 /usr/bin/python3 - <<'PY'
@@ -156,6 +156,9 @@ echo "[verify] live smoke"
 
 echo "[verify] frontend adapter smoke"
 ./scripts/smoke_test.sh --frontend-adapter --tf
+
+echo "[verify] native tracking smoke"
+./scripts/tracking_smoke_test.sh --bag "${FRONTEND_RAW_BAG_PATH}"
 
 echo "[verify] image color fallback smoke"
 ./scripts/smoke_test.sh --image-color-fallback-check

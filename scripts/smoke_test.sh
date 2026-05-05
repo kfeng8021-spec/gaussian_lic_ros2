@@ -252,6 +252,14 @@ if [[ "${ENABLE_TORCH}" == "true" ]]; then
     enable_torch_gaussian_init:=true
     torch_gaussian_device:=cpu
   )
+elif [[ "${IMAGE_COLOR_FALLBACK_CHECK}" == "true" || "${MINIMAL_INPUTS}" == "true" ]]; then
+  launch_args+=(
+    enable_torch_gaussian_init:=false
+    enable_torch_gaussian_extend:=false
+    enable_torch_gaussian_optimization:=false
+    enable_torch_gaussian_pruning:=false
+    enable_torch_gaussian_densification:=false
+  )
 fi
 
 if [[ -n "${SENSOR_QOS_RELIABILITY}" ]]; then
@@ -405,8 +413,11 @@ else
       >/tmp/gaussian_lic_smoke_save_map.txt
 
   test -f "${SAVE_DIR}/point_cloud.ply"
-  rg -q "property uchar red" "${SAVE_DIR}/point_cloud.ply"
+  if ! rg -q "property uchar red" "${SAVE_DIR}/point_cloud.ply"; then
+    rg -q "property float f_dc_" "${SAVE_DIR}/point_cloud.ply"
+  fi
   if [[ "${IMAGE_COLOR_FALLBACK_CHECK}" == "true" ]]; then
+    rg -q "property uchar red" "${SAVE_DIR}/point_cloud.ply"
     rg -q "^[-+0-9.eE]+ [-+0-9.eE]+ [-+0-9.eE]+ 255 32 16$" \
       "${SAVE_DIR}/point_cloud.ply"
   fi
