@@ -199,7 +199,11 @@ collects ROS2 current artifacts, and emits strict readiness/report JSON and
 Markdown files under the current-results directory.
 
 Before strict reporting, the script runs `scripts/eval_render_quality.py` on the
-baseline and current render directories when upstream GT images are available.
+baseline and current render directories. Baseline quality uses upstream GT
+frames; current quality uses the ROS2 current directory's saved `gt/` frames
+when present, so dropped or reordered replay frames are not scored against the
+wrong source image. The reproduction report also uses decoded GT hashes to
+associate ROS1 and ROS2 render-pair identities before sampling render pairs.
 That step fills finite PSNR, SSIM, and LPIPS fields under
 `metrics.json::quality`. The upstream TorchScript LPIPS file is traced with CUDA
 tensors, so CPU-only report environments should use the lpipsPyTorch fallback via

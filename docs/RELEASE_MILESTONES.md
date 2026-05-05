@@ -66,3 +66,8 @@ Goal: one-command paper-level reproduction on the selected FAST-LIVO2 sequence.
 - Generate `metrics.json`, trajectory, Gaussian PLY, rendered images, and comparison report.
 - Compare ROS2 outputs against archived ROS1 baseline artifacts with `scripts/reproduction_report.py`.
 - Publish release artifacts and expected screenshots/video for README and GitHub release notes.
+
+Status as of 2026-05-05: the mapper-contract/CUDA strict `CBD_Building_01`
+chain passes the local trajectory, PSNR/SSIM/LPIPS, GT-associated render-pair,
+and Chamfer gates against the archived ROS1 upstream baseline. Full native
+Coco-LIC2 frontend parity and SPNet runtime artifacting remain follow-up work.

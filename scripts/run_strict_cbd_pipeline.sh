@@ -21,7 +21,7 @@ CURRENT_TORCH_OPTIMIZATION_STEPS=100
 CURRENT_TORCH_OPTIMIZATION_SAMPLING=upstream_random
 CURRENT_TORCH_OPTIMIZATION_SEED=20260505
 CURRENT_TORCH_MAX_FOREGROUND=1500000
-CURRENT_TORCH_PRUNE_MIN_OPACITY=0.005
+CURRENT_TORCH_PRUNE_MIN_OPACITY=0.0
 CURRENT_TORCH_PRUNE_COUNT_POLICY=uniform
 CURRENT_TORCH_PRUNE_MAX_WORLD_SCALE=0.0
 CURRENT_TORCH_EXTEND_VISIBILITY_FILTER=true
@@ -71,7 +71,8 @@ Options:
   --current-torch-max-foreground N
                             Foreground Gaussian cap in rasterizer mode. Default: 1500000
   --current-torch-prune-min-opacity X
-                            Foreground opacity pruning threshold in rasterizer mode. Default: 0.005
+                            Foreground opacity pruning threshold in rasterizer mode. Default: 0.0,
+                            matching the released LIC2 append-only map used for strict parity.
   --current-torch-prune-count-policy P
                             Foreground count-cap policy in rasterizer mode. Default: uniform
   --current-torch-prune-max-world-scale X
@@ -345,7 +346,11 @@ fi
 
 if [[ "${SKIP_REPORT}" != "true" ]]; then
   echo "[strict-cbd] running strict readiness and reproduction report"
-  QUALITY_REFERENCE_DIR="${BASELINE_DIR}/upstream_result/gt"
+  BASELINE_QUALITY_REFERENCE_DIR="${BASELINE_DIR}/upstream_result/gt"
+  CURRENT_QUALITY_REFERENCE_DIR="${CURRENT_DIR}/gt"
+  if [[ ! -d "${CURRENT_QUALITY_REFERENCE_DIR}" ]]; then
+    CURRENT_QUALITY_REFERENCE_DIR="${BASELINE_QUALITY_REFERENCE_DIR}"
+  fi
   QUALITY_LPIPS_MODEL="${ROOT_DIR}/external/Gaussian-LIC/src/lpips/lpips_alex.pt"
   QUALITY_LPIPS_ROOT="${ROOT_DIR}/external/Gaussian-LIC/src/lpips"
   QUALITY_LPIPS_DEVICE="${QUALITY_LPIPS_DEVICE:-cpu}"
@@ -358,22 +363,22 @@ if [[ "${SKIP_REPORT}" != "true" ]]; then
       QUALITY_PYTHON="/usr/bin/python3"
     fi
   fi
-  if [[ -d "${QUALITY_REFERENCE_DIR}" ]]; then
+  if [[ -d "${BASELINE_QUALITY_REFERENCE_DIR}" ]]; then
     if [[ -d "${BASELINE_DIR}/upstream_result/render" ]]; then
       "${QUALITY_PYTHON}" scripts/eval_render_quality.py \
         --result-dir "${BASELINE_DIR}" \
         --render-dir "${BASELINE_DIR}/upstream_result/render" \
-        --reference-dir "${QUALITY_REFERENCE_DIR}" \
+        --reference-dir "${BASELINE_QUALITY_REFERENCE_DIR}" \
         --lpips-model "${QUALITY_LPIPS_MODEL}" \
         --lpips-device "${QUALITY_LPIPS_DEVICE}" \
         --lpips-pytorch-root "${QUALITY_LPIPS_ROOT}" \
         >"${BASELINE_DIR}/quality_eval.json" || true
     fi
-    if [[ -d "${CURRENT_DIR}/renders" ]]; then
+    if [[ -d "${CURRENT_DIR}/renders" && -d "${CURRENT_QUALITY_REFERENCE_DIR}" ]]; then
       "${QUALITY_PYTHON}" scripts/eval_render_quality.py \
         --result-dir "${CURRENT_DIR}" \
         --render-dir "${CURRENT_DIR}/renders" \
-        --reference-dir "${QUALITY_REFERENCE_DIR}" \
+        --reference-dir "${CURRENT_QUALITY_REFERENCE_DIR}" \
         --lpips-model "${QUALITY_LPIPS_MODEL}" \
         --lpips-device "${QUALITY_LPIPS_DEVICE}" \
         --lpips-pytorch-root "${QUALITY_LPIPS_ROOT}" \
