@@ -53,6 +53,49 @@ def ssim_global(reference, candidate):
     return float(np.mean(values))
 
 
+def gaussian_window(window_size=11, sigma=1.5):
+    offsets = np.arange(window_size, dtype=np.float64) - (window_size // 2)
+    values = np.exp(-(offsets ** 2) / (2.0 * sigma * sigma))
+    values /= np.sum(values)
+    return values
+
+
+SSIM_KERNEL_1D = gaussian_window()
+
+
+def gaussian_filter_zero_padded(image):
+    pad = SSIM_KERNEL_1D.size // 2
+    padded_x = np.pad(image, ((0, 0), (pad, pad)), mode="constant")
+    windows_x = np.lib.stride_tricks.sliding_window_view(padded_x, SSIM_KERNEL_1D.size, axis=1)
+    filtered_x = np.tensordot(windows_x, SSIM_KERNEL_1D, axes=([-1], [0]))
+    padded_y = np.pad(filtered_x, ((pad, pad), (0, 0)), mode="constant")
+    windows_y = np.lib.stride_tricks.sliding_window_view(padded_y, SSIM_KERNEL_1D.size, axis=0)
+    return np.tensordot(windows_y, SSIM_KERNEL_1D, axes=([-1], [0]))
+
+
+def ssim_windowed(reference, candidate):
+    """Match upstream loss_utils::ssim: 11x11 Gaussian conv2d with zero padding."""
+    values = []
+    c1 = 0.01 ** 2
+    c2 = 0.03 ** 2
+    for channel in range(reference.shape[2]):
+        x = reference[:, :, channel]
+        y = candidate[:, :, channel]
+        mean_x = gaussian_filter_zero_padded(x)
+        mean_y = gaussian_filter_zero_padded(y)
+        mean_x_sq = mean_x * mean_x
+        mean_y_sq = mean_y * mean_y
+        mean_xy = mean_x * mean_y
+        var_x = gaussian_filter_zero_padded(x * x) - mean_x_sq
+        var_y = gaussian_filter_zero_padded(y * y) - mean_y_sq
+        cov_xy = gaussian_filter_zero_padded(x * y) - mean_xy
+        ssim_map = ((2.0 * mean_xy + c1) * (2.0 * cov_xy + c2)) / (
+            (mean_x_sq + mean_y_sq + c1) * (var_x + var_y + c2)
+        )
+        values.append(float(np.mean(ssim_map)))
+    return float(np.mean(values))
+
+
 def load_lpips_model(model_path, device, lpips_pytorch_root):
     try:
         import torch  # noqa: PLC0415
@@ -103,6 +146,7 @@ def summarize(items, prefix, all_items):
             "count": 0,
             "psnr": None,
             "ssim": None,
+            "global_ssim": None,
             "lpips": None,
         }
     lpips_values = [item["lpips"] for item in selected if item["lpips"] is not None]
@@ -111,6 +155,7 @@ def summarize(items, prefix, all_items):
         "count": len(selected),
         "psnr": float(np.mean([item["psnr"] for item in selected])),
         "ssim": float(np.mean([item["ssim"] for item in selected])),
+        "global_ssim": float(np.mean([item["global_ssim"] for item in selected])),
         "lpips": float(np.mean(lpips_values)) if lpips_values else None,
     }
 
@@ -159,7 +204,8 @@ def compute_quality(args):
                 "render": str(render_path),
                 "reference": str(reference_path),
                 "psnr": psnr(reference, candidate),
-                "ssim": ssim_global(reference, candidate),
+                "ssim": ssim_windowed(reference, candidate),
+                "global_ssim": ssim_global(reference, candidate),
                 "lpips": None,
             }
             if torch is not None and lpips is not None:
@@ -186,10 +232,13 @@ def compute_quality(args):
         "novel_frame_count": novel["count"],
         "train_psnr": train["psnr"],
         "train_ssim": train["ssim"],
+        "train_global_ssim": train["global_ssim"],
         "train_lpips": train["lpips"],
         "novel_psnr": novel["psnr"],
         "novel_ssim": novel["ssim"],
+        "novel_global_ssim": novel["global_ssim"],
         "novel_lpips": novel["lpips"],
+        "ssim_method": "gaussian_lic_windowed_11x11_sigma1.5_zero_pad",
         "lpips_model": str(lpips_model) if lpips_model else "",
         "lpips_device": args.lpips_device if torch is not None and lpips is not None else "",
         "lpips_error": "; ".join([part for part in [lpips_error, *lpips_errors] if part]),

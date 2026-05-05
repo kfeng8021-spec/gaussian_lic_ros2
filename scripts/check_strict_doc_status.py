@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 DEFAULT_REPORT = Path(
-    "results/fastlivo2/CBD_Building_01_current_upstream_sampling_probe/"
+    "results/fastlivo2/CBD_Building_01_current_round_no_opacity_prune_probe/"
     "reproduction_report_strict.json"
 )
 DOCS = (Path("README.md"), Path("docs/ROADMAP.md"), Path("docs/RELEASE_MILESTONES.md"))
@@ -59,6 +59,38 @@ def check_docs(report: dict, docs: dict[Path, str]) -> list[str]:
     combined = "\n".join(docs.values())
 
     if report_ok:
+        psnr = _comparison(report, "novel_psnr")
+        psnr_regression = float(psnr["regression"]) * 100.0
+        point_cloud = report.get("point_cloud", {})
+        centroid_drift = float(point_cloud["centroid_drift_m"])
+        nearest_mean = float(point_cloud["nearest"]["bidirectional"]["mean_m"])
+        current_dir = str(report.get("current_dir", ""))
+        current_rel = current_dir.split("/gaussian_lic_ros2/", 1)[-1]
+
+        for path, text in docs.items():
+            if path.name == "README.md":
+                _require(text, "latest archived strict `CBD_Building_01` report is green", path, errors)
+            if path.match("docs/ROADMAP.md"):
+                _require(text, "- [x] Strict `CBD_Building_01` ROS2 current report", path, errors)
+                _require(text, "passes `reproduction_report.py --strict`", path, errors)
+            if path.match("docs/RELEASE_MILESTONES.md"):
+                _require(text, "latest archived strict `CBD_Building_01` report is green", path, errors)
+            _require(text, current_rel, path, errors)
+            _require(text, f"{psnr_regression:.2f}%", path, errors)
+            _require(text, f"{centroid_drift:.6f}", path, errors)
+            _require(text, f"{nearest_mean:.6f}", path, errors)
+
+        blocked_patterns = [
+            r"latest archived strict `CBD_Building_01` report is not green",
+            r"blocked on novel SSIM",
+            r"fails `reproduction_report\.py --strict`",
+            r"Chamfer/point-cloud parity is blocked",
+            r"strict report is blocked",
+            r"current novel-SSIM, render-pair, and point-cloud parity blockers",
+            r"Strict `CBD_Building_01` paper-data gate \| [^\n]*blocked",
+        ]
+        for pattern in blocked_patterns:
+            _forbid(combined, pattern, Path("README.md docs/ROADMAP.md"), errors)
         return errors
 
     ssim = _comparison(report, "novel_ssim")

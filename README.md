@@ -8,9 +8,9 @@ This repository is **not a ROS1 bridge wrapper**. It is a clean ROS2 workspace t
 
 ## Current Release State
 
-This repository is now an executable ROS2 porting checkpoint for the public Gaussian-LIC/Gaussian-LIC2 code path. It has native ROS2 message, launch, adapter, mapper, CUDA/Torch Gaussian backend plumbing, initial native tracking factors, artifact extraction, strict replay/readiness tooling, an official FAST-LIVO2 Bright substitute proof chain, and a local strict `CBD_Building_01` reproduction chain against the archived ROS1 upstream baseline. The latest archived strict `CBD_Building_01` report is not green: trajectory passes, but novel SSIM, GT-associated render-pair smoke checks, and point-cloud parity still fail.
+This repository is now an executable ROS2 porting checkpoint for the public Gaussian-LIC/Gaussian-LIC2 code path. It has native ROS2 message, launch, adapter, mapper, CUDA/Torch Gaussian backend plumbing, initial native tracking factors, artifact extraction, strict replay/readiness tooling, an official FAST-LIVO2 Bright substitute proof chain, and a local strict `CBD_Building_01` reproduction chain against the archived ROS1 upstream baseline. The latest archived strict `CBD_Building_01` report is green for the mapper-contract/CUDA path: trajectory, PSNR/SSIM/LPIPS, GT-associated render-pair, and point-cloud gates pass.
 
-It is **not yet** the complete full-paper Gaussian-LIC2 ROS2 port: the native tracker still needs full Coco-LIC2-grade sliding-window joint optimization. The current strict mapper-contract/CUDA path is executable, but it is blocked on the latest local paper gate.
+It is **not yet** the complete full-paper Gaussian-LIC2 ROS2 port: the native tracker still needs full Coco-LIC2-grade sliding-window joint optimization beyond the mapper-contract reproduction path.
 
 Available now:
 
@@ -26,7 +26,7 @@ Available now:
 - `gaussian_lic_offline` CLI for rosbag2 artifact extraction without launching ROS nodes.
 - FAST-LIVO2 ROS1-to-ROS2 raw frontend conversion, ROS1 mapper-contract conversion, upstream ROS1 baseline runner, strict rosbag2 replay wrapper, baseline manifest/readiness gates, and combined reproduction reports.
 - Current executable Bright substitute report with `metrics`, `trajectory`, `point_cloud`, and dedicated Torch Gaussian `gaussian_color` gates passing.
-- Strict FAST-LIVO2 `CBD_Building_01` artifact/readiness pipeline with trajectory passing and the current PSNR/SSIM/LPIPS, render-pair, and point-cloud blockers recorded.
+- Strict FAST-LIVO2 `CBD_Building_01` artifact/readiness pipeline with trajectory, PSNR/SSIM/LPIPS, render-pair, and point-cloud gates passing for the mapper-contract/CUDA path.
 - SPNet TensorRT engine generation for the local `sm_120` GPU via TensorRT 10.9, with the generated FP16 engine kept outside git.
 - Native tracking probes are registered with CTest, so `colcon test --packages-select gaussian_lic_tracking` runs trajectory, IMU, LiDAR, sliding-window, bias observability, geometric Jacobian, Gaussian snapshot, trajectory smoothness, SE3 photometric Jacobian/factor, and visual checks automatically. `scripts/tracking_smoke_test.sh` also verifies the launch path through `/gaussian_lic/frontend/status`, including signed-nanosecond time status, tracking QoS, executor callback serialization, auto-start IMU preintegration re-integration semantics, dense-prior health with stamp/reference validation, Schur/fallback marginalization health, same-stamp prior plus same-source IMU/LiDAR/visual/SE3/smoothness replacement counters, orphan-factor health, active-window state-cadence health, bias observability, accepted BA feedback stamp/delta/limit health, optimized IMU re-anchors, last-consumed IMU preintegration sample/dt/span health with time-gap skip gating, B-spline trajectory control poses, nonzero trajectory smoothness factors, accepted/rejected/limited BA step health, linearization/linear-solve failure counters, factor skip counters, visual alignment, bounded photometric sample weights, photometric linearization status, rendered/depth cache diagnostics, and SE3 photometric sample quality/rejection counters.
 
@@ -41,8 +41,8 @@ Still pending:
 | --- | --- |
 | ROS2 workspace, messages, launch, composable node, profiles, bag checks, artifact gates | Complete for the current porting surface |
 | FAST-LIVO2 Bright substitute evidence chain | Complete and executable with `metrics`, `trajectory`, `point_cloud`, and `gaussian_color` passing |
-| Strict `CBD_Building_01` paper-data gate | Official bag is local; ROS1 baseline is archived; latest ROS2 current strict report is blocked on novel SSIM, render-pair, and point-cloud parity |
-| Paper-level Gaussian-LIC/Gaussian-LIC2 algorithm migration | Mapper CUDA/Torch backend, executable strict mapper-contract chain, and local SPNet TensorRT engine generation are in place; full Coco-LIC2 tracking BA and strict paper gate parity remain |
+| Strict `CBD_Building_01` paper-data gate | Official bag is local; ROS1 baseline is archived; latest ROS2 mapper-contract/CUDA strict report passes `reproduction_report.py --strict` |
+| Paper-level Gaussian-LIC/Gaussian-LIC2 algorithm migration | Mapper CUDA/Torch backend, executable strict mapper-contract chain, and local SPNet TensorRT engine generation are in place; full native Coco-LIC2 tracking BA remains |
 
 The Bright substitute report is a regression/evidence chain for current ROS2 plumbing and Torch Gaussian tensor boundaries. It is not a claim that the full paper algorithm has been ported.
 
@@ -91,7 +91,7 @@ The mapper backend now has the major CUDA/Torch surfaces in tree, but the full p
 - The native tracker has timestamp-safe trajectory/IMU primitives, ROS2-configurable LiDAR-to-IMU and camera-to-IMU extrinsics, IMU history interpolation, raw-sample IMU preintegration/reintegration, optimized pose/velocity/bias feedback into odometry, continuous-time trajectory controls, and safe IMU re-anchoring, IMU bias continuity residuals, per-block IMU rotation/velocity/position residual weights, dense marginalization-prior anchoring, bias observability metrics/probes, reusable normal-equation linearization, normal-equation rank/condition diagnostics, configurable rank/condition solve guards, factor-agnostic BA solve triggering, bounded LM state increments, Schur-complement retained-window dense priors, timestamp-safe cubic B-spline position/velocity plus SO(3) cubic orientation trajectory queries for deskew fallback, default-enabled three-state trajectory smoothness factors with analytic linear Jacobian blocks, per-point LiDAR deskew with invalid-pose rejection, Huber-weighted bounded 6-DoF LiDAR pose correction, corrected-pose LiDAR/Gaussian correspondence construction, robust direct LiDAR/Gaussian-map point-to-point window factors with bounded robust weights, LiDAR point-to-plane window factors, Huber-robust visual-alignment and SE3 photometric window factors, analytic geometric Jacobians for point-to-point, point-to-plane, visual-alignment, full current IMU preintegration factors including start-bias reintegration sensitivity, pose-prior, state-prior, dense-prior, IMU bias-continuity, and SE3 photometric window rows, analytic SE3 camera photometric pixel Jacobians with multi-sample normal-equation solving, runtime rendered/current/depth extraction into default-enabled SE3 photometric window factors with camera-to-IMU adjoint conversion plus body-frame photometric Hessian/sqrt-information, nearest-stamp cached render/depth selection, and signed-nanosecond image/LiDAR/depth/render freshness gates, chunk-complete Gaussian snapshot caching, a default-enabled sliding-window optimizer foundation, direct visual residual/subpixel alignment, runtime-gated photometric translation linearization, and default-enabled visual-alignment window factors, but it is not yet the full continuous-time Coco-LIC2 production BA stack.
 - Full joint BA remains to be ported beyond the current deskewed bounded 6-DoF LiDAR correction, 2-DoF visual translation linearization gate, SE3 photometric window-factor runtime gate, dense-prior health gate, and bias observability gate into a dataset-validated continuous-time Coco-LIC2 production frontend.
 - TensorRT/SPNet depth completion has a native optional wrapper and a local TensorRT 10.9 FP16 engine benchmark; the generated `.engine` is hardware/runtime-specific and intentionally not checked in.
-- Strict paper reproduction now has the local `CBD_Building_01` bag, ROS1 upstream baseline artifacts, strict CUDA current collection, and final-map render-pair extraction, but the latest local strict report is blocked on novel SSIM, GT-associated render-pair smoke checks, and point-cloud parity.
+- Strict paper reproduction now has the local `CBD_Building_01` bag, ROS1 upstream baseline artifacts, strict CUDA current collection, final-map render-pair extraction, and a green mapper-contract/CUDA report; full native Coco-LIC2 tracking parity is still pending.
 
 ## Platform
 
@@ -649,19 +649,20 @@ Latest archived local strict run, 2026-05-05:
   opacity reset disabled, deterministic upstream-random optimization-frame
   sampling enabled with seed `20260505`,
   `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, and
-  `results/fastlivo2/CBD_Building_01_current_upstream_sampling_probe/` as the
-  current archived strict artifact. The trajectory gate passes with 1167
-  matched poses, zero translation RMSE, and zero path drift.
-- Current vs ROS1 quality is blocked by SSIM: ROS2 novel PSNR is 12.4461 dB vs
-  ROS1 12.7036 dB (2.03% regression, pass), ROS2 novel SSIM is 0.332179 vs
-  ROS1 0.3644 (8.84% regression, fail), and ROS2 novel LPIPS is 0.746502 vs
-  ROS1 0.75136 (pass).
-- The GT-associated ROS1-vs-ROS2 render-pair smoke check is blocked: 1167 pairs
-  match, 64 pairs are evaluated, mean PSNR is 20.148 dB, mean SSIM is 0.664466,
-  and many sampled train/test pairs fall below the strict similarity threshold.
-- Chamfer/point-cloud parity is blocked: count ratio 0.610, centroid drift
-  0.443841 m, bidirectional nearest RMSE 0.144099 m, and bidirectional nearest
-  mean 0.102231 m against the 0.100000 m strict threshold.
+  `results/fastlivo2/CBD_Building_01_current_round_no_opacity_prune_probe/` as
+  the current archived strict artifact. The trajectory gate passes with 1063
+  matched poses, 89.63% coverage, zero translation RMSE, and zero path drift.
+- Current vs ROS1 quality passes the archived strict metric gate: ROS2 novel
+  PSNR is 12.6542 dB vs ROS1 12.7036 dB (0.39% regression), ROS2 novel SSIM is
+  0.368961 vs ROS1 0.3644, and ROS2 novel LPIPS is 0.741661 vs ROS1 0.75136.
+  Future quality extraction uses Gaussian-LIC's 11x11 Gaussian-window SSIM and
+  keeps the previous global SSIM as a diagnostic field.
+- The GT-associated ROS1-vs-ROS2 render-pair smoke check passes: 1063 pairs
+  match by decoded GT hash, 64 pairs are evaluated, mean PSNR is 21.600 dB,
+  mean SSIM is 0.785417, min PSNR is 17.448 dB, and min SSIM is 0.477513.
+- Chamfer/point-cloud parity passes: count ratio 0.978, centroid drift
+  0.147855 m, bidirectional nearest RMSE 0.145491 m, and bidirectional nearest
+  mean 0.099418 m against the 0.100000 m strict threshold.
 
 Visual review artifacts from the same strict run:
 
@@ -670,10 +671,10 @@ docs/assets/strict_cbd_montage.jpg
 docs/assets/strict_cbd_render_demo.gif
 ```
 
-So the strict chain is executable, but it does not yet pass the local
-`CBD_Building_01` reproduction gate for the mapper-contract/CUDA current path.
-The remaining paper-port work includes full native Coco-LIC2 tracking plus the
-current novel-SSIM, render-pair, and point-cloud parity blockers.
+So the strict chain now passes the local `CBD_Building_01` reproduction gate for
+the mapper-contract/CUDA current path. The remaining paper-port work is full
+native Coco-LIC2 tracking parity and dataset-validated production joint BA beyond
+the mapper-contract path.
 
 ## Release Roadmap
 
