@@ -395,6 +395,13 @@ void SlidingWindowOptimizer::set_config(const SlidingWindowConfig & config)
   if (config.marginalization_prior_weight < 0.0) {
     throw std::runtime_error("sliding window marginalization prior weight must be non-negative");
   }
+  if (!std::isfinite(config.max_rotation_step_rad) || !std::isfinite(config.max_velocity_step_mps) ||
+    !std::isfinite(config.max_translation_step_m) || !std::isfinite(config.max_bias_step) ||
+    config.max_rotation_step_rad < 0.0 || config.max_velocity_step_mps < 0.0 ||
+    config.max_translation_step_m < 0.0 || config.max_bias_step < 0.0)
+  {
+    throw std::runtime_error("sliding window step limits must be finite and non-negative");
+  }
   config_ = config;
 }
 
@@ -1612,6 +1619,26 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   }
 
   double damping = config_.damping;
+  auto bounded_step_scale = [this, &variables](const Eigen::VectorXd & step) {
+      double scale = 1.0;
+      auto apply_limit = [&scale](const double norm, const double limit) {
+          if (limit > 0.0 && norm > limit) {
+            scale = std::min(scale, limit / norm);
+          }
+        };
+      for (const auto & variable : variables) {
+        const auto offset = static_cast<Eigen::Index>(variable.offset);
+        if (offset + static_cast<Eigen::Index>(kStateDof) > step.size()) {
+          continue;
+        }
+        apply_limit(step.template segment<3>(offset).norm(), config_.max_rotation_step_rad);
+        apply_limit(step.template segment<3>(offset + 3).norm(), config_.max_velocity_step_mps);
+        apply_limit(step.template segment<3>(offset + 6).norm(), config_.max_translation_step_m);
+        apply_limit(step.template segment<3>(offset + 9).norm(), config_.max_bias_step);
+        apply_limit(step.template segment<3>(offset + 12).norm(), config_.max_bias_step);
+      }
+      return scale;
+    };
   for (size_t iteration = 0; iteration < config_.max_iterations; ++iteration) {
     const auto normal_equation = linearize(states_, variables, damping);
     if (!normal_equation.valid) {
@@ -1624,14 +1651,15 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
     }
 
     auto candidate_states = states_;
-    apply_delta(candidate_states, variables, step, 1.0);
+    const double step_scale = bounded_step_scale(step);
+    apply_delta(candidate_states, variables, step, step_scale);
     const double candidate_cost = compute_cost(build_residual(candidate_states));
     if (candidate_cost <= current_cost) {
       states_ = std::move(candidate_states);
       summary.iterations = iteration + 1U;
       summary.final_cost = candidate_cost;
       damping = std::max(damping * 0.1, config_.damping);
-      if (step.norm() < config_.step_tolerance) {
+      if (step_scale * step.norm() < config_.step_tolerance) {
         summary.converged = true;
         break;
       }

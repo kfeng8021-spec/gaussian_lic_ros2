@@ -114,6 +114,10 @@ def main() -> int:
         "visual_alignment_huber_delta_m",
         "sliding_window_max_states",
         "sliding_window_max_iterations",
+        "sliding_window_max_rotation_step_rad",
+        "sliding_window_max_translation_step_m",
+        "sliding_window_max_velocity_step_mps",
+        "sliding_window_max_bias_step",
         "sliding_window_imu_weight",
         "sliding_window_pose_translation_weight",
         "sliding_window_pose_rotation_weight",
@@ -136,6 +140,18 @@ def main() -> int:
         errors.append("tracking_node must default production sliding-window BA to true")
     if 'DeclareLaunchArgument("enable_sliding_window_optimizer", default_value="true")' not in tracking_launch_text:
         errors.append("tracking.launch.py must default production sliding-window BA to true")
+    for needle, message in [
+        ('declare_parameter<double>("sliding_window_max_rotation_step_rad", 0.5)', "tracking_node must default rotation BA step limit to 0.5 rad"),
+        ('declare_parameter<double>("sliding_window_max_translation_step_m", 1.0)', "tracking_node must default translation BA step limit to 1.0m"),
+        ('declare_parameter<double>("sliding_window_max_velocity_step_mps", 5.0)', "tracking_node must default velocity BA step limit to 5.0m/s"),
+        ('declare_parameter<double>("sliding_window_max_bias_step", 1.0)', "tracking_node must default bias BA step limit to 1.0"),
+        ('DeclareLaunchArgument("sliding_window_max_rotation_step_rad", default_value="0.5")', "tracking.launch.py must expose rotation BA step limit"),
+        ('DeclareLaunchArgument("sliding_window_max_translation_step_m", default_value="1.0")', "tracking.launch.py must expose translation BA step limit"),
+        ('DeclareLaunchArgument("sliding_window_max_velocity_step_mps", default_value="5.0")', "tracking.launch.py must expose velocity BA step limit"),
+        ('DeclareLaunchArgument("sliding_window_max_bias_step", default_value="1.0")', "tracking.launch.py must expose bias BA step limit"),
+    ]:
+        if needle not in tracking_node_text and needle not in tracking_launch_text:
+            errors.append(message)
     if 'DeclareLaunchArgument("enable_visual_alignment_window_factor", default_value="true")' not in tracking_launch_text:
         errors.append("tracking.launch.py must default visual alignment window factors to true")
     if 'declare_parameter<double>("visual_alignment_huber_delta_m", 0.05)' not in tracking_node_text:

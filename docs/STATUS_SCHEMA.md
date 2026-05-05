@@ -136,7 +136,9 @@ LiDAR, and IMU stamps, bounded best-effort sensor QoS, bias-observability, and
 visual factors.
 The sliding-window gate also requires nonzero dense-prior rank and singular
 value coverage after marginalization so retained-state priors are numerically
-observable rather than only present by count.
+observable rather than only present by count; the optimizer itself bounds LM
+rotation, translation, velocity, and bias increments before applying a candidate
+state update.
 It also gates nonzero trajectory smoothness factors, which constrain adjacent
 three-state rotation-rate, position-rate, velocity-acceleration, and bias-rate
 continuity in the native joint BA window.

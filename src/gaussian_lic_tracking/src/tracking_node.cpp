@@ -155,6 +155,14 @@ public:
       declare_parameter<double>("gaussian_snapshot_lidar_min_opacity", 0.01);
     sliding_window_max_states_ = declare_parameter<int>("sliding_window_max_states", 12);
     sliding_window_max_iterations_ = declare_parameter<int>("sliding_window_max_iterations", 3);
+    sliding_window_max_rotation_step_rad_ =
+      declare_parameter<double>("sliding_window_max_rotation_step_rad", 0.5);
+    sliding_window_max_translation_step_m_ =
+      declare_parameter<double>("sliding_window_max_translation_step_m", 1.0);
+    sliding_window_max_velocity_step_mps_ =
+      declare_parameter<double>("sliding_window_max_velocity_step_mps", 5.0);
+    sliding_window_max_bias_step_ =
+      declare_parameter<double>("sliding_window_max_bias_step", 1.0);
     sliding_window_imu_weight_ = declare_parameter<double>("sliding_window_imu_weight", 1.0);
     sliding_window_bias_weight_ = declare_parameter<double>("sliding_window_bias_weight", 1.0);
     sliding_window_pose_translation_weight_ =
@@ -180,6 +188,10 @@ public:
     gaussian_lic_tracking::SlidingWindowConfig window_config;
     window_config.max_states = static_cast<size_t>(std::max(sliding_window_max_states_, 2));
     window_config.max_iterations = static_cast<size_t>(std::max(sliding_window_max_iterations_, 1));
+    window_config.max_rotation_step_rad = std::max(sliding_window_max_rotation_step_rad_, 0.0);
+    window_config.max_translation_step_m = std::max(sliding_window_max_translation_step_m_, 0.0);
+    window_config.max_velocity_step_mps = std::max(sliding_window_max_velocity_step_mps_, 0.0);
+    window_config.max_bias_step = std::max(sliding_window_max_bias_step_, 0.0);
     sliding_window_optimizer_.set_config(window_config);
 
     gaussian_lic_tracking::LidarFactorConfig lidar_config;
@@ -1641,6 +1653,10 @@ private:
   int64_t trajectory_control_interval_ns_{50000000LL};
   int sliding_window_max_states_{12};
   int sliding_window_max_iterations_{3};
+  double sliding_window_max_rotation_step_rad_{0.5};
+  double sliding_window_max_translation_step_m_{1.0};
+  double sliding_window_max_velocity_step_mps_{5.0};
+  double sliding_window_max_bias_step_{1.0};
   double gaussian_snapshot_lidar_min_opacity_{0.01};
   double sliding_window_imu_weight_{1.0};
   double sliding_window_bias_weight_{1.0};

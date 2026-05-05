@@ -83,7 +83,8 @@ Current ROS2 implementation status:
   pose priors, full-state priors, and marginalization-prior anchoring, plus direct LiDAR point-to-point,
   point-to-plane, Huber-robust visual-alignment and SE3 photometric, and default-enabled
   three-state continuous-time trajectory smoothness factors with analytic
-  linear Jacobian blocks. Geometric, prior, retained
+  linear Jacobian blocks, with configurable LM state-increment limits for
+  rotation, translation, velocity, and biases. Geometric, prior, retained
   dense-prior, IMU bias-continuity, full current IMU preintegration factors,
   and SE3 photometric rows now use analytic Jacobians.
   The ROS2 tracking launch now default-enables the sliding-window optimizer and

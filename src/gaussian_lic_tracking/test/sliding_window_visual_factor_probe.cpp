@@ -82,6 +82,35 @@ int main()
     std::cerr << "\nvisual alignment Huber kernel failed to downweight the outlier\n";
     return 1;
   }
+
+  gaussian_lic_tracking::SlidingWindowConfig limited_config;
+  limited_config.max_iterations = 1;
+  limited_config.max_translation_step_m = 0.05;
+  gaussian_lic_tracking::SlidingWindowOptimizer limited_optimizer(limited_config);
+  gaussian_lic_tracking::SlidingWindowState limited_state;
+  limited_state.stamp_ns = 300;
+  limited_state.p_w_i = Eigen::Vector3d::Zero();
+  limited_optimizer.add_or_update_state(limited_state);
+  gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor limited_factor;
+  limited_factor.stamp_ns = limited_state.stamp_ns;
+  limited_factor.reference_p_w_i = limited_state.p_w_i;
+  limited_factor.measured_shift_px = Eigen::Vector2d{100.0, 0.0};
+  limited_factor.meters_per_pixel = 0.01;
+  limited_factor.weight = 100.0;
+  limited_optimizer.add_visual_alignment_factor(limited_factor);
+  const auto limited_summary = limited_optimizer.optimize();
+  gaussian_lic_tracking::SlidingWindowState limited_optimized;
+  if (!limited_optimizer.get_state(limited_state.stamp_ns, limited_optimized)) {
+    std::cerr << "step-limited visual-factor state is missing\n";
+    return 1;
+  }
+  const double limited_translation = limited_optimized.p_w_i.norm();
+  std::cout << " limited_translation=" << limited_translation
+            << " limited_final_cost=" << limited_summary.final_cost;
+  if (!limited_summary.converged || limited_translation > 0.050001) {
+    std::cerr << "\nsliding window translation step limiter failed\n";
+    return 1;
+  }
   std::cout << "sliding_window_visual_factor_probe OK\n";
   return 0;
 }

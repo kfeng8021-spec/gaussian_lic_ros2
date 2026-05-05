@@ -23,6 +23,10 @@ struct SlidingWindowConfig
   double step_tolerance{1.0e-8};
   double numeric_epsilon{1.0e-6};
   double marginalization_prior_weight{1.0};
+  double max_rotation_step_rad{0.0};
+  double max_velocity_step_mps{0.0};
+  double max_translation_step_m{0.0};
+  double max_bias_step{0.0};
 };
 
 struct SlidingWindowState
