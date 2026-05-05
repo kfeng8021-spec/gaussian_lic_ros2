@@ -51,7 +51,7 @@ Current ROS2 implementation status:
 
 - `gaussian_lic_tracking::TrajectoryManager` provides the first native
   timestamp-safe cubic B-spline trajectory primitive with a constant-velocity
-  probe and negative-time roundtrip coverage.
+  pose/velocity probe and negative-time roundtrip coverage.
 - `gaussian_lic_tracking::ImuPropagator` now keeps a bounded signed-nanosecond
   IMU state history for interpolation, and `ImuPreintegrator` stores raw IMU
   samples so the sliding window can reintegrate factors with candidate gyro and
@@ -73,6 +73,9 @@ Current ROS2 implementation status:
   The ROS2 tracking launch now default-enables the sliding-window optimizer and
   visual/SE3 photometric window factors so the runtime path exercises the joint
   BA surface when rendered/depth inputs are available.
+  Optimized sliding-window velocity and bias now feed back into odometry and
+  safe IMU propagation re-anchoring, and the B-spline trajectory cache is used
+  as the first deskew pose-query source when it is valid.
   The optimizer has bounded window trimming, Schur-complement retained-window
   priors, optional SE3 photometric pose factors extracted from
   rendered/current/depth images, rank/singular-value health for retained dense

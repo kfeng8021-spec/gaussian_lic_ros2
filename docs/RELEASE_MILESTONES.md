@@ -85,3 +85,6 @@ The native tracking launch now defaults the sliding-window BA, visual-alignment
 window factors, and SE3 photometric window factors to enabled so ordinary
 tracking launch paths exercise the joint optimizer when the corresponding
 sensor/render/depth inputs are present.
+Optimized velocity and bias now feed back into odometry and safe IMU
+propagation re-anchoring, and cubic B-spline pose/velocity trajectory queries
+are available as the first deskew lookup source before IMU-history fallback.

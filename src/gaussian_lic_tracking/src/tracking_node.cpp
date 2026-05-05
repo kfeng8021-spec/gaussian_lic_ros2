@@ -108,6 +108,8 @@ public:
     lidar_time_unit_ = declare_parameter<std::string>("lidar_time_unit", "auto");
     lidar_time_mode_ = declare_parameter<std::string>("lidar_time_mode", "auto");
     imu_history_size_ = declare_parameter<int>("imu_history_size", 4000);
+    trajectory_control_interval_ns_ =
+      declare_parameter<int64_t>("trajectory_control_interval_ns", 50000000LL);
     enable_sliding_window_optimizer_ = declare_parameter<bool>("enable_sliding_window_optimizer", true);
     enable_gaussian_snapshot_lidar_factor_ =
       declare_parameter<bool>("enable_gaussian_snapshot_lidar_factor", true);
@@ -126,6 +128,7 @@ public:
       imu_propagator_.set_gravity_w(Eigen::Vector3d{gravity[0], gravity[1], gravity[2]});
     }
     imu_propagator_.set_max_history_size(static_cast<size_t>(std::max(imu_history_size_, 2)));
+    trajectory_manager_.set_control_interval_ns(std::max<int64_t>(trajectory_control_interval_ns_, 1LL));
     gaussian_lic_tracking::SlidingWindowConfig window_config;
     window_config.max_states = static_cast<size_t>(std::max(sliding_window_max_states_, 2));
     window_config.max_iterations = static_cast<size_t>(std::max(sliding_window_max_iterations_, 1));
@@ -436,6 +439,7 @@ private:
       const auto & state = imu_propagator_.state();
       tracking_pose.p_w_i = state.p_w_i;
       tracking_pose.q_w_i = state.q_w_i;
+      tracking_pose.v_w_i = state.v_w_i;
     }
 
     sensor_msgs::msg::PointCloud2 output_cloud = msg;
@@ -554,6 +558,7 @@ private:
         visual_window_factors,
         se3_photometric_factors);
     }
+    append_trajectory_control_pose(tracking_pose);
 
     geometry_msgs::msg::PoseStamped pose;
     pose.header.stamp = msg.header.stamp;
@@ -571,12 +576,9 @@ private:
     odom.header = pose.header;
     odom.child_frame_id = child_frame_;
     odom.pose.pose = pose.pose;
-    if (imu_propagator_.initialized()) {
-      const auto & state = imu_propagator_.state();
-      odom.twist.twist.linear.x = state.v_w_i.x();
-      odom.twist.twist.linear.y = state.v_w_i.y();
-      odom.twist.twist.linear.z = state.v_w_i.z();
-    }
+    odom.twist.twist.linear.x = tracking_pose.v_w_i.x();
+    odom.twist.twist.linear.y = tracking_pose.v_w_i.y();
+    odom.twist.twist.linear.z = tracking_pose.v_w_i.z();
     odometry_pub_->publish(odom);
     ++num_published_poses_;
 
@@ -689,8 +691,21 @@ private:
         if (sliding_window_optimizer_.get_state(input_pose.stamp_ns, optimized)) {
           output_pose.p_w_i = optimized.p_w_i;
           output_pose.q_w_i = optimized.q_w_i;
+          output_pose.v_w_i = optimized.v_w_i;
           sliding_window_bias_.gyro = optimized.gyro_bias;
           sliding_window_bias_.accel = optimized.accel_bias;
+          if (!imu_propagator_.initialized() ||
+            imu_propagator_.state().stamp_ns <= optimized.stamp_ns)
+          {
+            gaussian_lic_tracking::ImuState corrected_state;
+            corrected_state.stamp_ns = optimized.stamp_ns;
+            corrected_state.p_w_i = optimized.p_w_i;
+            corrected_state.q_w_i = optimized.q_w_i;
+            corrected_state.v_w_i = optimized.v_w_i;
+            corrected_state.gyro_bias = optimized.gyro_bias;
+            corrected_state.accel_bias = optimized.accel_bias;
+            imu_propagator_.reset(corrected_state);
+          }
         }
         RCLCPP_DEBUG_THROTTLE(
           get_logger(), *get_clock(), 2000,
@@ -717,6 +732,23 @@ private:
     sliding_window_preintegrator_.reset(input_pose.stamp_ns, sliding_window_bias_);
     sliding_window_preintegrator_initialized_ = true;
     return output_pose;
+  }
+
+  void append_trajectory_control_pose(const gaussian_lic_tracking::TrajectoryPose & pose)
+  {
+    try {
+      if (last_trajectory_control_stamp_ns_.has_value() &&
+        pose.stamp_ns <= last_trajectory_control_stamp_ns_.value())
+      {
+        return;
+      }
+      trajectory_manager_.add_control_pose(pose);
+      last_trajectory_control_stamp_ns_ = pose.stamp_ns;
+    } catch (const std::exception & ex) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "trajectory control pose skipped: %s", ex.what());
+    }
   }
 
   bool decode_image_gray(
@@ -1164,6 +1196,9 @@ private:
       timed_points,
       reference_pose,
       [this](const int64_t stamp_ns, gaussian_lic_tracking::TrajectoryPose & pose) {
+        if (trajectory_manager_.query_pose(stamp_ns, pose)) {
+          return true;
+        }
         gaussian_lic_tracking::ImuState state;
         if (!imu_propagator_.query_state(stamp_ns, state)) {
           return false;
@@ -1171,6 +1206,7 @@ private:
         pose.stamp_ns = state.stamp_ns;
         pose.p_w_i = state.p_w_i;
         pose.q_w_i = state.q_w_i;
+        pose.v_w_i = state.v_w_i;
         return true;
       });
   }
@@ -1377,6 +1413,7 @@ private:
   std::string lidar_time_unit_{"auto"};
   std::string lidar_time_mode_{"auto"};
   int imu_history_size_{4000};
+  int64_t trajectory_control_interval_ns_{50000000LL};
   int sliding_window_max_states_{12};
   int sliding_window_max_iterations_{3};
   double gaussian_snapshot_lidar_min_opacity_{0.01};
@@ -1414,12 +1451,14 @@ private:
   rclcpp::Publisher<gaussian_lic_msgs::msg::TrackingStatus>::SharedPtr tracking_status_pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   gaussian_lic_tracking::ImuPropagator imu_propagator_;
+  gaussian_lic_tracking::TrajectoryManager trajectory_manager_;
   gaussian_lic_tracking::SlidingWindowOptimizer sliding_window_optimizer_;
   gaussian_lic_tracking::ImuPreintegrator sliding_window_preintegrator_;
   gaussian_lic_tracking::ImuBias sliding_window_bias_;
   bool sliding_window_preintegrator_initialized_{false};
   bool has_sliding_window_state_{false};
   int64_t last_sliding_window_stamp_ns_{0};
+  std::optional<int64_t> last_trajectory_control_stamp_ns_;
   gaussian_lic_tracking::LidarFactor lidar_factor_;
   gaussian_lic_tracking::TrajectoryPose last_lidar_keyframe_pose_;
   bool has_lidar_keyframe_{false};

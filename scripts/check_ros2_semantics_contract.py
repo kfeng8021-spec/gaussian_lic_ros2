@@ -97,6 +97,7 @@ def main() -> int:
         "enable_lidar_plane_factor",
         "enable_visual_alignment_window_factor",
         "enable_se3_photometric_window_factor",
+        "trajectory_control_interval_ns",
         "enable_sliding_window_optimizer",
         "lidar_robust_kernel_m",
         "lidar_plane_min_neighbors",

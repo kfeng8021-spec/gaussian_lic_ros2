@@ -17,6 +17,7 @@ struct TrajectoryPose
   int64_t stamp_ns{0};
   Eigen::Vector3d p_w_i{Eigen::Vector3d::Zero()};
   Eigen::Quaterniond q_w_i{Eigen::Quaterniond::Identity()};
+  Eigen::Vector3d v_w_i{Eigen::Vector3d::Zero()};
 };
 
 class TrajectoryManager
@@ -34,6 +35,7 @@ public:
 
 private:
   static double cubic_basis(size_t basis_index, double u);
+  static double cubic_basis_derivative(size_t basis_index, double u);
   bool find_segment(int64_t stamp_ns, size_t & segment_index, double & u) const;
 
   int64_t control_interval_ns_{50000000LL};

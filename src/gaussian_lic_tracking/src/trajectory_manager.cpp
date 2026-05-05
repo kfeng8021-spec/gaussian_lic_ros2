@@ -55,6 +55,23 @@ double TrajectoryManager::cubic_basis(const size_t basis_index, const double u)
   }
 }
 
+double TrajectoryManager::cubic_basis_derivative(const size_t basis_index, const double u)
+{
+  const double u2 = u * u;
+  switch (basis_index) {
+    case 0:
+      return (-3.0 + 6.0 * u - 3.0 * u2) / 6.0;
+    case 1:
+      return (-12.0 * u + 9.0 * u2) / 6.0;
+    case 2:
+      return (3.0 + 6.0 * u - 9.0 * u2) / 6.0;
+    case 3:
+      return 0.5 * u2;
+    default:
+      throw std::runtime_error("invalid cubic B-spline basis index");
+  }
+}
+
 bool TrajectoryManager::find_segment(int64_t stamp_ns, size_t & segment_index, double & u) const
 {
   if (control_poses_.size() < 4) {
@@ -88,8 +105,12 @@ bool TrajectoryManager::query_pose(const int64_t stamp_ns, TrajectoryPose & pose
 
   pose.stamp_ns = stamp_ns;
   pose.p_w_i.setZero();
+  pose.v_w_i.setZero();
+  const double inv_dt_s = 1.0e9 / static_cast<double>(control_interval_ns_);
   for (size_t basis = 0; basis < 4; ++basis) {
-    pose.p_w_i += cubic_basis(basis, u) * control_poses_[segment_index + basis - 1U].p_w_i;
+    const auto & control_pose = control_poses_[segment_index + basis - 1U];
+    pose.p_w_i += cubic_basis(basis, u) * control_pose.p_w_i;
+    pose.v_w_i += cubic_basis_derivative(basis, u) * control_pose.p_w_i * inv_dt_s;
   }
   pose.q_w_i = control_poses_[segment_index].q_w_i.slerp(
     u, control_poses_[segment_index + 1U].q_w_i);

@@ -48,6 +48,7 @@ def generate_launch_description():
     se3_photometric_huber_delta = LaunchConfiguration("se3_photometric_huber_delta")
     se3_photometric_max_abs_residual = LaunchConfiguration("se3_photometric_max_abs_residual")
     enable_gaussian_snapshot = LaunchConfiguration("enable_gaussian_snapshot")
+    trajectory_control_interval_ns = LaunchConfiguration("trajectory_control_interval_ns")
     enable_sliding_window_optimizer = LaunchConfiguration("enable_sliding_window_optimizer")
     sliding_window_max_states = LaunchConfiguration("sliding_window_max_states")
     sliding_window_max_iterations = LaunchConfiguration("sliding_window_max_iterations")
@@ -107,6 +108,7 @@ def generate_launch_description():
             DeclareLaunchArgument("se3_photometric_huber_delta", default_value="0.15"),
             DeclareLaunchArgument("se3_photometric_max_abs_residual", default_value="1.0"),
             DeclareLaunchArgument("enable_gaussian_snapshot", default_value="true"),
+            DeclareLaunchArgument("trajectory_control_interval_ns", default_value="50000000"),
             DeclareLaunchArgument("enable_sliding_window_optimizer", default_value="true"),
             DeclareLaunchArgument("sliding_window_max_states", default_value="12"),
             DeclareLaunchArgument("sliding_window_max_iterations", default_value="3"),
@@ -169,6 +171,7 @@ def generate_launch_description():
                         "se3_photometric_huber_delta": se3_photometric_huber_delta,
                         "se3_photometric_max_abs_residual": se3_photometric_max_abs_residual,
                         "enable_gaussian_snapshot": enable_gaussian_snapshot,
+                        "trajectory_control_interval_ns": trajectory_control_interval_ns,
                         "enable_sliding_window_optimizer": enable_sliding_window_optimizer,
                         "sliding_window_max_states": sliding_window_max_states,
                         "sliding_window_max_iterations": sliding_window_max_iterations,
