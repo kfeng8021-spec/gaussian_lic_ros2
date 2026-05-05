@@ -80,6 +80,8 @@ lidar_map_points
 last_lidar_points
 lidar_invalid_points
 lidar_invalid_point_times
+lidar_out_of_range_point_times
+last_lidar_max_abs_point_time_offset_s
 last_lidar_matches
 last_window_point_correspondences
 last_window_plane_correspondences

@@ -187,6 +187,9 @@ public:
     lidar_time_field_ = declare_parameter<std::string>("lidar_time_field", "auto");
     lidar_time_unit_ = declare_parameter<std::string>("lidar_time_unit", "auto");
     lidar_time_mode_ = declare_parameter<std::string>("lidar_time_mode", "auto");
+    lidar_max_abs_point_time_offset_s_ = finite_positive_parameter(
+      "lidar_max_abs_point_time_offset_s",
+      declare_parameter<double>("lidar_max_abs_point_time_offset_s", 0.25));
     imu_history_size_ = integer_parameter_at_least(
       "imu_history_size", declare_parameter<int>("imu_history_size", 4000), 2);
     trajectory_control_interval_ns_ = integer_parameter_at_least(
@@ -1726,6 +1729,8 @@ private:
     const int64_t cloud_stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
     size_t invalid_points = 0U;
     size_t invalid_point_times = 0U;
+    size_t out_of_range_point_times = 0U;
+    double max_abs_point_time_offset_s = 0.0;
     for (size_t index = 0; index < count; ++index) {
       const size_t base = index * static_cast<size_t>(msg.point_step);
       if (base + max_offset > msg.data.size()) {
@@ -1751,8 +1756,16 @@ private:
           if (read_numeric_field(point_base, *fields.time_field, raw_time)) {
             const auto stamp_ns = decode_point_stamp_ns(raw_time, fields.time_field->name, cloud_stamp_ns);
             if (stamp_ns.has_value()) {
-              point.stamp_ns = stamp_ns.value();
-              point.has_stamp = true;
+              const double abs_offset_s =
+                static_cast<double>(stamp_delta_ns(stamp_ns.value(), cloud_stamp_ns)) /
+                static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
+              max_abs_point_time_offset_s = std::max(max_abs_point_time_offset_s, abs_offset_s);
+              if (abs_offset_s <= lidar_max_abs_point_time_offset_s_) {
+                point.stamp_ns = stamp_ns.value();
+                point.has_stamp = true;
+              } else {
+                ++out_of_range_point_times;
+              }
             } else {
               ++invalid_point_times;
             }
@@ -1767,11 +1780,17 @@ private:
     }
     lidar_invalid_points_ += invalid_points;
     lidar_invalid_point_times_ += invalid_point_times;
-    if (invalid_points > 0U || invalid_point_times > 0U) {
+    lidar_out_of_range_point_times_ += out_of_range_point_times;
+    last_lidar_max_abs_point_time_offset_s_ = max_abs_point_time_offset_s;
+    if (invalid_points > 0U || invalid_point_times > 0U || out_of_range_point_times > 0U) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
-        "PointCloud2 decode skipped invalid_points=%zu invalid_point_times=%zu",
-        invalid_points, invalid_point_times);
+        "PointCloud2 decode skipped invalid_points=%zu invalid_point_times=%zu out_of_range_point_times=%zu max_abs_time_offset_s=%.6f limit_s=%.6f",
+        invalid_points,
+        invalid_point_times,
+        out_of_range_point_times,
+        max_abs_point_time_offset_s,
+        lidar_max_abs_point_time_offset_s_);
     }
     return points;
   }
@@ -1891,6 +1910,8 @@ private:
     status.last_lidar_points = static_cast<uint64_t>(last_lidar_points_);
     status.lidar_invalid_points = lidar_invalid_points_;
     status.lidar_invalid_point_times = lidar_invalid_point_times_;
+    status.lidar_out_of_range_point_times = lidar_out_of_range_point_times_;
+    status.last_lidar_max_abs_point_time_offset_s = last_lidar_max_abs_point_time_offset_s_;
     status.last_lidar_matches = static_cast<uint64_t>(last_lidar_matches_);
     status.last_window_point_correspondences =
       static_cast<uint64_t>(last_window_point_correspondences_);
@@ -2093,6 +2114,7 @@ private:
   std::string lidar_time_field_{"auto"};
   std::string lidar_time_unit_{"auto"};
   std::string lidar_time_mode_{"auto"};
+  double lidar_max_abs_point_time_offset_s_{0.25};
   int imu_history_size_{4000};
   int64_t trajectory_control_interval_ns_{50000000LL};
   int sliding_window_max_states_{12};
@@ -2212,6 +2234,8 @@ private:
   uint64_t num_published_poses_{0};
   uint64_t lidar_invalid_points_{0};
   uint64_t lidar_invalid_point_times_{0};
+  uint64_t lidar_out_of_range_point_times_{0};
+  double last_lidar_max_abs_point_time_offset_s_{0.0};
   int64_t last_image_stamp_ns_{0};
   int64_t last_pointcloud_stamp_ns_{0};
   int64_t last_imu_stamp_ns_{0};

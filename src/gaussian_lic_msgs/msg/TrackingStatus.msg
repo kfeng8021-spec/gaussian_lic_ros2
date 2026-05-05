@@ -35,6 +35,8 @@ uint64 lidar_map_points
 uint64 last_lidar_points
 uint64 lidar_invalid_points
 uint64 lidar_invalid_point_times
+uint64 lidar_out_of_range_point_times
+float64 last_lidar_max_abs_point_time_offset_s
 uint64 last_lidar_matches
 uint64 last_window_point_correspondences
 uint64 last_window_plane_correspondences
