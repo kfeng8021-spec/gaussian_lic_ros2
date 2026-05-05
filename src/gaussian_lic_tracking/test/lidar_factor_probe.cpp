@@ -3,6 +3,7 @@
 #include <gaussian_lic_tracking/lidar_factor.hpp>
 
 #include <cmath>
+#include <exception>
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -18,6 +19,18 @@ int main()
   config.max_correction_m = 1.0;
   config.max_rotation_rad = 0.2;
   config.robust_kernel_m = 0.02;
+  bool rejected_bad_config = false;
+  try {
+    auto bad_config = config;
+    bad_config.nearest_distance_m = std::numeric_limits<double>::quiet_NaN();
+    gaussian_lic_tracking::LidarFactor bad_factor(bad_config);
+  } catch (const std::exception &) {
+    rejected_bad_config = true;
+  }
+  if (!rejected_bad_config) {
+    std::cerr << "LiDAR factor failed to reject non-finite config\n";
+    return 1;
+  }
   gaussian_lic_tracking::LidarFactor factor(config);
 
   std::vector<Eigen::Vector3d> scan;

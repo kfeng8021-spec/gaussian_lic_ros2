@@ -30,6 +30,12 @@ LidarFactor::LidarFactor(LidarFactorConfig config)
 
 void LidarFactor::set_config(const LidarFactorConfig & config)
 {
+  if (!std::isfinite(config.nearest_distance_m) || !std::isfinite(config.correction_gain) ||
+    !std::isfinite(config.max_correction_m) || !std::isfinite(config.max_rotation_rad) ||
+    !std::isfinite(config.robust_kernel_m) || !std::isfinite(config.plane_max_condition))
+  {
+    throw std::runtime_error("LiDAR factor numeric config values must be finite");
+  }
   if (config.min_points == 0U) {
     throw std::runtime_error("LiDAR factor min_points must be positive");
   }
