@@ -32,6 +32,16 @@ double correspondence_confidence(const double residual_norm, const double robust
   }
   return std::clamp(robust_kernel / residual_norm, 0.0, 1.0);
 }
+
+double plane_condition_confidence(const double condition, const double max_condition)
+{
+  if (!std::isfinite(condition) || !std::isfinite(max_condition) || max_condition <= 0.0 ||
+    condition < 0.0 || condition >= max_condition)
+  {
+    return 0.0;
+  }
+  return std::clamp(1.0 - condition / max_condition, 0.0, 1.0);
+}
 }
 
 LidarFactor::LidarFactor(LidarFactorConfig config)
@@ -470,7 +480,9 @@ SlidingWindowPointToPlaneFactor LidarFactor::build_point_to_plane_factor(
     if (std::abs(signed_distance) > config_.nearest_distance_m) {
       continue;
     }
-    const double confidence = correspondence_confidence(std::abs(signed_distance), config_.robust_kernel_m);
+    const double confidence =
+      correspondence_confidence(std::abs(signed_distance), config_.robust_kernel_m) *
+      plane_condition_confidence(condition, config_.plane_max_condition);
     if (confidence <= 0.0) {
       continue;
     }
