@@ -58,6 +58,12 @@ public:
     enable_gaussian_snapshot_ = declare_parameter<bool>("enable_gaussian_snapshot", true);
     visual_max_pixels_ = declare_parameter<int>("visual_max_pixels", 200000);
     visual_alignment_max_shift_px_ = declare_parameter<int>("visual_alignment_max_shift_px", 8);
+    enable_visual_alignment_window_factor_ =
+      declare_parameter<bool>("enable_visual_alignment_window_factor", false);
+    visual_alignment_meters_per_pixel_ =
+      declare_parameter<double>("visual_alignment_meters_per_pixel", 0.01);
+    visual_alignment_window_weight_ =
+      declare_parameter<double>("visual_alignment_window_weight", 1.0);
     enable_lio_factor_ = declare_parameter<bool>("enable_lio_factor", true);
     lidar_min_points_ = declare_parameter<int>("lidar_min_points", 32);
     lidar_max_frame_points_ = declare_parameter<int>("lidar_max_frame_points", 2000);
@@ -241,6 +247,10 @@ private:
         latest_rendered_frame_,
         observed,
         std::max(visual_alignment_max_shift_px_, 0));
+      if (last_visual_alignment_.valid) {
+        pending_visual_alignment_ = last_visual_alignment_;
+        has_pending_visual_alignment_ = true;
+      }
       if (last_visual_residual_.valid) {
         RCLCPP_DEBUG_THROTTLE(
           get_logger(), *get_clock(), 2000,
@@ -357,10 +367,27 @@ private:
       }
     }
 
+    std::vector<gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor> visual_window_factors;
+    if (enable_sliding_window_optimizer_ && enable_visual_alignment_window_factor_ &&
+      has_pending_visual_alignment_)
+    {
+      gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor visual_factor;
+      visual_factor.stamp_ns = tracking_pose.stamp_ns;
+      visual_factor.reference_p_w_i = tracking_pose.p_w_i;
+      visual_factor.measured_shift_px = Eigen::Vector2d{
+        static_cast<double>(pending_visual_alignment_.dx),
+        static_cast<double>(pending_visual_alignment_.dy)};
+      visual_factor.meters_per_pixel = visual_alignment_meters_per_pixel_;
+      visual_factor.weight = visual_alignment_window_weight_;
+      visual_window_factors.push_back(visual_factor);
+      has_pending_visual_alignment_ = false;
+    }
+
     if (enable_sliding_window_optimizer_) {
       tracking_pose = update_sliding_window(
         tracking_pose,
-        window_point_factors);
+        window_point_factors,
+        visual_window_factors);
     }
 
     geometry_msgs::msg::PoseStamped pose;
@@ -408,7 +435,8 @@ private:
 
   gaussian_lic_tracking::TrajectoryPose update_sliding_window(
     const gaussian_lic_tracking::TrajectoryPose & input_pose,
-    const std::vector<gaussian_lic_tracking::SlidingWindowPointToPointFactor> & point_factors)
+    const std::vector<gaussian_lic_tracking::SlidingWindowPointToPointFactor> & point_factors,
+    const std::vector<gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor> & visual_factors)
   {
     gaussian_lic_tracking::TrajectoryPose output_pose = input_pose;
     gaussian_lic_tracking::ImuState imu_state;
@@ -443,6 +471,15 @@ private:
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window point factor skipped: %s", ex.what());
+      }
+    }
+    for (const auto & visual_factor : visual_factors) {
+      try {
+        sliding_window_optimizer_.add_visual_alignment_factor(visual_factor);
+      } catch (const std::exception & ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "sliding window visual factor skipped: %s", ex.what());
       }
     }
 
@@ -889,6 +926,9 @@ private:
   bool enable_gaussian_snapshot_{true};
   int visual_max_pixels_{200000};
   int visual_alignment_max_shift_px_{8};
+  bool enable_visual_alignment_window_factor_{false};
+  double visual_alignment_meters_per_pixel_{0.01};
+  double visual_alignment_window_weight_{1.0};
   bool enable_lio_factor_{true};
   bool enable_lidar_deskew_{true};
   bool enable_sliding_window_optimizer_{false};
@@ -943,6 +983,8 @@ private:
   gaussian_lic_tracking::VisualFrame latest_rendered_frame_;
   gaussian_lic_tracking::VisualResidual last_visual_residual_;
   gaussian_lic_tracking::VisualAlignment last_visual_alignment_;
+  gaussian_lic_tracking::VisualAlignment pending_visual_alignment_;
+  bool has_pending_visual_alignment_{false};
   bool has_rendered_frame_{false};
   int64_t last_gaussian_snapshot_stamp_ns_{0};
   uint32_t last_gaussian_total_count_{0};

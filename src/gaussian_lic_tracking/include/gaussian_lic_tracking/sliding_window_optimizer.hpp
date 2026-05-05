@@ -77,6 +77,15 @@ struct SlidingWindowPointToPointFactor
   double weight{1.0};
 };
 
+struct SlidingWindowVisualAlignmentFactor
+{
+  int64_t stamp_ns{0};
+  Eigen::Vector2d measured_shift_px{Eigen::Vector2d::Zero()};
+  Eigen::Vector3d reference_p_w_i{Eigen::Vector3d::Zero()};
+  double meters_per_pixel{0.01};
+  double weight{1.0};
+};
+
 struct SlidingWindowSummary
 {
   size_t state_count{0};
@@ -84,6 +93,7 @@ struct SlidingWindowSummary
   size_t pose_prior_count{0};
   size_t state_prior_count{0};
   size_t point_factor_count{0};
+  size_t visual_factor_count{0};
   size_t marginalized_state_count{0};
   size_t iterations{0};
   double initial_cost{0.0};
@@ -108,6 +118,7 @@ public:
   void add_pose_prior(const SlidingWindowPosePrior & prior);
   void add_state_prior(const SlidingWindowStatePrior & prior);
   void add_point_to_point_factor(const SlidingWindowPointToPointFactor & factor);
+  void add_visual_alignment_factor(const SlidingWindowVisualAlignmentFactor & factor);
 
   SlidingWindowSummary optimize();
 
@@ -140,6 +151,7 @@ private:
   std::vector<SlidingWindowPosePrior> pose_priors_;
   std::vector<SlidingWindowStatePrior> state_priors_;
   std::vector<SlidingWindowPointToPointFactor> point_factors_;
+  std::vector<SlidingWindowVisualAlignmentFactor> visual_factors_;
   size_t marginalized_state_count_{0};
 };
 

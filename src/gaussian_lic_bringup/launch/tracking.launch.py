@@ -19,6 +19,9 @@ def generate_launch_description():
     enable_lidar_deskew = LaunchConfiguration("enable_lidar_deskew")
     enable_visual_factor = LaunchConfiguration("enable_visual_factor")
     visual_alignment_max_shift_px = LaunchConfiguration("visual_alignment_max_shift_px")
+    enable_visual_alignment_window_factor = LaunchConfiguration("enable_visual_alignment_window_factor")
+    visual_alignment_meters_per_pixel = LaunchConfiguration("visual_alignment_meters_per_pixel")
+    visual_alignment_window_weight = LaunchConfiguration("visual_alignment_window_weight")
     enable_gaussian_snapshot = LaunchConfiguration("enable_gaussian_snapshot")
     enable_sliding_window_optimizer = LaunchConfiguration("enable_sliding_window_optimizer")
     sliding_window_bias_weight = LaunchConfiguration("sliding_window_bias_weight")
@@ -45,6 +48,9 @@ def generate_launch_description():
             DeclareLaunchArgument("lidar_time_mode", default_value="auto"),
             DeclareLaunchArgument("enable_visual_factor", default_value="true"),
             DeclareLaunchArgument("visual_alignment_max_shift_px", default_value="8"),
+            DeclareLaunchArgument("enable_visual_alignment_window_factor", default_value="false"),
+            DeclareLaunchArgument("visual_alignment_meters_per_pixel", default_value="0.01"),
+            DeclareLaunchArgument("visual_alignment_window_weight", default_value="1.0"),
             DeclareLaunchArgument("enable_gaussian_snapshot", default_value="true"),
             DeclareLaunchArgument("enable_sliding_window_optimizer", default_value="false"),
             DeclareLaunchArgument("sliding_window_bias_weight", default_value="1.0"),
@@ -76,6 +82,9 @@ def generate_launch_description():
                         "lidar_time_mode": lidar_time_mode,
                         "enable_visual_factor": enable_visual_factor,
                         "visual_alignment_max_shift_px": visual_alignment_max_shift_px,
+                        "enable_visual_alignment_window_factor": enable_visual_alignment_window_factor,
+                        "visual_alignment_meters_per_pixel": visual_alignment_meters_per_pixel,
+                        "visual_alignment_window_weight": visual_alignment_window_weight,
                         "enable_gaussian_snapshot": enable_gaussian_snapshot,
                         "enable_sliding_window_optimizer": enable_sliding_window_optimizer,
                         "sliding_window_bias_weight": sliding_window_bias_weight,
