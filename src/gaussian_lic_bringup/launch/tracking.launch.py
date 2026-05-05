@@ -13,6 +13,7 @@ def generate_launch_description():
     raw_depth_topic = LaunchConfiguration("raw_depth_topic")
     raw_pointcloud_topic = LaunchConfiguration("raw_pointcloud_topic")
     raw_imu_topic = LaunchConfiguration("raw_imu_topic")
+    tracking_status_topic = LaunchConfiguration("tracking_status_topic")
     rendered_image_topic = LaunchConfiguration("rendered_image_topic")
     gaussian_map_topic = LaunchConfiguration("gaussian_map_topic")
     enable_lio_factor = LaunchConfiguration("enable_lio_factor")
@@ -56,6 +57,7 @@ def generate_launch_description():
             DeclareLaunchArgument("raw_depth_topic", default_value="/camera/depth"),
             DeclareLaunchArgument("raw_pointcloud_topic", default_value="/livox/lidar"),
             DeclareLaunchArgument("raw_imu_topic", default_value="/imu"),
+            DeclareLaunchArgument("tracking_status_topic", default_value="/gaussian_lic/frontend/status"),
             DeclareLaunchArgument("rendered_image_topic", default_value="/gaussian_lic/rendered_image"),
             DeclareLaunchArgument("gaussian_map_topic", default_value="/gaussian_lic/gaussian_map"),
             DeclareLaunchArgument("enable_lio_factor", default_value="true"),
@@ -107,6 +109,7 @@ def generate_launch_description():
                         "raw_depth_topic": raw_depth_topic,
                         "raw_pointcloud_topic": raw_pointcloud_topic,
                         "raw_imu_topic": raw_imu_topic,
+                        "tracking_status_topic": tracking_status_topic,
                         "rendered_image_topic": rendered_image_topic,
                         "gaussian_map_topic": gaussian_map_topic,
                         "enable_lio_factor": enable_lio_factor,

@@ -10,6 +10,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Gaussian.msg"
   "msg/GaussianArray.msg"
   "msg/MappingStatus.msg"
+  "msg/TrackingStatus.msg"
   "srv/SaveMap.srv"
   DEPENDENCIES builtin_interfaces std_msgs
 )

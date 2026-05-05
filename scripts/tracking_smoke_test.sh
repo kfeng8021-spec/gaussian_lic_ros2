@@ -89,6 +89,9 @@ trap cleanup EXIT
 setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   enable_sliding_window_optimizer:="${ENABLE_SLIDING_WINDOW}" \
   enable_lidar_plane_factor:="${ENABLE_LIDAR_PLANE_FACTOR}" \
+  lidar_min_points:=1 \
+  lidar_nearest_distance_m:=2.0 \
+  lidar_keyframe_translation_m:=0.0 \
   >"${launch_log}" 2>&1 &
 launch_pid=$!
 
@@ -99,6 +102,14 @@ play_pid=$!
 for topic in /pose_for_gs /points_for_gs /gaussian_lic/frontend/odometry /gaussian_lic/frontend/path; do
   timeout "${TIMEOUT_SEC}" ros2 topic echo --once "${topic}" >/dev/null
 done
+timeout "${TIMEOUT_SEC}" ros2 topic echo --once \
+  /gaussian_lic/frontend/status gaussian_lic_msgs/msg/TrackingStatus \
+  >/tmp/gaussian_lic_tracking_smoke_status.txt
+rg -q "state: 2" /tmp/gaussian_lic_tracking_smoke_status.txt
+rg -q "sliding_window_enabled: true" /tmp/gaussian_lic_tracking_smoke_status.txt
+rg -q "sliding_window_imu_factors: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
+rg -q "sliding_window_point_factors: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
+rg -q "num_lidar_keyframes: [1-9]" /tmp/gaussian_lic_tracking_smoke_status.txt
 
 echo "[tracking-smoke] passed"
 echo "[tracking-smoke] launch log: ${launch_log}"

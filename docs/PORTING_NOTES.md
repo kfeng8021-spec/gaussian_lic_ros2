@@ -26,6 +26,7 @@ Outputs:
 /gaussian_lic/rendered_image  sensor_msgs/msg/Image
 /gaussian_lic/gaussian_map    gaussian_lic_msgs/msg/GaussianArray
 /gaussian_lic/status          gaussian_lic_msgs/msg/MappingStatus
+/gaussian_lic/frontend/status gaussian_lic_msgs/msg/TrackingStatus
 ```
 
 ## ROS2 Design Rules

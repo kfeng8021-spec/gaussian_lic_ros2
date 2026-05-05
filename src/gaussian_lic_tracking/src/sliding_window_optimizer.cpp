@@ -611,6 +611,14 @@ std::vector<std::pair<Eigen::Index, Eigen::Index>> SlidingWindowOptimizer::fill_
         numeric_row_ranges.emplace_back(start, size);
       }
     };
+  auto fallback_to_numeric = [&numeric_row_ranges, &mark_numeric, &jacobian]() {
+      numeric_row_ranges.clear();
+      mark_numeric(0, jacobian.rows());
+      return numeric_row_ranges;
+    };
+  auto rows_available = [&jacobian](const Eigen::Index start, const Eigen::Index size) {
+      return start >= 0 && size >= 0 && start + size <= jacobian.rows();
+    };
   auto find_local = [&states](const int64_t stamp_ns) -> int {
       const auto it = std::find_if(
         states.begin(), states.end(),
@@ -685,6 +693,9 @@ std::vector<std::pair<Eigen::Index, Eigen::Index>> SlidingWindowOptimizer::fill_
     const auto & state = states[static_cast<size_t>(index)];
     const Eigen::Index offset = variable_offsets[static_cast<size_t>(index)];
     for (size_t point_index = 0; point_index < factor.frame_points_i.size(); ++point_index) {
+      if (!rows_available(row, 3)) {
+        return fallback_to_numeric();
+      }
       if (offset >= 0) {
         const double robust_weight = factor.point_weights.empty()
           ? 1.0
@@ -708,6 +719,9 @@ std::vector<std::pair<Eigen::Index, Eigen::Index>> SlidingWindowOptimizer::fill_
     const auto & state = states[static_cast<size_t>(index)];
     const Eigen::Index offset = variable_offsets[static_cast<size_t>(index)];
     for (size_t point_index = 0; point_index < factor.frame_points_i.size(); ++point_index) {
+      if (!rows_available(row, 1)) {
+        return fallback_to_numeric();
+      }
       if (offset >= 0) {
         const double robust_weight = factor.point_weights.empty()
           ? 1.0
@@ -730,6 +744,9 @@ std::vector<std::pair<Eigen::Index, Eigen::Index>> SlidingWindowOptimizer::fill_
       continue;
     }
     const Eigen::Index offset = variable_offsets[static_cast<size_t>(index)];
+    if (!rows_available(row, 2)) {
+      return fallback_to_numeric();
+    }
     if (offset >= 0) {
       const double scale = std::sqrt(factor.weight);
       jacobian(row, offset + 6) = scale;

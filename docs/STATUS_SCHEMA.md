@@ -1,6 +1,8 @@
 # Status Schema
 
 `/gaussian_lic/status` uses `gaussian_lic_msgs/msg/MappingStatus`.
+`/gaussian_lic/frontend/status` uses `gaussian_lic_msgs/msg/TrackingStatus`
+when the native tracking frontend is launched.
 
 ## State Fields
 
@@ -47,14 +49,62 @@ gpu_memory_mb
 
 The current mapping slice fills rates, counters, mapping latency, and mean iteration time. Full tracking/mapping ports must fill tracking latency and GPU memory fields before v0.4 strict reproduction.
 
+## Native Tracking Status
+
+`TrackingStatus` is the native frontend gate. It is published with transient-local
+QoS on `/gaussian_lic/frontend/status` so smoke tests and rosbag runs can verify
+the estimator did more than publish pass-through topics.
+
+```text
+state/status_text
+num_raw_images
+num_raw_pointclouds
+num_raw_imus
+num_published_poses
+num_lidar_keyframes
+lidar_map_points
+last_lidar_points
+last_lidar_matches
+last_lidar_mean_residual_m
+sliding_window_enabled
+sliding_window_states
+sliding_window_imu_factors
+sliding_window_pose_priors
+sliding_window_dense_priors
+sliding_window_point_factors
+sliding_window_plane_factors
+sliding_window_visual_factors
+sliding_window_marginalized_states
+sliding_window_iterations
+sliding_window_initial_cost
+sliding_window_final_cost
+sliding_window_converged
+gaussian_snapshot_points
+gaussian_snapshot_expected_total
+gaussian_snapshot_chunks_received
+gaussian_snapshot_expected_chunks
+gaussian_snapshot_complete
+visual_factor_enabled
+visual_alignment_valid
+visual_rmse
+visual_subpixel_dx
+visual_subpixel_dy
+```
+
+`scripts/tracking_smoke_test.sh` asserts that the synthetic frontend bag reaches
+`STATE_TRACKING`, publishes frontend odometry/path, and exercises the sliding
+window with nonzero IMU and point factors. The synthetic bag intentionally lowers
+the LiDAR point threshold to one point; dataset profiles keep production
+thresholds.
+
 ## Render Mode Policy
 
 `render_mode` is the canonical parameter.
 
 ```text
-debug_cpu    Current default; CPU projected map preview.
+debug_cpu    CPU projected map preview diagnostic.
 debug_input  Input image passthrough diagnostic.
-rasterizer   Future default once the CUDA rasterizer is ported.
+rasterizer   Default CUDA Gaussian rasterizer preview/loss path.
 off          Do not publish rendered preview images.
 ```
 

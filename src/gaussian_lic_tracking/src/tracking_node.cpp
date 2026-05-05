@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include <builtin_interfaces/msg/time.hpp>
 #include <gaussian_lic_tracking/gaussian_snapshot.hpp>
 #include <gaussian_lic_tracking/imu_propagator.hpp>
 #include <gaussian_lic_tracking/lidar_deskew.hpp>
@@ -16,6 +17,7 @@
 #include <gaussian_lic_tracking/time.hpp>
 #include <gaussian_lic_tracking/visual_factor.hpp>
 #include <gaussian_lic_msgs/msg/gaussian_array.hpp>
+#include <gaussian_lic_msgs/msg/tracking_status.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -46,6 +48,8 @@ public:
     pose_topic_ = declare_parameter<std::string>("pose_topic", "/pose_for_gs");
     odometry_topic_ = declare_parameter<std::string>("odometry_topic", "/gaussian_lic/frontend/odometry");
     path_topic_ = declare_parameter<std::string>("path_topic", "/gaussian_lic/frontend/path");
+    tracking_status_topic_ = declare_parameter<std::string>(
+      "tracking_status_topic", "/gaussian_lic/frontend/status");
     rendered_image_topic_ = declare_parameter<std::string>("rendered_image_topic", "/gaussian_lic/rendered_image");
     gaussian_map_topic_ = declare_parameter<std::string>("gaussian_map_topic", "/gaussian_lic/gaussian_map");
     world_frame_ = declare_parameter<std::string>("world_frame", "map");
@@ -153,6 +157,8 @@ public:
     pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_, 20);
     odometry_pub_ = create_publisher<nav_msgs::msg::Odometry>(odometry_topic_, 20);
     path_pub_ = create_publisher<nav_msgs::msg::Path>(path_topic_, rclcpp::QoS(1).transient_local().reliable());
+    tracking_status_pub_ = create_publisher<gaussian_lic_msgs::msg::TrackingStatus>(
+      tracking_status_topic_, rclcpp::QoS(1).transient_local().reliable());
     rendered_image_sub_ = create_subscription<sensor_msgs::msg::Image>(
       rendered_image_topic_, rclcpp::QoS(1).transient_local().reliable(),
       [this](sensor_msgs::msg::Image::ConstSharedPtr msg) {
@@ -208,6 +214,7 @@ private:
   {
     try {
       const int64_t stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
+      ++num_raw_imus_;
       imu_propagator_.add_measurement(
         stamp_ns,
         Eigen::Vector3d{
@@ -240,6 +247,7 @@ private:
 
   void handle_image(const sensor_msgs::msg::Image & msg)
   {
+    ++num_raw_images_;
     image_pub_->publish(msg);
     if (!enable_visual_factor_) {
       return;
@@ -308,6 +316,7 @@ private:
 
   void handle_pointcloud(const sensor_msgs::msg::PointCloud2 & msg)
   {
+    ++num_raw_pointclouds_;
     gaussian_lic_tracking::TrajectoryPose tracking_pose;
     tracking_pose.stamp_ns = gaussian_lic_tracking::stamp_to_nanoseconds(msg.header.stamp);
     tracking_pose.q_w_i = Eigen::Quaterniond::Identity();
@@ -326,6 +335,7 @@ private:
       for (const auto & point : decoded_points) {
         lidar_points.push_back(point.point_i);
       }
+      last_lidar_points_ = lidar_points.size();
       if (enable_lidar_deskew_ && fields.xyz_writable && !decoded_points.empty()) {
         const auto deskew_result = deskew_decoded_points(decoded_points, tracking_pose);
         if (deskew_result.deskewed_count > 0U) {
@@ -370,12 +380,15 @@ private:
         }
       }
       const auto correction = lidar_factor_.compute_pose_correction(lidar_points, tracking_pose);
+      last_lidar_matches_ = correction.matched_points;
+      last_lidar_mean_residual_m_ = correction.mean_residual_m;
       if (correction.applied) {
         tracking_pose.p_w_i += correction.delta_p_w;
         tracking_pose.q_w_i = (correction.delta_q * tracking_pose.q_w_i).normalized();
       }
       if (should_insert_lidar_keyframe(tracking_pose, lidar_points.size())) {
         lidar_factor_.insert_keyframe(lidar_points, tracking_pose);
+        ++num_lidar_keyframes_;
         last_lidar_keyframe_pose_ = tracking_pose;
         has_lidar_keyframe_ = true;
       }
@@ -428,6 +441,7 @@ private:
       odom.twist.twist.linear.z = state.v_w_i.z();
     }
     odometry_pub_->publish(odom);
+    ++num_published_poses_;
 
     path_.header = pose.header;
     path_.poses.push_back(pose);
@@ -446,6 +460,7 @@ private:
       tf.transform.rotation = pose.pose.orientation;
       tf_broadcaster_->sendTransform(tf);
     }
+    publish_tracking_status(msg.header.stamp);
   }
 
   gaussian_lic_tracking::TrajectoryPose update_sliding_window(
@@ -521,6 +536,8 @@ private:
       try {
         sliding_window_optimizer_.add_imu_factor(factor);
         const auto summary = sliding_window_optimizer_.optimize();
+        last_sliding_window_summary_ = summary;
+        has_last_sliding_window_summary_ = true;
         gaussian_lic_tracking::SlidingWindowState optimized;
         if (sliding_window_optimizer_.get_state(input_pose.stamp_ns, optimized)) {
           output_pose.p_w_i = optimized.p_w_i;
@@ -931,6 +948,64 @@ private:
     return (pose.p_w_i - last_lidar_keyframe_pose_.p_w_i).norm() >= lidar_keyframe_translation_m_;
   }
 
+  void publish_tracking_status(const builtin_interfaces::msg::Time & stamp)
+  {
+    gaussian_lic_msgs::msg::TrackingStatus status;
+    status.header.stamp = stamp;
+    status.header.frame_id = world_frame_;
+    if (num_published_poses_ == 0U) {
+      status.state = gaussian_lic_msgs::msg::TrackingStatus::STATE_INITIALIZING;
+      status.status_text = "initializing";
+    } else if (enable_sliding_window_optimizer_ && !has_last_sliding_window_summary_) {
+      status.state = gaussian_lic_msgs::msg::TrackingStatus::STATE_DEGRADED;
+      status.status_text = "tracking_waiting_for_sliding_window";
+    } else {
+      status.state = gaussian_lic_msgs::msg::TrackingStatus::STATE_TRACKING;
+      status.status_text = enable_sliding_window_optimizer_ ? "tracking_with_sliding_window" : "tracking";
+    }
+
+    status.num_raw_images = num_raw_images_;
+    status.num_raw_pointclouds = num_raw_pointclouds_;
+    status.num_raw_imus = num_raw_imus_;
+    status.num_published_poses = num_published_poses_;
+
+    status.num_lidar_keyframes = num_lidar_keyframes_;
+    status.lidar_map_points = static_cast<uint64_t>(lidar_factor_.map_size());
+    status.last_lidar_points = static_cast<uint64_t>(last_lidar_points_);
+    status.last_lidar_matches = static_cast<uint64_t>(last_lidar_matches_);
+    status.last_lidar_mean_residual_m = last_lidar_mean_residual_m_;
+
+    const auto & summary = last_sliding_window_summary_;
+    status.sliding_window_enabled = enable_sliding_window_optimizer_;
+    status.sliding_window_states = has_last_sliding_window_summary_
+      ? static_cast<uint64_t>(summary.state_count)
+      : static_cast<uint64_t>(sliding_window_optimizer_.states().size());
+    status.sliding_window_imu_factors = static_cast<uint64_t>(summary.imu_factor_count);
+    status.sliding_window_pose_priors = static_cast<uint64_t>(summary.pose_prior_count);
+    status.sliding_window_dense_priors = static_cast<uint64_t>(summary.dense_prior_count);
+    status.sliding_window_point_factors = static_cast<uint64_t>(summary.point_factor_count);
+    status.sliding_window_plane_factors = static_cast<uint64_t>(summary.plane_factor_count);
+    status.sliding_window_visual_factors = static_cast<uint64_t>(summary.visual_factor_count);
+    status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
+    status.sliding_window_iterations = static_cast<uint64_t>(summary.iterations);
+    status.sliding_window_initial_cost = summary.initial_cost;
+    status.sliding_window_final_cost = summary.final_cost;
+    status.sliding_window_converged = summary.converged;
+
+    status.gaussian_snapshot_points = static_cast<uint64_t>(gaussian_snapshot_.point_count());
+    status.gaussian_snapshot_expected_total = last_gaussian_total_count_;
+    status.gaussian_snapshot_chunks_received = gaussian_snapshot_chunks_received_;
+    status.gaussian_snapshot_expected_chunks = last_gaussian_chunk_count_;
+    status.gaussian_snapshot_complete = gaussian_snapshot_.complete();
+
+    status.visual_factor_enabled = enable_visual_factor_;
+    status.visual_alignment_valid = last_visual_alignment_.valid;
+    status.visual_rmse = last_visual_residual_.valid ? last_visual_residual_.rmse : 0.0;
+    status.visual_subpixel_dx = last_visual_alignment_.valid ? last_visual_alignment_.subpixel_dx : 0.0;
+    status.visual_subpixel_dy = last_visual_alignment_.valid ? last_visual_alignment_.subpixel_dy : 0.0;
+    tracking_status_pub_->publish(status);
+  }
+
   std::string raw_image_topic_;
   std::string raw_camera_info_topic_;
   std::string raw_depth_topic_;
@@ -943,6 +1018,7 @@ private:
   std::string pose_topic_;
   std::string odometry_topic_;
   std::string path_topic_;
+  std::string tracking_status_topic_;
   std::string rendered_image_topic_;
   std::string gaussian_map_topic_;
   std::string world_frame_;
@@ -1000,6 +1076,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+  rclcpp::Publisher<gaussian_lic_msgs::msg::TrackingStatus>::SharedPtr tracking_status_pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   gaussian_lic_tracking::ImuPropagator imu_propagator_;
   gaussian_lic_tracking::SlidingWindowOptimizer sliding_window_optimizer_;
@@ -1019,6 +1096,16 @@ private:
   gaussian_lic_tracking::VisualAlignment pending_visual_alignment_;
   bool has_pending_visual_alignment_{false};
   bool has_rendered_frame_{false};
+  gaussian_lic_tracking::SlidingWindowSummary last_sliding_window_summary_;
+  bool has_last_sliding_window_summary_{false};
+  uint64_t num_raw_images_{0};
+  uint64_t num_raw_pointclouds_{0};
+  uint64_t num_raw_imus_{0};
+  uint64_t num_published_poses_{0};
+  uint64_t num_lidar_keyframes_{0};
+  size_t last_lidar_points_{0};
+  size_t last_lidar_matches_{0};
+  double last_lidar_mean_residual_m_{0.0};
   int64_t last_gaussian_snapshot_stamp_ns_{0};
   uint32_t last_gaussian_total_count_{0};
   uint32_t last_gaussian_chunk_count_{0};

@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+uint8 STATE_UNCONFIGURED=0
+uint8 STATE_INITIALIZING=1
+uint8 STATE_TRACKING=2
+uint8 STATE_DEGRADED=3
+uint8 STATE_ERROR=255
+
+std_msgs/Header header
+
+uint8 state
+string status_text
+
+uint64 num_raw_images
+uint64 num_raw_pointclouds
+uint64 num_raw_imus
+uint64 num_published_poses
+
+uint64 num_lidar_keyframes
+uint64 lidar_map_points
+uint64 last_lidar_points
+uint64 last_lidar_matches
+float64 last_lidar_mean_residual_m
+
+bool sliding_window_enabled
+uint64 sliding_window_states
+uint64 sliding_window_imu_factors
+uint64 sliding_window_pose_priors
+uint64 sliding_window_dense_priors
+uint64 sliding_window_point_factors
+uint64 sliding_window_plane_factors
+uint64 sliding_window_visual_factors
+uint64 sliding_window_marginalized_states
+uint64 sliding_window_iterations
+float64 sliding_window_initial_cost
+float64 sliding_window_final_cost
+bool sliding_window_converged
+
+uint64 gaussian_snapshot_points
+uint64 gaussian_snapshot_expected_total
+uint64 gaussian_snapshot_chunks_received
+uint64 gaussian_snapshot_expected_chunks
+bool gaussian_snapshot_complete
+
+bool visual_factor_enabled
+bool visual_alignment_valid
+float64 visual_rmse
+float64 visual_subpixel_dx
+float64 visual_subpixel_dy
