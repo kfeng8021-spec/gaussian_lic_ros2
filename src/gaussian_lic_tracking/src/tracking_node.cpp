@@ -118,7 +118,9 @@ public:
     lidar_robust_kernel_m_ = declare_parameter<double>("lidar_robust_kernel_m", 0.15);
     lidar_plane_min_neighbors_ = declare_parameter<int>("lidar_plane_min_neighbors", 5);
     lidar_plane_max_condition_ = declare_parameter<double>("lidar_plane_max_condition", 0.2);
-    lidar_keyframe_translation_m_ = declare_parameter<double>("lidar_keyframe_translation_m", 0.25);
+    lidar_keyframe_translation_m_ = finite_nonnegative_parameter(
+      "lidar_keyframe_translation_m",
+      declare_parameter<double>("lidar_keyframe_translation_m", 0.25));
     const auto lidar_to_imu_translation = declare_parameter<std::vector<double>>(
       "lidar_to_imu_translation_m", std::vector<double>{0.0, 0.0, 0.0});
     const auto lidar_to_imu_rpy = declare_parameter<std::vector<double>>(
@@ -173,10 +175,9 @@ public:
       declare_parameter<double>("sliding_window_smoothness_velocity_weight", 0.1);
     sliding_window_smoothness_bias_weight_ =
       declare_parameter<double>("sliding_window_smoothness_bias_weight", 0.1);
-    const auto gravity = declare_parameter<std::vector<double>>("imu_gravity_w", std::vector<double>{0.0, 0.0, 0.0});
-    if (gravity.size() == 3U) {
-      imu_propagator_.set_gravity_w(Eigen::Vector3d{gravity[0], gravity[1], gravity[2]});
-    }
+    const auto gravity =
+      declare_parameter<std::vector<double>>("imu_gravity_w", std::vector<double>{0.0, 0.0, 0.0});
+    imu_propagator_.set_gravity_w(vector3_from_parameter("imu_gravity_w", gravity));
     imu_propagator_.set_max_history_size(static_cast<size_t>(std::max(imu_history_size_, 2)));
     trajectory_manager_.set_control_interval_ns(std::max<int64_t>(trajectory_control_interval_ns_, 1LL));
     gaussian_lic_tracking::SlidingWindowConfig window_config;
@@ -427,6 +428,14 @@ private:
       throw std::runtime_error(std::string(parameter_name) + " produced an invalid quaternion");
     }
     return q;
+  }
+
+  static double finite_nonnegative_parameter(const char * parameter_name, const double value)
+  {
+    if (!std::isfinite(value) || value < 0.0) {
+      throw std::runtime_error(std::string(parameter_name) + " must be finite and non-negative");
+    }
+    return value;
   }
 
   void handle_depth(const sensor_msgs::msg::Image & msg)

@@ -179,6 +179,8 @@ def main() -> int:
         errors.append("tracking_node must reject non-finite CameraInfo intrinsics at the input boundary")
     if "vector3_from_parameter" not in tracking_node_text or "quaternion_from_rpy_parameter" not in tracking_node_text:
         errors.append("tracking_node must validate finite LiDAR/camera extrinsic parameters")
+    if "finite_nonnegative_parameter" not in tracking_node_text or 'vector3_from_parameter("imu_gravity_w"' not in tracking_node_text:
+        errors.append("tracking_node must validate finite IMU gravity and LiDAR keyframe thresholds")
     if 'declare_parameter<bool>("enable_sliding_window_optimizer", true)' not in tracking_node_text:
         errors.append("tracking_node must default production sliding-window BA to true")
     if 'DeclareLaunchArgument("enable_sliding_window_optimizer", default_value="true")' not in tracking_launch_text:
