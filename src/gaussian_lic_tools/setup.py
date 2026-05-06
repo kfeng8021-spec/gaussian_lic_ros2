@@ -21,6 +21,7 @@ setup(
             "status_stub = gaussian_lic_tools.status_stub:main",
             "synthetic_gs_frame_pub = gaussian_lic_tools.synthetic_gs_frame_pub:main",
             "topic_probe = gaussian_lic_tools.topic_probe:main",
+            "native_tracking_recorder = gaussian_lic_tools.native_tracking_recorder:main",
             "gaussian_lic_offline = gaussian_lic_tools.offline:main",
             "gaussian_lic_bag_check = gaussian_lic_tools.bag_contract:main",
         ],

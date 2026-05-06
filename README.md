@@ -146,6 +146,26 @@ colcon test-result --verbose
 
 Expected local result is `25 tests, 0 errors, 0 failures, 0 skipped`.
 
+Run a real frontend-raw native tracking evidence pass:
+
+```bash
+./scripts/run_native_tracking_bag_report.sh \
+  --bag /home/frank/data/fast_livo/Bright_Screen_Wall_frontend_raw \
+  --output results/fastlivo2/Bright_Screen_Wall_native_tracking_12s
+```
+
+This records native tracking odometry/status and mapper-contract outputs, then
+gates signed-time, IMU, LiDAR, sliding-window, and numeric-Jacobian health in
+`native_tracking_report.json`.
+
+Latest local real-bag check:
+
+```text
+results/fastlivo2/Bright_Screen_Wall_native_tracking_8s/native_tracking_report.json
+ok=true, poses=20, /points_for_gs=21, status_samples=20, imu_factors=3,
+normal_equation_rows=87779, numeric_jacobian_blocks=0
+```
+
 Run the full local verification wrapper:
 
 ```bash
