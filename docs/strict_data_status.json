@@ -51,47 +51,63 @@
   ],
   "data_root": "/home/frank/data",
   "disk": {
-    "free_bytes": 194037772288,
-    "free_gb": 180.7117576599121,
+    "free_bytes": 145033895936,
+    "free_gb": 135.0733413696289,
     "path": "/home/frank/data",
     "total_bytes": 1005867986944,
-    "used_bytes": 760659443712
+    "used_bytes": 809663320064
   },
   "disk_ok": true,
-  "generated_at": "2026-05-06T13:19:36+00:00",
+  "generated_at": "2026-05-06T18:51:00+00:00",
   "min_free_gb": 100.0,
   "ok": false,
   "profiles": {
     "fastlivo": {
       "dataset": "FAST-LIVO",
       "missing": [
-        "frontend_raw_rosbag2",
         "native_reference_trajectory",
-        "raw_ros1_bag",
-        "ros1_baseline_artifacts",
-        "ros2_current_artifacts"
+        "ros1_baseline_artifacts"
       ],
       "ok": false,
       "required_sequences": [
         {
-          "frontend_raw_rosbag2": [],
+          "frontend_raw_rosbag2": [
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
+              "path": "/home/frank/data/fast_livo_mcap/LiDAR_Degenerate_frontend_raw"
+            }
+          ],
           "missing": [
-            "raw_ros1_bag",
-            "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
-            "ros2_current_artifacts",
             "native_reference_trajectory"
           ],
           "native_reference_trajectory": [],
           "ok": false,
-          "raw_ros1_bag": [],
+          "raw_ros1_bag": [
+            {
+              "bytes": 6506600889,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/fast_livo_mcap/FAST-LIVO/LiDAR_Degenerate/LiDAR_Degenerate_0.mcap"
+            }
+          ],
           "roots": [
             "/home/frank/data/fast_livo",
             "/home/frank/data/fastlivo",
             "/home/frank/data/fast_livo_mcap"
           ],
           "ros1_baseline_artifacts": [],
-          "ros2_current_artifacts": [],
+          "ros2_current_artifacts": [
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
+              "path": "/home/frank/gaussian_lic_ros2/results/fastlivo/LiDAR_Degenerate_native_tracking_scan_order_60s"
+            }
+          ],
           "sequence": "LiDAR_Degenerate",
           "split_raw_components": {}
         },
@@ -504,7 +520,6 @@
       "dataset": "MCD",
       "missing": [
         "frontend_raw_rosbag2",
-        "raw_component_camera_d435i",
         "ros1_baseline_artifacts",
         "ros2_current_artifacts"
       ],
@@ -513,7 +528,6 @@
         {
           "frontend_raw_rosbag2": [],
           "missing": [
-            "raw_component_camera_d435i",
             "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
             "ros2_current_artifacts"
@@ -544,6 +558,13 @@
           "ok": false,
           "raw_ros1_bag": [
             {
+              "bytes": 14264815921,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag.bz2"
+            },
+            {
               "bytes": 568196474,
               "exists": true,
               "is_dir": false,
@@ -566,7 +587,15 @@
           "ros2_current_artifacts": [],
           "sequence": "ntu_day_01",
           "split_raw_components": {
-            "camera_d435i": [],
+            "camera_d435i": [
+              {
+                "bytes": 14264815921,
+                "exists": true,
+                "is_dir": false,
+                "is_file": true,
+                "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag.bz2"
+              }
+            ],
             "imu_vn100_or_vn200": [
               {
                 "bytes": 33957020,
