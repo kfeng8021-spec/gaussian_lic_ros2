@@ -12,6 +12,7 @@ ENABLE_VISUAL_FACTOR_GATE=true
 SLIDING_WINDOW_IMU_WEIGHT=1.0
 SLIDING_WINDOW_MAX_NORMAL_EQUATION_CONDITION=10000000000000.0
 EXPECT_IMU_FACTOR=true
+MAX_OPTIMIZATION_MS="${TRACKING_SMOKE_MAX_OPTIMIZATION_MS:-5000.0}"
 
 usage() {
   cat <<'EOF'
@@ -177,6 +178,21 @@ status_has_finite_number() {
   [[ "${value}" =~ ^[-+]?(([0-9]+([.][0-9]*)?)|([.][0-9]+))([eE][-+]?[0-9]+)?$ ]]
 }
 
+status_number_le() {
+  local key="$1"
+  local max_value="$2"
+  awk -v key="${key}:" -v max_value="${max_value}" '
+    $1 == key {
+      found = 1
+      exit !(($2 + 0.0) <= max_value)
+    }
+    END {
+      if (!found) {
+        exit 1
+      }
+    }' "${status_file}"
+}
+
 status_matches() {
   rg -q "executor_callback_serialization_enabled: true" "${status_file}" &&
     rg -q "sensor_qos_reliability: best_effort" "${status_file}" &&
@@ -228,6 +244,7 @@ status_matches() {
     rg -q "sliding_window_optimization_skip_count:" "${status_file}" &&
     rg -q "sliding_window_invalid_optimized_states: 0" "${status_file}" &&
     status_has_finite_number "sliding_window_last_optimization_duration_ms" &&
+    status_number_le "sliding_window_last_optimization_duration_ms" "${MAX_OPTIMIZATION_MS}" &&
     rg -q "sliding_window_feedback_updates:" "${status_file}" &&
     rg -q "sliding_window_last_feedback_stamp_ns:" "${status_file}" &&
     rg -q "sliding_window_last_feedback_translation_delta_m:" "${status_file}" &&
