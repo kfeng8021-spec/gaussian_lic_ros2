@@ -193,6 +193,7 @@ baseline_manifest.json
 - [x] Add Schur-complement normal-equation math coverage for the tracking marginalization path, with deterministic equivalence against the full normal-equation solve.
 - [x] Expose reusable sliding-window residual/Jacobian/Hessian/RHS normal-equation linearization and cover it with CTest.
 - [x] Add analytic Jacobians for full current IMU preintegration factors, pose-prior, state-prior, retained dense-prior, IMU bias-continuity, and SE3 photometric window rows, with deterministic CTest coverage.
+- [x] Upgrade IMU preintegration rotation residuals to SO(3) log-map semantics, including AutoDiff start-bias sensitivity and deterministic residual/Jacobian probes.
 - [x] Feed Schur-complement marginalization back into the live sliding window as retained-state dense priors, with fallback to diagonal anchoring when the marginalized block has no information.
 - [x] Publish dense-prior marginalization rank and singular-value health, and gate it in native tracking smoke.
 - [x] Add direct LiDAR point-to-point correspondence factors to the optional tracking window.
@@ -251,6 +252,7 @@ baseline_manifest.json
 - [x] Publish and smoke-gate optimized IMU re-anchor and B-spline trajectory-control runtime status fields.
 - [x] Add optional SE3 photometric pose factors to the sliding-window optimizer with deterministic CTest coverage.
 - [x] Use SO(3) log-map rotation residuals and left-Jacobian inverse blocks for pose/state/dense/SE3 priors, with nonzero-residual finite-difference CTest coverage.
+- [x] Use SO(3) log-map residuals and left-Jacobian inverse blocks for IMU preintegration rotation rows, with finite-difference CTest coverage for nonzero IMU errors and bias sensitivity.
 - [x] Extract runtime SE3 photometric window factors from rendered/current/depth images and gate them in native tracking smoke.
 - [x] Add robust runtime SE3 photometric sampling gates for depth range, image gradient, residual outliers, Huber weighting, and status-reported sample quality.
 - [x] Publish cumulative visual-alignment and SE3 photometric window-factor totals so optimized runs still prove visual BA usage after active-window trimming.

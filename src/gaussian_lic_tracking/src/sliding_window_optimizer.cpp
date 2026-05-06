@@ -63,6 +63,24 @@ Quaternionad normalized_quaternion(const Quaternionad & quaternion)
     quaternion.z() / norm);
 }
 
+Vector3ad quaternion_log_vector_autodiff(Quaternionad quaternion)
+{
+  using std::atan2;
+  using std::sqrt;
+
+  quaternion = normalized_quaternion(quaternion);
+  if (quaternion.w().value() < 0.0) {
+    quaternion.coeffs() *= -1.0;
+  }
+  const Vector3ad vector = quaternion.vec();
+  const BiasAutoDiff vector_norm = sqrt(vector.squaredNorm());
+  if (vector_norm.value() < 1.0e-12) {
+    return 2.0 * vector;
+  }
+  const BiasAutoDiff angle = 2.0 * atan2(vector_norm, quaternion.w());
+  return (angle / vector_norm) * vector;
+}
+
 Vector3ad rotate_vector(const Quaternionad & quaternion, const Vector3ad & vector)
 {
   return quaternion * vector;
@@ -184,18 +202,8 @@ Eigen::Matrix3d rotation_residual_middle_perturbation_jacobian(
   const Eigen::Quaterniond & measured_delta_q,
   const Eigen::Quaterniond & predicted_delta_q)
 {
-  const Eigen::Quaterniond measured_inv = measured_delta_q.normalized().inverse();
-  const Eigen::Quaterniond predicted = predicted_delta_q.normalized();
-  const Eigen::Quaterniond error = (measured_inv * predicted).normalized();
-  const double sign = error.w() < 0.0 ? -1.0 : 1.0;
-  Eigen::Matrix3d jacobian;
-  for (Eigen::Index column = 0; column < 3; ++column) {
-    Eigen::Vector3d basis = Eigen::Vector3d::Zero();
-    basis[column] = 1.0;
-    const Eigen::Quaterniond pure_delta(0.0, basis.x(), basis.y(), basis.z());
-    jacobian.col(column) = sign * (measured_inv * pure_delta * predicted).vec();
-  }
-  return jacobian;
+  return so3_left_jacobian_inverse(relative_rotation_vector(measured_delta_q, predicted_delta_q)) *
+         measured_delta_q.normalized().inverse().toRotationMatrix();
 }
 
 Eigen::Matrix<double, 9, 6> imu_preintegration_bias_residual_jacobian(
@@ -270,12 +278,9 @@ Eigen::Matrix<double, 9, 6> imu_preintegration_bias_residual_jacobian(
       to_state.p_w_i - from_state.p_w_i - from_state.v_w_i * delta_t_s -
       0.5 * factor.gravity_w * delta_t_s * delta_t_s));
 
-  Quaternionad error = normalized_quaternion(delta_q.conjugate() * predicted_delta_q);
-  if (error.w().value() < 0.0) {
-    error.coeffs() *= -1.0;
-  }
+  const Quaternionad error = normalized_quaternion(delta_q.conjugate() * predicted_delta_q);
   Eigen::Matrix<BiasAutoDiff, 9, 1> residual;
-  residual.template segment<3>(0) = 2.0 * error.vec();
+  residual.template segment<3>(0) = quaternion_log_vector_autodiff(error);
   residual.template segment<3>(3) = predicted_delta_v - delta_v;
   residual.template segment<3>(6) = predicted_delta_p - delta_p;
 

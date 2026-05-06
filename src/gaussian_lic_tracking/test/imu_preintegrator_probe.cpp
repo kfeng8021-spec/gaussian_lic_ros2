@@ -45,6 +45,16 @@ int main()
     return 1;
   }
 
+  auto end_with_rotation_error = end;
+  end_with_rotation_error.q_w_i =
+    (preintegrator.delta_q() *
+    Eigen::Quaterniond(Eigen::AngleAxisd(1.2, Eigen::Vector3d::UnitX()))).normalized();
+  const auto log_residual = preintegrator.residual(start, end_with_rotation_error);
+  if (std::abs(log_residual.rotation_norm - 1.2) > 1.0e-12) {
+    std::cerr << "IMU preintegration rotation residual must be the SO(3) log-map angle\n";
+    return 1;
+  }
+
   bool rejected_bad_measurement = false;
   try {
     preintegrator.add_measurement(

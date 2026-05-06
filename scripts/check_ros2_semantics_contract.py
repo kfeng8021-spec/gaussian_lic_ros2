@@ -19,6 +19,7 @@ TRACKING_LAUNCH = ROOT / "src" / "gaussian_lic_bringup" / "launch" / "tracking.l
 TRACKING_NODE = ROOT / "src" / "gaussian_lic_tracking" / "src" / "tracking_node.cpp"
 SLIDING_WINDOW_OPTIMIZER = ROOT / "src" / "gaussian_lic_tracking" / "src" / "sliding_window_optimizer.cpp"
 SLIDING_WINDOW_HEADER = ROOT / "src" / "gaussian_lic_tracking" / "include" / "gaussian_lic_tracking" / "sliding_window_optimizer.hpp"
+IMU_PREINTEGRATOR = ROOT / "src" / "gaussian_lic_tracking" / "src" / "imu_preintegrator.cpp"
 TRACKING_STATUS_MSG = ROOT / "src" / "gaussian_lic_msgs" / "msg" / "TrackingStatus.msg"
 SYNTHETIC_GS_FRAME_PUB = (
     ROOT / "src" / "gaussian_lic_tools" / "gaussian_lic_tools" / "synthetic_gs_frame_pub.py"
@@ -67,6 +68,7 @@ def main() -> int:
     tracking_node_text = read(TRACKING_NODE)
     sliding_window_text = read(SLIDING_WINDOW_OPTIMIZER)
     sliding_window_header_text = read(SLIDING_WINDOW_HEADER)
+    imu_preintegrator_text = read(IMU_PREINTEGRATOR)
     tracking_status_msg_text = read(TRACKING_STATUS_MSG)
     synthetic_pub_text = read(SYNTHETIC_GS_FRAME_PUB)
     tracking_smoke_text = read(TRACKING_SMOKE_TEST)
@@ -344,6 +346,10 @@ def main() -> int:
         errors.append("sliding-window rotation priors must use SO(3) log-map residuals")
     if "rotation_residual_left_perturbation_jacobian" not in sliding_window_text:
         errors.append("sliding-window rotation priors must use SO(3) left-Jacobian inverse blocks")
+    if "quaternion_log_vector_autodiff(error)" not in sliding_window_text:
+        errors.append("IMU bias Jacobian residual must use SO(3) log-map AutoDiff, not 2*quaternion-vector")
+    if "return quaternion_log_vector(" not in imu_preintegrator_text:
+        errors.append("IMU preintegration rotation residual must use SO(3) log-map residuals")
     if 'declare_parameter("imu_samples_per_frame", 3)' not in synthetic_pub_text:
         errors.append("synthetic_gs_frame_pub must publish at least three IMU samples per frame by default")
     if 'declare_parameter("imu_stamp_lead_ns", 10000000)' not in synthetic_pub_text:

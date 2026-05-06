@@ -9,6 +9,25 @@
 
 namespace gaussian_lic_tracking
 {
+namespace
+{
+
+Eigen::Vector3d quaternion_log_vector(Eigen::Quaterniond quaternion)
+{
+  quaternion.normalize();
+  if (quaternion.w() < 0.0) {
+    quaternion.coeffs() *= -1.0;
+  }
+  const Eigen::Vector3d vector = quaternion.vec();
+  const double vector_norm = vector.norm();
+  if (vector_norm < 1.0e-12) {
+    return 2.0 * vector;
+  }
+  const double angle = 2.0 * std::atan2(vector_norm, quaternion.w());
+  return angle * vector / vector_norm;
+}
+
+}  // namespace
 
 void ImuPreintegrator::reset(const int64_t start_stamp_ns, const ImuBias & bias)
 {
@@ -83,11 +102,8 @@ Eigen::Vector3d ImuPreintegrator::rotation_residual(
   const Eigen::Quaterniond & measured_delta,
   const Eigen::Quaterniond & predicted_delta)
 {
-  Eigen::Quaterniond error = (measured_delta.normalized().inverse() * predicted_delta.normalized()).normalized();
-  if (error.w() < 0.0) {
-    error.coeffs() *= -1.0;
-  }
-  return 2.0 * error.vec();
+  return quaternion_log_vector(
+    measured_delta.normalized().inverse() * predicted_delta.normalized());
 }
 
 ImuPreintegrationResidual ImuPreintegrator::residual(
