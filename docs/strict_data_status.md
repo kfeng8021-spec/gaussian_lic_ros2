@@ -1,8 +1,8 @@
 # Strict Data Input Audit
 
-Generated: `2026-05-06T18:51:00+00:00`
+Generated: `2026-05-06T19:15:22+00:00`
 Data root: `/home/frank/data`
-Disk free: `135.07 GiB` (minimum requested `100.00 GiB`) - PASS
+Disk free: `112.28 GiB` (minimum requested `100.00 GiB`) - PASS
 Strict evidence currently materialized: `2/7`
 
 | Profile | Dataset | Status | Missing Inputs |
@@ -10,7 +10,7 @@ Strict evidence currently materialized: `2/7`
 | `fastlivo` | FAST-LIVO | MISSING | native_reference_trajectory, ros1_baseline_artifacts |
 | `fastlivo2` | FAST-LIVO2 | MISSING | native_reference_trajectory, ros1_baseline_artifacts |
 | `m2dgr` | M2DGR | MISSING | frontend_raw_rosbag2, raw_ros1_bag, ros1_baseline_artifacts, ros2_current_artifacts |
-| `mcd` | MCD | MISSING | frontend_raw_rosbag2, ros1_baseline_artifacts, ros2_current_artifacts |
+| `mcd` | MCD | MISSING | ros1_baseline_artifacts |
 | `r3live` | R3LIVE | MISSING | native_reference_trajectory, ros1_baseline_artifacts |
 
 ## Sequence Detail
@@ -53,12 +53,14 @@ Strict evidence currently materialized: `2/7`
   - native_reference_trajectory: `/home/frank/data/m2dgr/room_03/room_03_gt.tum`
 
 ### mcd
-- `ntu_day_01`: MISSING; missing: frontend_raw_rosbag2, ros1_baseline_artifacts, ros2_current_artifacts
-  - raw_ros1_bag: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag.bz2`
+- `ntu_day_01`: MISSING; missing: ros1_baseline_artifacts
+  - raw_ros1_bag: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag`
+  - frontend_raw_rosbag2: `/home/frank/data/mcd/ntu_day_01_frontend_raw`
+  - ros2_current_artifacts: `/home/frank/gaussian_lic_ros2/results/mcd/ntu_day_01_native_tracking_scan_order_60s`
   - native_reference_trajectory: `/home/frank/data/mcd/ntu_day_01/groundtruth/pose_inW.tum`
-  - raw_component_camera_d435i: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag.bz2`
-  - raw_component_lidar_mid70: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_mid70.bag.bz2`
-  - raw_component_imu_vn100_or_vn200: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_vn100.bag.bz2`
+  - raw_component_camera_d435i: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag`
+  - raw_component_lidar_mid70: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_mid70.bag`
+  - raw_component_imu_vn100_or_vn200: `/home/frank/data/mcd/ntu_day_01/ntu_day_01_vn100.bag`
 
 ### r3live
 - `hku_park_00`: MISSING; missing: ros1_baseline_artifacts, native_reference_trajectory

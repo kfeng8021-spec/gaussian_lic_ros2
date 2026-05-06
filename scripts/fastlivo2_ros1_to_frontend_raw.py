@@ -61,7 +61,7 @@ PROFILE_DEFAULTS = {
             "/d435i/color/image_raw/compressed",
         ),
         "lidar_topics": ("/livox/lidar", "/os_cloud_node/points", "/os1_cloud_node/points"),
-        "imu_topics": ("/os_cloud_node/imu", "/os1_cloud_node/imu", "/livox/imu"),
+        "imu_topics": ("/vn100/imu", "/vn200/imu", "/d435i/imu", "/os_cloud_node/imu", "/os1_cloud_node/imu", "/livox/imu"),
         "intrinsics": {
             "fx": 385.538839108671,
             "fy": 385.6733947077097,

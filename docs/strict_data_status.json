@@ -51,14 +51,14 @@
   ],
   "data_root": "/home/frank/data",
   "disk": {
-    "free_bytes": 145033895936,
-    "free_gb": 135.0733413696289,
+    "free_bytes": 120560975872,
+    "free_gb": 112.28115844726562,
     "path": "/home/frank/data",
     "total_bytes": 1005867986944,
-    "used_bytes": 809663320064
+    "used_bytes": 834136240128
   },
   "disk_ok": true,
-  "generated_at": "2026-05-06T18:51:00+00:00",
+  "generated_at": "2026-05-06T19:15:22+00:00",
   "min_free_gb": 100.0,
   "ok": false,
   "profiles": {
@@ -519,18 +519,21 @@
     "mcd": {
       "dataset": "MCD",
       "missing": [
-        "frontend_raw_rosbag2",
-        "ros1_baseline_artifacts",
-        "ros2_current_artifacts"
+        "ros1_baseline_artifacts"
       ],
       "ok": false,
       "required_sequences": [
         {
-          "frontend_raw_rosbag2": [],
+          "frontend_raw_rosbag2": [
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
+              "path": "/home/frank/data/mcd/ntu_day_01_frontend_raw"
+            }
+          ],
           "missing": [
-            "frontend_raw_rosbag2",
-            "ros1_baseline_artifacts",
-            "ros2_current_artifacts"
+            "ros1_baseline_artifacts"
           ],
           "native_reference_trajectory": [
             {
@@ -562,6 +565,27 @@
               "exists": true,
               "is_dir": false,
               "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag"
+            },
+            {
+              "bytes": 568196474,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_mid70.bag"
+            },
+            {
+              "bytes": 33957020,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_vn100.bag"
+            },
+            {
+              "bytes": 14264815921,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
               "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag.bz2"
             },
             {
@@ -584,10 +608,24 @@
             "/home/frank/data/MCD"
           ],
           "ros1_baseline_artifacts": [],
-          "ros2_current_artifacts": [],
+          "ros2_current_artifacts": [
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
+              "path": "/home/frank/gaussian_lic_ros2/results/mcd/ntu_day_01_native_tracking_scan_order_60s"
+            }
+          ],
           "sequence": "ntu_day_01",
           "split_raw_components": {
             "camera_d435i": [
+              {
+                "bytes": 14264815921,
+                "exists": true,
+                "is_dir": false,
+                "is_file": true,
+                "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_d435i.bag"
+              },
               {
                 "bytes": 14264815921,
                 "exists": true,
@@ -602,10 +640,24 @@
                 "exists": true,
                 "is_dir": false,
                 "is_file": true,
+                "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_vn100.bag"
+              },
+              {
+                "bytes": 33957020,
+                "exists": true,
+                "is_dir": false,
+                "is_file": true,
                 "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_vn100.bag.bz2"
               }
             ],
             "lidar_mid70": [
+              {
+                "bytes": 568196474,
+                "exists": true,
+                "is_dir": false,
+                "is_file": true,
+                "path": "/home/frank/data/mcd/ntu_day_01/ntu_day_01_mid70.bag"
+              },
               {
                 "bytes": 568196474,
                 "exists": true,
