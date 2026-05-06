@@ -292,10 +292,16 @@ def main() -> int:
         errors.append("tracking_node must keep a delayed observed-image cache for async mapper feedback")
     if 'DeclareLaunchArgument("observed_frame_cache_size", default_value="64")' not in tracking_launch_text:
         errors.append("tracking.launch.py must expose the observed-image cache size")
+    if 'declare_parameter<int>("visual_pending_factor_queue_size", 64)' not in tracking_node_text:
+        errors.append("tracking_node must queue delayed visual factors instead of keeping a single pending slot")
+    if 'DeclareLaunchArgument("visual_pending_factor_queue_size", default_value="64")' not in tracking_launch_text:
+        errors.append("tracking.launch.py must expose the visual pending factor queue size")
     if "select_visual_factor_reference" not in tracking_node_text:
         errors.append("tracking_node must attach delayed visual factors to active window states")
     if "observed_frame_cache_size:=128" not in native_tracking_report_text:
         errors.append("native tracking real-bag report must enlarge the observed-frame cache")
+    if "visual_pending_factor_queue_size:=128" not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must enlarge the visual pending-factor queue")
     if 'declare_parameter<bool>("enable_sliding_window_smoothness_factor", true)' not in tracking_node_text:
         errors.append("tracking_node must default trajectory smoothness BA factors to true")
     if 'DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true")' not in tracking_launch_text:

@@ -26,6 +26,11 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
   may repeat a stamp, while LiDAR and IMU must be strictly increasing.
 - Native tracking also rejects non-finite IMU angular velocity or acceleration
   before propagation/preintegration and publishes an invalid-measurement counter.
+- IMU callbacks must propagate the current IMU sample and append it to the
+  sliding-window preintegrator before releasing any point clouds that were waiting
+  for that sample. Releasing the queue first recreates a ROS2 callback-order race:
+  the LiDAR frame uses the previous IMU span, then strict BA reports a hidden IMU
+  time-gap skip.
 
 ## QoS
 
@@ -49,6 +54,10 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
 - Visual and SE3 photometric BA samples use bounded mapper-render/depth caches
   and nearest-stamp selection inside `visual_factor_max_dt_ns`, so rosbag2 topic
   arrival order cannot silently pair an image with an old render or depth frame.
+- Delayed visual-alignment and SE3 photometric BA factors use bounded pending
+  queues instead of single-slot "latest" storage. This preserves multiple valid
+  mapper-feedback factors under asynchronous image/render arrival while still
+  surfacing queue overflow or freshness expiry through stale-drop counters.
 - Reliable QoS is opt-in for controlled local rosbag2 replay or drivers known to
   publish reliable sensor streams.
 - State and visualization outputs that are naturally latched, such as path and

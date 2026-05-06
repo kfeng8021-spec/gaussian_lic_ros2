@@ -275,7 +275,11 @@ three-state rotation-rate, position-rate, velocity-acceleration, and bias-rate
 continuity in the native joint BA window.
 The pointcloud/IMU wait counters expose the bounded queue that holds LiDAR
 frames until IMU propagation has reached the frame stamp, preserving ROS1-style
-sequential estimator math under rosbag2 multi-topic playback.
+sequential estimator math under rosbag2 multi-topic playback. The gate checks
+cumulative LiDAR correspondence evidence and feedback counters rather than
+requiring the last active window to still contain a LiDAR point factor or forcing
+an IMU re-anchor; after the current IMU sample is integrated before queued
+LiDAR release, backward re-anchoring can be correctly skipped.
 When `enable_external_odometry_prior` is explicitly enabled, the frontend also
 reports received, matched, missed, invalid, and stamp-regression counts for the
 reference odometry pose-prior stream. This keeps reference-assisted trajectory
