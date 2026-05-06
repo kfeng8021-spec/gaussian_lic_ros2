@@ -51,14 +51,14 @@
   ],
   "data_root": "/home/frank/data",
   "disk": {
-    "free_bytes": 63158886400,
-    "free_gb": 58.82129669189453,
+    "free_bytes": 217088266240,
+    "free_gb": 202.17920303344727,
     "path": "/home/frank/data",
     "total_bytes": 1005867986944,
-    "used_bytes": 891538329600
+    "used_bytes": 737608949760
   },
-  "disk_ok": false,
-  "generated_at": "2026-05-06T11:06:21+00:00",
+  "disk_ok": true,
+  "generated_at": "2026-05-06T11:33:21+00:00",
   "min_free_gb": 100.0,
   "ok": false,
   "profiles": {
@@ -87,7 +87,8 @@
           "raw_ros1_bag": [],
           "roots": [
             "/home/frank/data/fast_livo",
-            "/home/frank/data/fastlivo"
+            "/home/frank/data/fastlivo",
+            "/home/frank/data/fast_livo_mcap"
           ],
           "ros1_baseline_artifacts": [],
           "ros2_current_artifacts": [],
@@ -108,7 +109,8 @@
           "raw_ros1_bag": [],
           "roots": [
             "/home/frank/data/fast_livo",
-            "/home/frank/data/fastlivo"
+            "/home/frank/data/fastlivo",
+            "/home/frank/data/fast_livo_mcap"
           ],
           "ros1_baseline_artifacts": [],
           "ros2_current_artifacts": [],
@@ -129,7 +131,8 @@
           "raw_ros1_bag": [],
           "roots": [
             "/home/frank/data/fast_livo",
-            "/home/frank/data/fastlivo"
+            "/home/frank/data/fastlivo",
+            "/home/frank/data/fast_livo_mcap"
           ],
           "ros1_baseline_artifacts": [],
           "ros2_current_artifacts": [],
@@ -150,7 +153,8 @@
           "raw_ros1_bag": [],
           "roots": [
             "/home/frank/data/fast_livo",
-            "/home/frank/data/fastlivo"
+            "/home/frank/data/fastlivo",
+            "/home/frank/data/fast_livo_mcap"
           ],
           "ros1_baseline_artifacts": [],
           "ros2_current_artifacts": [],
@@ -160,7 +164,8 @@
       ],
       "source_urls": [
         "https://github.com/hku-mars/FAST-LIVO",
-        "https://connecthkuhk-my.sharepoint.com/personal/zhengcr_connect_hku_hk/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fzhengcr%5Fconnect%5Fhku%5Fhk%2FDocuments%2FFAST%2DLIVO%2DDatasets&ga=1"
+        "https://connecthkuhk-my.sharepoint.com/personal/zhengcr_connect_hku_hk/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fzhengcr%5Fconnect%5Fhku%5Fhk%2FDocuments%2FFAST%2DLIVO%2DDatasets&ga=1",
+        "https://huggingface.co/datasets/DapengFeng/MCAP/tree/main/FAST-LIVO"
       ]
     },
     "fastlivo2": {
@@ -316,7 +321,6 @@
       "dataset": "M2DGR",
       "missing": [
         "frontend_raw_rosbag2",
-        "native_reference_trajectory",
         "raw_ros1_bag",
         "ros1_baseline_artifacts",
         "ros2_current_artifacts"
@@ -329,10 +333,17 @@
             "raw_ros1_bag",
             "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
-            "ros2_current_artifacts",
-            "native_reference_trajectory"
+            "ros2_current_artifacts"
           ],
-          "native_reference_trajectory": [],
+          "native_reference_trajectory": [
+            {
+              "bytes": 487151,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/m2dgr/room_01/room_01_gt.txt"
+            }
+          ],
           "ok": false,
           "raw_ros1_bag": [],
           "roots": [
@@ -350,10 +361,17 @@
             "raw_ros1_bag",
             "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
-            "ros2_current_artifacts",
-            "native_reference_trajectory"
+            "ros2_current_artifacts"
           ],
-          "native_reference_trajectory": [],
+          "native_reference_trajectory": [
+            {
+              "bytes": 504403,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/m2dgr/room_02/room_02_gt.txt"
+            }
+          ],
           "ok": false,
           "raw_ros1_bag": [],
           "roots": [
@@ -371,10 +389,17 @@
             "raw_ros1_bag",
             "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
-            "ros2_current_artifacts",
-            "native_reference_trajectory"
+            "ros2_current_artifacts"
           ],
-          "native_reference_trajectory": [],
+          "native_reference_trajectory": [
+            {
+              "bytes": 849029,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/m2dgr/room_03/room_03_gt.txt"
+            }
+          ],
           "ok": false,
           "raw_ros1_bag": [],
           "roots": [
@@ -395,7 +420,6 @@
       "dataset": "MCD",
       "missing": [
         "frontend_raw_rosbag2",
-        "native_reference_trajectory",
         "raw_component_camera_d435i",
         "ros1_baseline_artifacts",
         "ros2_current_artifacts"
@@ -408,10 +432,24 @@
             "raw_component_camera_d435i",
             "frontend_raw_rosbag2",
             "ros1_baseline_artifacts",
-            "ros2_current_artifacts",
-            "native_reference_trajectory"
+            "ros2_current_artifacts"
           ],
-          "native_reference_trajectory": [],
+          "native_reference_trajectory": [
+            {
+              "bytes": 953650,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/groundtruth/pose_inW.csv"
+            },
+            {
+              "bytes": 4144802,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/data/mcd/ntu_day_01/groundtruth/spline.csv"
+            }
+          ],
           "ok": false,
           "raw_ros1_bag": [
             {

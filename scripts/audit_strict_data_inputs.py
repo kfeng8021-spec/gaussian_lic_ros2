@@ -23,11 +23,12 @@ DEFAULT_MATRIX = Path("docs/strict_parity_matrix.json")
 CATALOG: dict[str, dict[str, Any]] = {
     "fastlivo": {
         "dataset": "FAST-LIVO",
-        "roots": ("fast_livo", "fastlivo"),
+        "roots": ("fast_livo", "fastlivo", "fast_livo_mcap"),
         "required_sequences": ("LiDAR_Degenerate", "Visual_Challenge", "hku1", "hku2"),
         "source_urls": (
             "https://github.com/hku-mars/FAST-LIVO",
             "https://connecthkuhk-my.sharepoint.com/personal/zhengcr_connect_hku_hk/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fzhengcr%5Fconnect%5Fhku%5Fhk%2FDocuments%2FFAST%2DLIVO%2DDatasets&ga=1",
+            "https://huggingface.co/datasets/DapengFeng/MCAP/tree/main/FAST-LIVO",
         ),
     },
     "fastlivo2": {
@@ -68,7 +69,7 @@ CATALOG: dict[str, dict[str, Any]] = {
 }
 
 
-RAW_PATTERNS = ("*.bag", "*.bag.bz2")
+RAW_PATTERNS = ("*.bag", "*.bag.bz2", "*.mcap")
 REFERENCE_PATTERNS = ("*.tum", "*.txt", "*.csv")
 
 
