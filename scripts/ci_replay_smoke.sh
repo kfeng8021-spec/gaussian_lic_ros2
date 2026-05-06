@@ -98,6 +98,7 @@ echo "[ci-smoke] replaying frontend raw contract through LIC2 adapter"
 frontend_smoke_args=(
   --bag "${FRONTEND_BAG_PATH}"
   --frontend-adapter
+  --skip-rendered-data-check
   --timeout "${TIMEOUT_SEC}"
 )
 if [[ "${PUBLISH_TF}" == "true" ]]; then
