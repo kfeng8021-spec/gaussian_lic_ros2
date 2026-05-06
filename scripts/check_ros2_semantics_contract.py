@@ -28,6 +28,7 @@ SYNTHETIC_GS_FRAME_PUB = (
 TRACKING_SMOKE_TEST = ROOT / "scripts" / "tracking_smoke_test.sh"
 SEMANTICS_DOC = ROOT / "docs" / "ROS2_SEMANTICS.md"
 TIMING_AUDIT = ROOT / "scripts" / "rosbag2_timing_audit.py"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 
 
 def read(path: Path) -> str:
@@ -61,6 +62,8 @@ def main() -> int:
         errors.append("docs/ROS2_SEMANTICS.md is missing")
     if not TIMING_AUDIT.is_file():
         errors.append("scripts/rosbag2_timing_audit.py is missing")
+    if not CI_WORKFLOW.is_file():
+        errors.append(".github/workflows/ci.yaml is missing")
 
     mapping_text = read(MAPPING_NODE)
     frontend_text = read(FRONTEND_ADAPTER)
@@ -75,6 +78,12 @@ def main() -> int:
     synthetic_pub_text = read(SYNTHETIC_GS_FRAME_PUB)
     tracking_smoke_text = read(TRACKING_SMOKE_TEST)
     timing_audit_text = read(TIMING_AUDIT)
+    ci_workflow_text = read(CI_WORKFLOW)
+
+    if "humble" in ci_workflow_text.lower():
+        errors.append("CI workflow must stay Jazzy-only; do not add ROS2 Humble to the build matrix")
+    if "ros_distro: [jazzy]" not in ci_workflow_text:
+        errors.append("CI workflow build matrix must be exactly ros_distro: [jazzy]")
 
     if "stamp_to_sec" in mapping_text:
         errors.append("mapping_node still exposes stamp_to_sec; use int64 nanoseconds for sync math")

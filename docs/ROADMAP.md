@@ -349,6 +349,8 @@ baseline_manifest.json
 - [x] Preserve distinct delayed visual observations when several image pairs attach to the same active BA state.
   - Visual-alignment and SE3 photometric window factors now use a deterministic source id derived from the observed/rendered stamp pair instead of a fixed source id, so duplicate processing of the same pair still replaces while distinct image pairs do not overwrite each other after active-window stamp snapping.
   - 2026-05-06 local Bright 30s visual+scan-order deskew run at `results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_scan_order_deskew_source_id_30s/native_tracking_report.json` passes with 110 odometry poses, 110 mapper point frames, 108 IMU factors, 56 visual-alignment factors, 11 SE3 photometric factors, zero visual/SE3 factor replacements, zero pending visual/SE3 queue backlog, 2,640,000 deskew queries, 2,562,222 deskew hits, zero IMU factor/time-gap skips, zero invalid optimized states, 18,064 normal-equation rows, condition number 9.500e6, rank ratio 1.0, and zero numeric-Jacobian fallback.
+- [x] Gate CI as Jazzy-only so Humble cannot re-enter the build matrix accidentally.
+  - `check_ros2_semantics_contract.py` now fails if `.github/workflows/ci.yaml` contains `humble` or if the ROS build matrix is not exactly `ros_distro: [jazzy]`.
 - [x] Local SPNet TensorRT engine benchmark passes the runtime target.
   - TensorRT 10.9 CUDA 12.8 builds `/home/frank/Software/TensorRT-engines/spnet_512_640_fp16.engine` for the RTX 5070 Ti `sm_120` GPU.
   - Mean `trtexec` latency is 26.4492 ms at `512x640`, below the 30 ms/frame target.
