@@ -1968,7 +1968,8 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
 
   const auto variables = variable_layout();
   const size_t variable_count = variables.size() * kStateDof;
-  auto refresh_normal_equation_summary = [&summary, this, &variables]() {
+  auto refresh_normal_equation_summary = [&summary](
+      const SlidingWindowNormalEquation & normal) {
       summary.normal_equation_rows = 0U;
       summary.normal_equation_cols = 0U;
       summary.normal_equation_rank = 0U;
@@ -1978,7 +1979,6 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
       summary.normal_equation_max_singular_value = 0.0;
       summary.normal_equation_condition_number = 0.0;
 
-      const auto normal = linearize(states_, variables, 0.0);
       if (!normal.valid) {
         return;
       }
@@ -2050,7 +2050,8 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
         summary.dense_prior_min_singular_value = min_positive;
       }
     };
-  auto refresh_bias_summary = [&summary, this, &variables]() {
+  auto refresh_bias_summary = [&summary, this, &variables](
+      const SlidingWindowNormalEquation & normal) {
       summary.gyro_bias_norm = 0.0;
       summary.accel_bias_norm = 0.0;
       for (const auto & state : states_) {
@@ -2062,7 +2063,6 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
       if (variables.empty()) {
         return;
       }
-      const auto normal = linearize(states_, variables, 0.0);
       if (!normal.valid || normal.hessian.rows() == 0) {
         return;
       }
@@ -2104,7 +2104,8 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
       summary.smoothness_factor_cost = breakdown.smoothness_factor_cost;
     };
   refresh_dense_prior_summary();
-  refresh_normal_equation_summary();
+  const auto initial_normal_equation = linearize(states_, variables, 0.0);
+  refresh_normal_equation_summary(initial_normal_equation);
   auto normal_equation_is_degenerate = [&summary, this]() {
       if (summary.normal_equation_cols == 0U) {
         return false;
@@ -2127,29 +2128,29 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   if (summary.orphan_factor_count > 0U) {
     summary.normal_equation_degenerate = true;
     ++summary.rejected_steps;
-    refresh_bias_summary();
+    refresh_bias_summary(initial_normal_equation);
     refresh_cost_summary();
     return summary;
   }
   if (summary.state_gap_degenerate) {
     summary.normal_equation_degenerate = true;
     ++summary.rejected_steps;
-    refresh_bias_summary();
+    refresh_bias_summary(initial_normal_equation);
     refresh_cost_summary();
     return summary;
   }
   if (residual.size() == 0 || variable_count == 0U) {
     summary.converged = true;
-    refresh_bias_summary();
+    refresh_bias_summary(initial_normal_equation);
     refresh_dense_prior_summary();
-    refresh_normal_equation_summary();
+    refresh_normal_equation_summary(initial_normal_equation);
     refresh_cost_summary();
     return summary;
   }
   if (normal_equation_is_degenerate()) {
     summary.normal_equation_degenerate = true;
     ++summary.rejected_steps;
-    refresh_bias_summary();
+    refresh_bias_summary(initial_normal_equation);
     refresh_cost_summary();
     return summary;
   }
@@ -2245,9 +2246,10 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   if (summary.iterations == config_.max_iterations || summary.final_cost < summary.initial_cost) {
     summary.converged = summary.final_cost <= summary.initial_cost;
   }
-  refresh_bias_summary();
+  const auto final_normal_equation = linearize(states_, variables, 0.0);
+  refresh_bias_summary(final_normal_equation);
   refresh_dense_prior_summary();
-  refresh_normal_equation_summary();
+  refresh_normal_equation_summary(final_normal_equation);
   summary.normal_equation_degenerate =
     summary.normal_equation_degenerate || normal_equation_is_degenerate();
   refresh_cost_summary();
