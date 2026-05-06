@@ -58,6 +58,10 @@ paper-level CUDA mapper and continuous-time frontend are being ported.
   queues instead of single-slot "latest" storage. This preserves multiple valid
   mapper-feedback factors under asynchronous image/render arrival while still
   surfacing queue overflow or freshness expiry through stale-drop counters.
+- Visual BA factor `source_id` values are derived from the observed/rendered stamp
+  pair. This keeps duplicate processing of the same image pair replaceable while
+  allowing distinct delayed image pairs to coexist when they attach to the same
+  active sliding-window state.
 - Reliable QoS is opt-in for controlled local rosbag2 replay or drivers known to
   publish reliable sensor streams.
 - State and visualization outputs that are naturally latched, such as path and

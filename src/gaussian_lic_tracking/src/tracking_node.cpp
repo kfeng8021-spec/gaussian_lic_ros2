@@ -513,12 +513,14 @@ private:
   struct PendingVisualAlignmentFactor
   {
     int64_t stamp_ns{0};
+    uint8_t source_id{0};
     gaussian_lic_tracking::VisualAlignment alignment;
   };
 
   struct PendingSe3PhotometricFactor
   {
     int64_t stamp_ns{0};
+    uint8_t source_id{0};
     gaussian_lic_tracking::VisualSe3PhotometricLinearization linearization;
   };
 
@@ -958,6 +960,7 @@ private:
       {
         PendingSe3PhotometricFactor pending;
         pending.stamp_ns = observed.stamp_ns;
+        pending.source_id = visual_factor_source_id(observed.stamp_ns, rendered.stamp_ns);
         pending.linearization = last_visual_se3_photometric_linearization_;
         pending_visual_se3_photometric_factors_.push_back(std::move(pending));
         trim_pending_visual_factor_queues();
@@ -966,6 +969,7 @@ private:
     if (last_visual_alignment_.valid) {
       PendingVisualAlignmentFactor pending;
       pending.stamp_ns = observed.stamp_ns;
+      pending.source_id = visual_factor_source_id(observed.stamp_ns, rendered.stamp_ns);
       pending.alignment = last_visual_alignment_;
       pending_visual_alignment_factors_.push_back(std::move(pending));
       trim_pending_visual_factor_queues();
@@ -1231,7 +1235,7 @@ private:
         }
         gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor visual_factor;
         visual_factor.stamp_ns = visual_reference->stamp_ns;
-        visual_factor.source_id = 1U;
+        visual_factor.source_id = pending.source_id;
         visual_factor.reference_p_w_i = visual_reference->p_w_i;
         visual_factor.measured_shift_px = Eigen::Vector2d{
           pending.alignment.subpixel_dx,
@@ -1257,7 +1261,7 @@ private:
         }
         gaussian_lic_tracking::SlidingWindowSe3PhotometricFactor factor;
         factor.stamp_ns = visual_reference->stamp_ns;
-        factor.source_id = 1U;
+        factor.source_id = pending.source_id;
         factor.reference_p_w_i = visual_reference->p_w_i;
         factor.reference_q_w_i = visual_reference->q_w_i;
         factor.target_delta = gaussian_lic_tracking::transform_camera_delta_to_body(
@@ -1790,6 +1794,21 @@ private:
     const int64_t current_stamp_ns) const
   {
     return factor_stamp_ns + max_visual_factor_reference_delta_ns() < current_stamp_ns;
+  }
+
+  static uint8_t visual_factor_source_id(
+    const int64_t observed_stamp_ns,
+    const int64_t rendered_stamp_ns)
+  {
+    uint64_t mixed = static_cast<uint64_t>(observed_stamp_ns);
+    mixed ^= static_cast<uint64_t>(rendered_stamp_ns) + 0x9e3779b97f4a7c15ULL +
+      (mixed << 6U) + (mixed >> 2U);
+    mixed ^= mixed >> 30U;
+    mixed *= 0xbf58476d1ce4e5b9ULL;
+    mixed ^= mixed >> 27U;
+    mixed *= 0x94d049bb133111ebULL;
+    mixed ^= mixed >> 31U;
+    return static_cast<uint8_t>(1U + (mixed % 254U));
   }
 
   static bool stamp_delta_is_within(

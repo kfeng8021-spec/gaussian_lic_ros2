@@ -98,14 +98,16 @@ if [[ ! -f "${BAG_PATH}/metadata.yaml" ]]; then
 fi
 
 echo "[verify] creating frontend raw synthetic bag at ${FRONTEND_RAW_BAG_PATH}"
-./scripts/create_synthetic_bag.sh \
+GAUSSIAN_LIC_BAG_ROS_DOMAIN_ID="$((180 + (BASHPID % 20)))" \
+  ./scripts/create_synthetic_bag.sh \
   --frontend-raw \
   --frontend-raw-odometry \
   --output "${FRONTEND_RAW_BAG_PATH}" \
   --duration 4
 
 echo "[verify] creating frontend raw visual synthetic bag at ${FRONTEND_RAW_VISUAL_BAG_PATH}"
-./scripts/create_synthetic_bag.sh \
+GAUSSIAN_LIC_BAG_ROS_DOMAIN_ID="$((200 + (BASHPID % 20)))" \
+  ./scripts/create_synthetic_bag.sh \
   --frontend-raw \
   --frontend-raw-odometry \
   --output "${FRONTEND_RAW_VISUAL_BAG_PATH}" \
