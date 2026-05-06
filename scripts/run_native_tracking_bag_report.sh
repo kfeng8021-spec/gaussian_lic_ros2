@@ -29,6 +29,7 @@ REQUIRE_NONDEGENERATE_BA=false
 REQUIRE_DESKEW=false
 ENABLE_VISUAL_FACTORS=false
 ENABLE_MAPPER_FEEDBACK=false
+MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC=0.01
 VISUAL_FACTOR_MAX_DT_NS=300000000
 VISUAL_DEPTH_MAX_DT_NS=0
 VISUAL_DEPTH_FRAME_CACHE_SIZE=64
@@ -45,6 +46,7 @@ SE3_PHOTOMETRIC_MIN_COVERAGE_TILES=4
 ENABLE_EXTERNAL_ODOMETRY_PRIOR=false
 REFERENCE_ODOMETRY_TOPIC="/gaussian_lic/frontend/input_odometry"
 REFERENCE_POSE_TOPIC=""
+REFERENCE_TUM_PATH=""
 REQUIRE_REFERENCE_TRAJECTORY=false
 MIN_REFERENCE_POSES=10
 REFERENCE_TRAJECTORY_ALIGN=first
@@ -97,6 +99,8 @@ Options:
   --require-nondegenerate-ba   Require the last reported BA normal equation and state cadence to be non-degenerate.
   --enable-visual-factors      Require mapper-rendered-image visual factors to be present externally.
   --enable-mapper-feedback     Launch mapping_node so native tracking can consume mapper rendered-image feedback.
+  --mapper-feedback-sync-tolerance-sec SEC
+                               mapping_node frame sync tolerance for mapper feedback. Default: 0.01.
   --visual-factor-max-dt-ns NS Max nearest-stamp delta for rendered/observed visual BA pairing. Default: 300000000.
   --visual-depth-max-dt-ns NS  Max nearest-stamp delta for sparse LiDAR depth selected by SE3 visual BA. Default: 0, follow --visual-factor-max-dt-ns.
   --visual-depth-dilation-px N Sparse LiDAR depth projection dilation radius for SE3 visual BA. Default: 5.
@@ -120,6 +124,7 @@ Options:
                                Feed the reference odometry topic into tracking BA as an optional pose prior.
   --reference-odometry-topic T Topic to record as reference TUM trajectory. Default: /gaussian_lic/frontend/input_odometry.
   --reference-pose-topic T     Optional PoseStamped reference trajectory topic.
+  --reference-tum FILE         Optional external TUM reference trajectory for report comparison.
   --require-reference-trajectory
                                Require reference trajectory samples and trajectory_compare.py gate.
   --min-reference-poses N      Minimum reference poses when required. Default: 10.
@@ -244,6 +249,10 @@ while [[ $# -gt 0 ]]; do
       ENABLE_VISUAL_FACTORS=true
       shift
       ;;
+    --mapper-feedback-sync-tolerance-sec)
+      MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC="$2"
+      shift 2
+      ;;
     --visual-factor-max-dt-ns)
       VISUAL_FACTOR_MAX_DT_NS="$2"
       shift 2
@@ -298,6 +307,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --reference-pose-topic)
       REFERENCE_POSE_TOPIC="$2"
+      shift 2
+      ;;
+    --reference-tum)
+      REFERENCE_TUM_PATH="$(realpath -m "$2")"
       shift 2
       ;;
     --require-reference-trajectory)
@@ -447,7 +460,7 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   se3_photometric_coverage_grid_rows:="${SE3_PHOTOMETRIC_COVERAGE_GRID_ROWS}" \
   se3_photometric_min_coverage_tiles:="${SE3_PHOTOMETRIC_MIN_COVERAGE_TILES}" \
   enable_external_odometry_prior:="${ENABLE_EXTERNAL_ODOMETRY_PRIOR}" \
-  external_odometry_prior_topic:="${REFERENCE_ODOMETRY_TOPIC}" \
+  external_odometry_prior_topic:="${REFERENCE_ODOMETRY_TOPIC:-/__unused_reference_odometry}" \
   external_odometry_prior_max_dt_ns:="${EXTERNAL_ODOMETRY_PRIOR_MAX_DT_NS}" \
   external_odometry_prior_translation_weight:="${EXTERNAL_ODOMETRY_PRIOR_TRANSLATION_WEIGHT}" \
   external_odometry_prior_rotation_weight:="${EXTERNAL_ODOMETRY_PRIOR_ROTATION_WEIGHT}" \
@@ -474,6 +487,7 @@ if [[ "${ENABLE_MAPPER_FEEDBACK}" == "true" ]]; then
     --params-file "${ROOT_DIR}/src/gaussian_lic_bringup/config/default.yaml" \
     -p use_sim_time:=true \
     -p render_mode:=debug_input \
+    -p sync_tolerance_sec:="${MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC}" \
     -p require_depth_topic:=false \
     -p publish_gaussian_map:=false \
     -p enable_torch_camera_conversion:=false \
@@ -550,7 +564,8 @@ python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${SE3_PHOTOMETRIC_MIN_SAMPLE_INLIER_RATIO}" \
   "${SE3_PHOTOMETRIC_MAX_MEAN_ABS_RESIDUAL_FOR_FACTOR}" \
   "${SE3_PHOTOMETRIC_COVERAGE_GRID_COLS}" "${SE3_PHOTOMETRIC_COVERAGE_GRID_ROWS}" \
-  "${SE3_PHOTOMETRIC_MIN_COVERAGE_TILES}" <<'PY'
+  "${SE3_PHOTOMETRIC_MIN_COVERAGE_TILES}" "${MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC}" \
+  "${REFERENCE_TUM_PATH}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -578,6 +593,9 @@ se3_photometric_max_mean_abs_residual_for_factor = float(sys.argv[20])
 se3_photometric_coverage_grid_cols = int(sys.argv[21])
 se3_photometric_coverage_grid_rows = int(sys.argv[22])
 se3_photometric_min_coverage_tiles = int(sys.argv[23])
+mapper_feedback_sync_tolerance_sec = float(sys.argv[24])
+reference_tum_path = Path(sys.argv[25]) if sys.argv[25] else None
+has_external_reference_tum = reference_tum_path is not None and reference_tum_path.is_file() and reference_tum_path.stat().st_size > 0
 
 metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 topic_counts = metrics.get("topic_counts", {})
@@ -591,7 +609,11 @@ if status.get("samples", 0) < min_status:
     errors.append(f"tracking status samples {status.get('samples', 0)} < {min_status}")
 if topic_counts.get("/points_for_gs", 0) < min_point_frames:
     errors.append(f"/points_for_gs frames {topic_counts.get('/points_for_gs', 0)} < {min_point_frames}")
-if require_reference_trajectory and metrics.get("reference_trajectory_poses", 0) < min_reference_poses:
+if (
+    require_reference_trajectory
+    and metrics.get("reference_trajectory_poses", 0) < min_reference_poses
+    and not has_external_reference_tum
+):
     errors.append(
         f"reference trajectory poses {metrics.get('reference_trajectory_poses', 0)} < {min_reference_poses}")
 
@@ -748,6 +770,7 @@ report = {
         "visual_factor_max_dt_ns": visual_factor_max_dt_ns,
         "visual_depth_max_dt_ns": visual_depth_max_dt_ns,
         "visual_depth_dilation_px": visual_depth_dilation_px,
+        "mapper_feedback_sync_tolerance_sec": mapper_feedback_sync_tolerance_sec,
         "visual_pending_factor_queue_size": visual_pending_factor_queue_size,
         "se3_photometric_min_samples": se3_photometric_min_samples,
         "se3_photometric_min_hessian_rank": se3_photometric_min_hessian_rank,
@@ -759,6 +782,7 @@ report = {
         "se3_photometric_coverage_grid_cols": se3_photometric_coverage_grid_cols,
         "se3_photometric_coverage_grid_rows": se3_photometric_coverage_grid_rows,
         "se3_photometric_min_coverage_tiles": se3_photometric_min_coverage_tiles,
+        "reference_tum_path": str(reference_tum_path) if reference_tum_path else "",
     },
     "metrics": metrics,
 }
@@ -778,6 +802,9 @@ PY
 
 COMPARE_JSON="${OUTPUT_DIR}/native_tracking_trajectory_compare.json"
 REFERENCE_TUM="${ARTIFACT_DIR}/reference_trajectory.tum"
+if [[ -n "${REFERENCE_TUM_PATH}" ]]; then
+  REFERENCE_TUM="${REFERENCE_TUM_PATH}"
+fi
 CURRENT_TUM="${ARTIFACT_DIR}/trajectory.tum"
 if [[ -s "${REFERENCE_TUM}" && -s "${CURRENT_TUM}" ]]; then
   compare_cmd=(

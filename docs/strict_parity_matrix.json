@@ -1,0 +1,161 @@
+{
+  "schema": "gaussian_lic_strict_parity_matrix/v1",
+  "target_profiles": [
+    "fastlivo",
+    "fastlivo2",
+    "m2dgr",
+    "mcd",
+    "r3live"
+  ],
+  "evidence": [
+    {
+      "id": "fastlivo2/CBD_Building_01/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "profile": "fastlivo2",
+      "dataset": "FAST-LIVO2",
+      "sequence": "CBD_Building_01",
+      "required": true,
+      "report": "results/fastlivo2/CBD_Building_01_current_round_no_opacity_prune_probe/reproduction_report_strict.json",
+      "strict": true,
+      "min_render_pairs": 64,
+      "gates": [
+        "baseline_manifest",
+        "metrics",
+        "trajectory",
+        "point_cloud",
+        "gaussian_color"
+      ],
+      "thresholds": [
+        {
+          "path": "trajectory.matched_poses",
+          "min": 1000
+        },
+        {
+          "path": "trajectory.coverage",
+          "min": 0.8
+        },
+        {
+          "path": "point_cloud.nearest.bidirectional.mean_m",
+          "max": 0.1
+        }
+      ]
+    },
+    {
+      "id": "fastlivo2/CBD_Building_01/native_tracking_visual_ba_120s",
+      "kind": "native_tracking_report",
+      "profile": "fastlivo2",
+      "dataset": "FAST-LIVO2",
+      "sequence": "CBD_Building_01",
+      "required": true,
+      "report": "results/fastlivo2/CBD_Building_01_native_tracking_visual_ba_sync50ms_120s/native_tracking_report.json",
+      "requires_reference_parity": false,
+      "thresholds": [
+        {
+          "path": "metrics.trajectory_poses",
+          "min": 100
+        },
+        {
+          "path": "metrics.topic_counts./points_for_gs",
+          "min": 100
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_total_imu_factors",
+          "min": 100
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_total_visual_factors",
+          "min": 100
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_total_se3_photometric_factors",
+          "min": 1
+        },
+        {
+          "path": "metrics.tracking_status.last.visual_se3_photometric_last_accepted_coverage_tiles",
+          "min": 4
+        },
+        {
+          "path": "metrics.tracking_status.last.visual_se3_photometric_last_accepted_hessian_rank",
+          "min": 6
+        },
+        {
+          "path": "metrics.tracking_status.last.visual_se3_photometric_last_accepted_hessian_condition_number",
+          "max": 1000000000000.0
+        },
+        {
+          "path": "metrics.tracking_status.last.trajectory_deskew_queries",
+          "min": 1
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_normal_equation_rank_ratio",
+          "min": 0.999
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_numeric_jacobian_blocks",
+          "max": 0
+        }
+      ]
+    },
+    {
+      "id": "fastlivo2/Bright_Screen_Wall/mapper_contract_curated",
+      "kind": "reproduction_report",
+      "profile": "fastlivo2",
+      "dataset": "FAST-LIVO2",
+      "sequence": "Bright_Screen_Wall_fastlivo2_color_8s",
+      "required": false,
+      "report": "results/fastlivo2/Bright_Screen_Wall_current_extrinsic_color_fullseq/reproduction_report_combined.json",
+      "strict": false,
+      "gates": [
+        "metrics",
+        "trajectory",
+        "point_cloud",
+        "gaussian_color"
+      ]
+    },
+    {
+      "id": "fastlivo2/CBD_Building_01/native_tracking_reference_parity",
+      "kind": "pending",
+      "profile": "fastlivo2",
+      "dataset": "FAST-LIVO2",
+      "sequence": "CBD_Building_01",
+      "required": true,
+      "reason": "frontend_raw CBD bag does not contain a trusted reference odometry topic, and the archived mapper-contract TUM is not a valid native trajectory reference; full native trajectory parity remains missing."
+    },
+    {
+      "id": "fastlivo/full_sequence_strict",
+      "kind": "pending",
+      "profile": "fastlivo",
+      "dataset": "FAST-LIVO",
+      "sequence": "all_required_sequences",
+      "required": true,
+      "reason": "no full-sequence ROS1 baseline and ROS2 strict current artifact is archived for FAST-LIVO."
+    },
+    {
+      "id": "m2dgr/full_sequence_strict",
+      "kind": "pending",
+      "profile": "m2dgr",
+      "dataset": "M2DGR",
+      "sequence": "all_required_sequences",
+      "required": true,
+      "reason": "no full-sequence ROS1 baseline and ROS2 strict current artifact is archived for M2DGR."
+    },
+    {
+      "id": "mcd/full_sequence_strict",
+      "kind": "pending",
+      "profile": "mcd",
+      "dataset": "MCD",
+      "sequence": "all_required_sequences",
+      "required": true,
+      "reason": "no full-sequence ROS1 baseline and ROS2 strict current artifact is archived for MCD."
+    },
+    {
+      "id": "r3live/full_sequence_strict",
+      "kind": "pending",
+      "profile": "r3live",
+      "dataset": "R3LIVE",
+      "sequence": "all_required_sequences",
+      "required": true,
+      "reason": "no full-sequence ROS1 baseline and ROS2 strict current artifact is archived for R3LIVE."
+    }
+  ]
+}

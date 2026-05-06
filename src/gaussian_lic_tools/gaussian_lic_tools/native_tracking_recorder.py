@@ -5,6 +5,8 @@ import math
 from pathlib import Path
 
 import rclpy
+from rclpy._rclpy_pybind11 import RCLError
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 
@@ -193,10 +195,16 @@ def main(args=None):
     node = NativeTrackingRecorder()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    except RCLError as exc:
+        if "context is not valid" not in str(exc):
+            raise
     finally:
         node.flush()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

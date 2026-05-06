@@ -10,7 +10,7 @@ This repository is **not a ROS1 bridge wrapper**. It is a clean ROS2 workspace t
 
 This repository is now an executable ROS2 porting checkpoint for the public Gaussian-LIC/Gaussian-LIC2 code path. It has native ROS2 message, launch, adapter, mapper, CUDA/Torch Gaussian backend plumbing, initial native tracking factors, artifact extraction, strict replay/readiness tooling, an official FAST-LIVO2 Bright substitute proof chain, and a local strict `CBD_Building_01` reproduction chain against the archived ROS1 upstream baseline. The latest archived strict `CBD_Building_01` report is green for the mapper-contract/CUDA path: trajectory, PSNR/SSIM/LPIPS, GT-associated render-pair, and point-cloud gates pass.
 
-It is **not yet** the complete full-paper Gaussian-LIC2 ROS2 port: the native tracker still needs full Coco-LIC2-grade sliding-window joint optimization beyond the mapper-contract reproduction path.
+It is **not yet** the complete full-paper Gaussian-LIC2 ROS2 port: the native tracker still needs full Coco-LIC2-grade sliding-window joint optimization beyond the mapper-contract reproduction path, and the full-dataset strict parity matrix is intentionally incomplete until every required dataset/profile has archived ROS1 and ROS2 strict artifacts.
 
 Available now:
 
@@ -27,6 +27,7 @@ Available now:
 - FAST-LIVO2 ROS1-to-ROS2 raw frontend conversion, ROS1 mapper-contract conversion, upstream ROS1 baseline runner, strict rosbag2 replay wrapper, baseline manifest/readiness gates, and combined reproduction reports.
 - Current executable Bright substitute report with `metrics`, `trajectory`, `point_cloud`, and dedicated Torch Gaussian `gaussian_color` gates passing.
 - Strict FAST-LIVO2 `CBD_Building_01` artifact/readiness pipeline with trajectory, PSNR/SSIM/LPIPS, render-pair, and point-cloud gates passing for the mapper-contract/CUDA path.
+- `scripts/check_strict_parity_matrix.py` for the final full-dataset release gate. It currently reports `required=2/7` because only FAST-LIVO2 mapper strict parity plus CBD native BA runtime health are proven; native reference trajectory parity and FAST-LIVO/M2DGR/MCD/R3LIVE full-sequence strict reports are still missing.
 - SPNet TensorRT engine generation for the local `sm_120` GPU via TensorRT 10.9, with the generated FP16 engine kept outside git.
 - Native tracking probes are registered with CTest, so `colcon test --packages-select gaussian_lic_tracking` runs trajectory, IMU, LiDAR, sliding-window, bias observability, geometric Jacobian, Gaussian snapshot, trajectory smoothness, SE3 photometric Jacobian/factor, and visual checks automatically. `scripts/tracking_smoke_test.sh` also verifies the launch path through `/gaussian_lic/frontend/status`, including signed-nanosecond time status, tracking QoS, executor callback serialization, auto-start IMU preintegration re-integration semantics, cumulative IMU-factor/preintegration and visual/SE3 factor evidence that survives window marginalization, dense-prior health with stamp/reference validation, Schur/fallback marginalization health, same-stamp prior plus same-source IMU/LiDAR/visual/SE3/smoothness replacement counters, orphan-factor health, active-window state-cadence health, bias observability, accepted BA feedback stamp/delta/limit health, optimized IMU re-anchors, last-consumed IMU preintegration sample/dt/span health with time-gap skip gating, B-spline trajectory control poses, LiDAR correspondence confidence and spatial-index health, sliding-window optimization timing, zero global numeric-Jacobian fallback, nonzero trajectory smoothness factors, accepted/rejected/limited BA step health, linearization/linear-solve failure counters, factor skip counters, visual alignment, bounded photometric sample weights, photometric linearization status, rendered/depth cache diagnostics, and SE3 photometric sample quality/rejection counters.
 - CI semantic checks keep the GitHub Actions build matrix Jazzy-only; adding ROS2 Humble to `.github/workflows/ci.yaml` is treated as a contract violation.
@@ -35,6 +36,7 @@ Still pending:
 
 - Full Coco-LIC2-grade frontend/tracking algorithm: production sliding-window joint BA with dataset-validated IMU/LiDAR/camera factors beyond the current gated foundation.
 - Full native Coco-LIC2 frontend/tracking parity beyond the mapper-contract reproduction path.
+- Full-dataset strict parity evidence for FAST-LIVO, FAST-LIVO2 native reference trajectory parity, M2DGR, MCD, and R3LIVE.
 
 ## Progress Ledger
 
@@ -44,6 +46,7 @@ Still pending:
 | FAST-LIVO2 Bright substitute evidence chain | Complete and executable with `metrics`, `trajectory`, `point_cloud`, and `gaussian_color` passing |
 | Strict `CBD_Building_01` paper-data gate | Official bag is local; ROS1 baseline is archived; latest ROS2 mapper-contract/CUDA strict report passes `reproduction_report.py --strict` |
 | Paper-level Gaussian-LIC/Gaussian-LIC2 algorithm migration | Mapper CUDA/Torch backend, executable strict mapper-contract chain, and local SPNet TensorRT engine generation are in place; full native Coco-LIC2 tracking BA remains |
+| Full-dataset strict parity matrix | Executable gate is in place; current status is incomplete at `2/7` required evidence items, with only FAST-LIVO2 covered |
 
 The Bright substitute report is a regression/evidence chain for current ROS2 plumbing and Torch Gaussian tensor boundaries. It is not a claim that the full paper algorithm has been ported.
 
@@ -216,6 +219,25 @@ beside native tracking:
   --enable-mapper-feedback
 ```
 
+For a longer full-sequence CBD production-BA health run, use the frontend-raw
+bag and loosen mapper feedback frame synchronization enough for asynchronous
+rosbag2 replay:
+
+```bash
+./scripts/run_native_tracking_bag_report.sh \
+  --bag /home/frank/data/fast_livo/CBD_Building_01_frontend_raw \
+  --output results/fastlivo2/CBD_Building_01_native_tracking_visual_ba_sync50ms_120s \
+  --playback-duration 120 \
+  --timeout 240 \
+  --min-poses 100 \
+  --min-point-frames 100 \
+  --enable-scan-order-deskew \
+  --require-deskew \
+  --enable-mapper-feedback \
+  --mapper-feedback-sync-tolerance-sec 0.05 \
+  --require-nondegenerate-ba
+```
+
 Latest local real-bag check:
 
 ```text
@@ -383,6 +405,21 @@ last_accepted_se3_coverage_tiles=5/16,
 last_accepted_se3_hessian_rank=6, last_accepted_se3_hessian_condition=7.467e3,
 imu_factor_skip_count=0, imu_time_gap_skip_count=0, feedback_updates=82,
 normal_equation_rows=49171, condition=1.143e7, rank_ratio=1.0,
+numeric_jacobian_blocks=0
+
+results/fastlivo2/CBD_Building_01_native_tracking_visual_ba_sync50ms_120s/native_tracking_report.json
+ok=true, poses=478, /points_for_gs=478, status_samples=478, imu_factors=477,
+visual_factors=238, se3_photometric_factors=27,
+se3_total_batches=238, se3_valid_batches=27, se3_degenerate_batches=0,
+se3_quality_rejected_batches=21, se3_total_samples=76250,
+visual_rendered_miss_count=2, visual_rendered_cache_size=64,
+visual_depth_cache_size=64, mapper_feedback_sync_tolerance_sec=0.05,
+last_accepted_se3_sample_inlier_ratio=0.935,
+last_accepted_se3_coverage_tiles=6/16,
+last_accepted_se3_hessian_rank=6, last_accepted_se3_hessian_condition=6.187e3,
+trajectory_deskew_queries=11472000, trajectory_deskew_hits=11430279,
+imu_factor_skip_count=0, imu_time_gap_skip_count=0, feedback_updates=477,
+normal_equation_rows=6258, condition=5.818e6, rank_ratio=1.0,
 numeric_jacobian_blocks=0
 ```
 
@@ -927,6 +964,28 @@ So the strict chain now passes the local `CBD_Building_01` reproduction gate for
 the mapper-contract/CUDA current path. The remaining paper-port work is full
 native Coco-LIC2 tracking parity and dataset-validated production joint BA beyond
 the mapper-contract path.
+
+The final full-dataset parity gate is explicit and intentionally fails until all
+required datasets and native reference trajectory evidence are present:
+
+```bash
+./scripts/check_strict_parity_matrix.py
+```
+
+To write a current gap report without treating the incomplete matrix as success:
+
+```bash
+./scripts/check_strict_parity_matrix.py \
+  --allow-incomplete \
+  --output results/strict_parity_matrix.json \
+  --markdown results/strict_parity_matrix.md
+```
+
+Current local matrix status: `required=2/7`, `covered_profiles=fastlivo2`.
+Passing items are FAST-LIVO2 `CBD_Building_01` mapper-contract/CUDA strict parity
+and the 120s CBD native visual/SE3 BA health report. Missing required items are
+native reference trajectory parity for CBD plus full-sequence strict artifacts for
+FAST-LIVO, M2DGR, MCD, and R3LIVE.
 
 ## Release Roadmap
 
