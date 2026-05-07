@@ -14,6 +14,7 @@ SEQUENCE="CBD_Building_01"
 BAG_PATH=""
 OUTPUT_DIR=""
 CONFIG_NAME="fastlivo2.yaml"
+DATASET_NAME="fastlivo2"
 RUN_TIMEOUT_SEC=0
 PLAY_DELAY_SEC=3
 POST_PLAY_SETTLE_SEC="${GAUSSIAN_LIC_BASELINE_POST_PLAY_SETTLE_SEC:-8}"
@@ -41,6 +42,10 @@ Options:
   --workspace DIR         Persistent catkin workspace. Default:
                           /home/frank/.cache/gaussian_lic_ros2/noetic_catkin_gaussian.
   --opencv-dir DIR        OpenCV build directory. Default: OpenCV 4.10 fallback.
+  --config-name FILE      Upstream config file under external/Gaussian-LIC/config.
+                          Default: fastlivo2.yaml.
+  --dataset NAME          Dataset/profile name written to baseline_manifest.json.
+                          Default: fastlivo2.
   --runtime-sec SEC       Stop runtime after SEC seconds. Default: wait for bag/end.
   --post-play-settle SEC  Seconds to let upstream queues drain after rosbag play.
                           Default: ${GAUSSIAN_LIC_BASELINE_POST_PLAY_SETTLE_SEC:-8}.
@@ -75,6 +80,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --opencv-dir)
       OPENCV_DIR="$2"
+      shift 2
+      ;;
+    --config-name)
+      CONFIG_NAME="$2"
+      shift 2
+      ;;
+    --dataset)
+      DATASET_NAME="$2"
       shift 2
       ;;
     --runtime-sec)
@@ -136,6 +149,10 @@ for path in "${SOFTWARE_DIR}" "${OPENCV_DIR}" "${HOST_CUDA}" "${ROOT_DIR}/extern
     exit 2
   fi
 done
+if [[ ! -f "${ROOT_DIR}/external/Gaussian-LIC/config/${CONFIG_NAME}" ]]; then
+  echo "Missing upstream config: ${ROOT_DIR}/external/Gaussian-LIC/config/${CONFIG_NAME}" >&2
+  exit 2
+fi
 if [[ ! -f "${COMPAT_LIBSTDCXX}" ]]; then
   echo "Missing compatible libstdc++ for libtorch runtime: ${COMPAT_LIBSTDCXX}" >&2
   exit 2
@@ -450,6 +467,7 @@ PY
 
 ./scripts/baseline_manifest.py \
   --baseline "${OUTPUT_DIR}" \
+  --dataset "${DATASET_NAME}" \
   --sequence "${SEQUENCE}" \
   --write
 

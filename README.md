@@ -27,6 +27,7 @@ Available now:
 - Profile-aware ROS1-to-ROS2 raw frontend conversion for FAST-LIVO, FAST-LIVO2, M2DGR, MCD, and R3LIVE; ROS1 mapper-contract conversion, upstream ROS1 baseline runner, strict rosbag2 replay wrapper, baseline manifest/readiness gates, and combined reproduction reports.
 - Current executable Bright substitute report with `metrics`, `trajectory`, `point_cloud`, and dedicated Torch Gaussian `gaussian_color` gates passing.
 - Strict FAST-LIVO2 `CBD_Building_01` artifact/readiness pipeline with trajectory, PSNR/SSIM/LPIPS, render-pair, and point-cloud gates passing for the mapper-contract/CUDA path.
+- `scripts/run_strict_parity_queue.sh` turns the remaining data/evidence backlog into a resumable full-profile queue: it reuses or creates frontend-raw bags, emits ROS1 mapper-contract bags, runs the upstream baseline with the matching profile config, collects ROS2 CUDA current artifacts, and writes strict readiness/reproduction reports for FAST-LIVO, FAST-LIVO2, M2DGR, MCD, and R3LIVE targets.
 - `scripts/check_strict_parity_matrix.py` for the final full-dataset release gate. It currently reports `required=2/7` because only FAST-LIVO2 mapper strict parity plus CBD native BA runtime health are proven; native reference trajectory parity and FAST-LIVO/M2DGR/MCD/R3LIVE full-sequence strict reports are still missing.
 - `scripts/audit_strict_data_inputs.py` for the data-side gate. The current local audit is archived at `docs/strict_data_status.md` / `docs/strict_data_status.json`; it now separates raw/frontend data, ROS1 baseline artifacts, ROS2 current artifacts, and native reference trajectories. Raw and converted frontend inputs are local for every required profile, while ROS1 baseline artifacts and FAST-LIVO/FAST-LIVO2/R3LIVE native reference trajectories remain the release blockers.
 - R3LIVE `hku_park_00` can be converted to ROS2 frontend-raw and passes the native sensor-only tracking health gate; this is runtime coverage, not strict baseline parity.
@@ -822,6 +823,14 @@ Compare a current TUM trajectory against an archived ROS1 baseline:
 The trajectory gate associates poses by timestamp, reports translation RMSE/mean/max plus path-length drift, and exits non-zero when any threshold fails. Use `--align first` only for datasets whose baseline and current trajectories differ by a known initial translation offset. Use `--align yaw` for local-world frontend trajectories, such as M2DGR native tracking, where the estimator origin/yaw is arbitrary but scale is fixed.
 
 M2DGR `room_01` native tracking now has a 60s slow-replay reference pass at `results/m2dgr/room_01_tracking_sweep_yaw_guarded008_60s/all_frames_default_60s/native_tracking_report.json`: 106 odometry poses, 105 yaw-aligned GT matches, RMSE 0.4479 m, mean 0.4342 m, max 0.7597 m, and zero report errors. This is a frontend trajectory parity checkpoint, not a replacement for the remaining full-dataset ROS1 mapper/render strict artifacts.
+
+Run the remaining full-profile strict artifact backlog from one queue:
+
+```bash
+./scripts/run_strict_parity_queue.sh --continue-on-error
+```
+
+Use `--dry-run` first to see the exact per-profile commands. The queue uses the existing raw/frontend data under `/home/frank/data`, writes baselines under `baseline/<profile>/<sequence>`, writes current artifacts under `results/<profile>/<sequence>_strict_current`, and finishes by refreshing `docs/strict_data_status.*` plus `scripts/check_strict_parity_matrix.py --allow-incomplete`.
 
 Compare a current PLY map against an archived ROS1 baseline:
 

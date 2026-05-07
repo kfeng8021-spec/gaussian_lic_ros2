@@ -218,6 +218,25 @@ The validated curated chain can also be re-run from one entrypoint:
 ```
 
 The transformed Bright substitute uses the released FAST-LIVO2 camera-LiDAR
+extrinsics.
+
+## Full Strict Artifact Queue
+
+`run_strict_cbd_pipeline.sh` remains the focused FAST-LIVO2 CBD paper gate. To
+attack the remaining full-dataset evidence backlog, use the queue entrypoint:
+
+```bash
+./scripts/run_strict_parity_queue.sh --dry-run
+./scripts/run_strict_parity_queue.sh --continue-on-error
+```
+
+The queue covers FAST-LIVO, FAST-LIVO2, M2DGR, MCD, and R3LIVE targets. For each
+target it reuses or creates `frontend_raw`, creates a ROS1 mapper-contract bag,
+runs `scripts/run_upstream_baseline.sh` with the matching upstream config such as
+`m2dgr.yaml`, collects ROS2 CUDA/rasterizer current artifacts, and emits strict
+readiness/reproduction reports. Passing this queue is still evidence generation;
+the final release gate remains `scripts/check_strict_parity_matrix.py` without
+`--allow-incomplete`.
 extrinsics for both the ROS1 mapper-contract baseline and the ROS2 LIC2 adapter
 current run. The transform flag selects the validated sequence name, mapper bag,
 baseline directory, current directory, and 10 second current recording window

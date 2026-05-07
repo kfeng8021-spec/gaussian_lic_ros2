@@ -214,3 +214,21 @@ SH order:      DC RGB triplet followed by remaining coefficient RGB triplets
 The `/gaussian_lic/save_map` service writes the initialized Gaussian map to `point_cloud.ply` when given a directory path, or directly to the requested `.ply` path. The Gaussian PLY properties follow upstream Gaussian-LIC naming: `f_dc_*`, `f_rest_*`, `opacity`, `scale_*`, and `rot_*`. These are raw optimization tensor values, not sigmoid/exp activated transport values.
 
 When the torch Gaussian map is not initialized, the same service falls back to the accumulated debug map points and writes a plain XYZRGB PLY with `red/green/blue` uchar fields. This keeps native ROS2 smoke tests useful without requiring libtorch.
+
+## Full-Profile Strict Queue
+
+`scripts/run_strict_parity_queue.sh` is the current execution path for the
+remaining dataset evidence. It is intentionally built on the same conversion,
+mapper-contract, ROS1 baseline, ROS2 current, and strict-report tools used by the
+green FAST-LIVO2 CBD run, but parameterizes the upstream config and result paths
+by profile:
+
+```bash
+./scripts/run_strict_parity_queue.sh --dry-run
+./scripts/run_strict_parity_queue.sh --continue-on-error
+```
+
+This addresses the data-side blocker by making FAST-LIVO, FAST-LIVO2, M2DGR,
+MCD, and R3LIVE strict artifact generation restartable. It does not change the
+release gate: `scripts/check_strict_parity_matrix.py` must pass without
+`--allow-incomplete` before the port can be called full paper parity.
