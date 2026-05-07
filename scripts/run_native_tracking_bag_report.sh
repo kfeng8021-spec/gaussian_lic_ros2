@@ -721,10 +721,15 @@ ros2 bag play "${BAG_PATH}" \
 play_pid=$!
 
 play_timeout="$(
-  python3 - "${PLAYBACK_DURATION}" "${TIMEOUT_SEC}" <<'PY'
+  python3 - "${PLAYBACK_DURATION}" "${TIMEOUT_SEC}" "${PLAYBACK_RATE}" <<'PY'
 import math
 import sys
-print(int(math.ceil(float(sys.argv[1]) + float(sys.argv[2]))))
+duration_sec = float(sys.argv[1])
+timeout_sec = float(sys.argv[2])
+rate = float(sys.argv[3])
+if rate <= 0.0:
+    raise SystemExit("playback rate must be positive")
+print(int(math.ceil(duration_sec / rate + timeout_sec)))
 PY
 )"
 if ! timeout "${play_timeout}" tail --pid="${play_pid}" -f /dev/null; then
