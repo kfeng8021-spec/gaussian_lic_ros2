@@ -434,9 +434,6 @@ run_target() {
       --imu-pose-fallback
       --sync-image-to-pointcloud
       --adapter-imu-orientation-history-size 200000
-      --adapter-pointcloud-filter-min-z 0.001
-      --adapter-pointcloud-filter-max-z 20.0
-      --adapter-pointcloud-filter-min-points 1000
       --optional-depth
       --sensor-qos reliable
       --sensor-qos-depth 50

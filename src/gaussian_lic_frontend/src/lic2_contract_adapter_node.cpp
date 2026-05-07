@@ -237,6 +237,11 @@ public:
       RCLCPP_WARN(get_logger(), "sync_pointcloud_queue_size must be positive; using 1");
       sync_pointcloud_queue_size_ = 1;
     }
+    visual_history_size_ = declare_parameter<int>("visual_history_size", 128);
+    if (visual_history_size_ < 1) {
+      RCLCPP_WARN(get_logger(), "visual_history_size must be positive; using 1");
+      visual_history_size_ = 1;
+    }
     imu_integration_max_dt_sec_ = declare_parameter<double>("imu_integration_max_dt_sec", 0.05);
     pointcloud_transform_profile_ =
       lowercase(declare_parameter<std::string>("pointcloud_transform_profile", "identity"));
@@ -318,7 +323,7 @@ public:
         if (sync_image_to_pointcloud_) {
           {
             std::lock_guard<std::mutex> lock(latest_visual_mutex_);
-            latest_image_ = std::make_shared<sensor_msgs::msg::Image>(*msg);
+            remember_image_locked(msg);
           }
           process_pending_pointclouds();
         } else {
@@ -332,7 +337,7 @@ public:
         if (sync_image_to_pointcloud_) {
           {
             std::lock_guard<std::mutex> lock(latest_visual_mutex_);
-            latest_camera_info_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*msg);
+            remember_camera_info_locked(msg);
           }
           process_pending_pointclouds();
         } else {
@@ -406,7 +411,8 @@ public:
       "image=%s pointcloud=%s pose=%s frontend_odom=%s frontend_path=%s "
       "fallback(identity=%s imu=%s) image_sync=%s pointcloud_transform=%s profile=%s "
       "pointcloud_filter(min_z=%.6f max_z=%.6f min_points=%d) "
-      "imu_stamp_lookup=%s imu_history_size=%d visual_sync_tol=%.6f sync_queue=%d",
+      "imu_stamp_lookup=%s imu_history_size=%d visual_sync_tol=%.6f sync_queue=%d "
+      "visual_history=%d",
       raw_image_topic_.c_str(), raw_pointcloud_topic_.c_str(), pose_stamped_topic_.c_str(),
       raw_odometry_topic_.c_str(), image_topic_.c_str(), pointcloud_topic_.c_str(),
       pose_topic_.c_str(), frontend_odometry_topic_.c_str(), frontend_path_topic_.c_str(),
@@ -416,7 +422,7 @@ public:
       pointcloud_transform_profile_.c_str(), pointcloud_filter_min_z_, pointcloud_filter_max_z_,
       pointcloud_filter_min_points_, pointcloud_use_stamp_imu_orientation_ ? "true" : "false",
       imu_orientation_history_size_, sync_image_pointcloud_tolerance_sec_,
-      sync_pointcloud_queue_size_);
+      sync_pointcloud_queue_size_, visual_history_size_);
   }
 
 private:
@@ -425,6 +431,14 @@ private:
     kWaiting,
     kReady,
     kMissed
+  };
+
+  struct VisualSelection
+  {
+    std::shared_ptr<sensor_msgs::msg::Image> image;
+    std::shared_ptr<sensor_msgs::msg::CameraInfo> camera_info;
+    int64_t image_delta_nsec{std::numeric_limits<int64_t>::max()};
+    int64_t camera_info_delta_nsec{std::numeric_limits<int64_t>::max()};
   };
 
   bool needs_pointcloud_transform() const
@@ -440,26 +454,101 @@ private:
       pointcloud_filter_min_points_ > 0;
   }
 
+  template<typename MsgT>
+  static int64_t message_stamp_nsec(const std::shared_ptr<MsgT> & msg)
+  {
+    return stamp_to_nsec(msg->header.stamp);
+  }
+
+  static int64_t abs_delta_nsec(const int64_t lhs, const int64_t rhs)
+  {
+    const int64_t delta = lhs - rhs;
+    return delta < 0 ? -delta : delta;
+  }
+
+  template<typename MsgT>
+  void trim_visual_history_locked(std::deque<std::shared_ptr<MsgT>> & history)
+  {
+    while (history.size() > static_cast<size_t>(visual_history_size_)) {
+      history.pop_front();
+    }
+  }
+
+  void remember_image_locked(const sensor_msgs::msg::Image::ConstSharedPtr & msg)
+  {
+    latest_image_ = std::make_shared<sensor_msgs::msg::Image>(*msg);
+    image_history_.push_back(latest_image_);
+    trim_visual_history_locked(image_history_);
+  }
+
+  void remember_camera_info_locked(const sensor_msgs::msg::CameraInfo::ConstSharedPtr & msg)
+  {
+    latest_camera_info_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*msg);
+    camera_info_history_.push_back(latest_camera_info_);
+    trim_visual_history_locked(camera_info_history_);
+  }
+
+  template<typename MsgT>
+  std::shared_ptr<MsgT> select_nearest_visual_locked(
+    const std::deque<std::shared_ptr<MsgT>> & history,
+    const int64_t target_nsec,
+    int64_t & best_delta_nsec) const
+  {
+    std::shared_ptr<MsgT> best;
+    best_delta_nsec = std::numeric_limits<int64_t>::max();
+    bool best_is_future = true;
+    for (const auto & candidate : history) {
+      const int64_t candidate_nsec = message_stamp_nsec(candidate);
+      const int64_t delta_nsec = abs_delta_nsec(candidate_nsec, target_nsec);
+      const bool is_future = candidate_nsec > target_nsec;
+      if (!best || delta_nsec < best_delta_nsec ||
+        (delta_nsec == best_delta_nsec && best_is_future && !is_future))
+      {
+        best = candidate;
+        best_delta_nsec = delta_nsec;
+        best_is_future = is_future;
+      }
+    }
+    return best;
+  }
+
+  VisualSelection select_visual_locked(const builtin_interfaces::msg::Time & stamp) const
+  {
+    const int64_t point_nsec = stamp_to_nsec(stamp);
+    VisualSelection selection;
+    selection.image =
+      select_nearest_visual_locked(image_history_, point_nsec, selection.image_delta_nsec);
+    selection.camera_info =
+      select_nearest_visual_locked(
+      camera_info_history_, point_nsec, selection.camera_info_delta_nsec);
+    return selection;
+  }
+
   VisualSyncState pointcloud_visual_sync_state(
     const builtin_interfaces::msg::Time & stamp)
   {
     const int64_t point_nsec = stamp_to_nsec(stamp);
     std::lock_guard<std::mutex> lock(latest_visual_mutex_);
-    if (!latest_image_ || !latest_camera_info_) {
+    if (image_history_.empty() || camera_info_history_.empty()) {
       return VisualSyncState::kWaiting;
     }
 
-    const int64_t image_nsec = stamp_to_nsec(latest_image_->header.stamp);
-    const int64_t camera_info_nsec = stamp_to_nsec(latest_camera_info_->header.stamp);
-    const int64_t min_visual_nsec = std::min(image_nsec, camera_info_nsec);
-    const int64_t max_visual_nsec = std::max(image_nsec, camera_info_nsec);
-    if (max_visual_nsec < point_nsec - sync_image_pointcloud_tolerance_nsec_) {
+    const auto selection = select_visual_locked(stamp);
+    if (selection.image && selection.camera_info &&
+      selection.image_delta_nsec <= sync_image_pointcloud_tolerance_nsec_ &&
+      selection.camera_info_delta_nsec <= sync_image_pointcloud_tolerance_nsec_)
+    {
+      return VisualSyncState::kReady;
+    }
+
+    const int64_t latest_image_nsec = message_stamp_nsec(image_history_.back());
+    const int64_t latest_camera_info_nsec = message_stamp_nsec(camera_info_history_.back());
+    if (latest_image_nsec < point_nsec - sync_image_pointcloud_tolerance_nsec_ ||
+      latest_camera_info_nsec < point_nsec - sync_image_pointcloud_tolerance_nsec_)
+    {
       return VisualSyncState::kWaiting;
     }
-    if (min_visual_nsec > point_nsec + sync_image_pointcloud_tolerance_nsec_) {
-      return VisualSyncState::kMissed;
-    }
-    return VisualSyncState::kReady;
+    return VisualSyncState::kMissed;
   }
 
   void defer_pointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
@@ -557,11 +646,12 @@ private:
     std::shared_ptr<sensor_msgs::msg::CameraInfo> camera_info;
     {
       std::lock_guard<std::mutex> lock(latest_visual_mutex_);
-      if (latest_image_) {
-        image = std::make_shared<sensor_msgs::msg::Image>(*latest_image_);
+      const auto selection = select_visual_locked(stamp);
+      if (selection.image) {
+        image = std::make_shared<sensor_msgs::msg::Image>(*selection.image);
       }
-      if (latest_camera_info_) {
-        camera_info = std::make_shared<sensor_msgs::msg::CameraInfo>(*latest_camera_info_);
+      if (selection.camera_info) {
+        camera_info = std::make_shared<sensor_msgs::msg::CameraInfo>(*selection.camera_info);
       }
     }
 
@@ -902,6 +992,7 @@ private:
   double sync_image_pointcloud_tolerance_sec_{0.01};
   int64_t sync_image_pointcloud_tolerance_nsec_{10000000LL};
   int sync_pointcloud_queue_size_{32};
+  int visual_history_size_{128};
   bool transform_pointcloud_to_camera_frame_{false};
   double pointcloud_filter_min_z_{-std::numeric_limits<double>::max()};
   double pointcloud_filter_max_z_{0.0};
@@ -940,6 +1031,8 @@ private:
   std::mutex pending_pointcloud_mutex_;
   std::shared_ptr<sensor_msgs::msg::Image> latest_image_;
   std::shared_ptr<sensor_msgs::msg::CameraInfo> latest_camera_info_;
+  std::deque<std::shared_ptr<sensor_msgs::msg::Image>> image_history_;
+  std::deque<std::shared_ptr<sensor_msgs::msg::CameraInfo>> camera_info_history_;
   std::deque<sensor_msgs::msg::PointCloud2::ConstSharedPtr> pending_pointclouds_;
 
   size_t image_count_{0};
