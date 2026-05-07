@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <vector>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -21,6 +22,13 @@ struct ImuState
   Eigen::Vector3d accel_bias{Eigen::Vector3d::Zero()};
 };
 
+struct ImuMeasurement
+{
+  int64_t stamp_ns{0};
+  Eigen::Vector3d angular_velocity_rad_s{Eigen::Vector3d::Zero()};
+  Eigen::Vector3d linear_acceleration_m_s2{Eigen::Vector3d::Zero()};
+};
+
 class ImuPropagator
 {
 public:
@@ -32,11 +40,14 @@ public:
   const ImuState & state() const { return state_; }
   bool initialized() const { return initialized_; }
   size_t history_size() const { return history_.size(); }
+  size_t measurement_history_size() const { return measurement_history_.size(); }
 
   void set_gravity_w(const Eigen::Vector3d & gravity_w);
   const Eigen::Vector3d & gravity_w() const { return gravity_w_; }
   void set_max_history_size(size_t max_history_size);
   bool query_state(int64_t stamp_ns, ImuState & state) const;
+  bool rebase_from_state(const ImuState & corrected_state);
+  std::vector<ImuMeasurement> measurements_after(int64_t stamp_ns) const;
 
   void add_measurement(
     int64_t stamp_ns,
@@ -45,13 +56,18 @@ public:
 
 private:
   void push_history(const ImuState & state);
+  void remember_measurement(const ImuMeasurement & measurement);
+  static bool state_is_valid(const ImuState & state);
+  static bool measurement_is_valid(const ImuMeasurement & measurement);
 
   ImuState state_;
   std::deque<ImuState> history_;
+  std::deque<ImuMeasurement> measurement_history_;
   Eigen::Vector3d gravity_w_{Eigen::Vector3d::Zero()};
   Eigen::Vector3d last_angular_velocity_rad_s_{Eigen::Vector3d::Zero()};
   Eigen::Vector3d last_linear_acceleration_m_s2_{Eigen::Vector3d::Zero()};
   size_t max_history_size_{4000};
+  size_t max_measurement_history_size_{4000};
   bool initialized_{false};
   bool has_last_measurement_{false};
 };

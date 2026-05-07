@@ -85,6 +85,59 @@ int main()
     return 1;
   }
 
+  gaussian_lic_tracking::ImuState tilted_initial;
+  tilted_initial.stamp_ns = 0;
+  const Eigen::Quaterniond true_q_w_i =
+    (Eigen::AngleAxisd(0.18, Eigen::Vector3d::UnitX()) *
+    Eigen::AngleAxisd(-0.11, Eigen::Vector3d::UnitY())).normalized();
+  const Eigen::Vector3d tilted_stationary_accel =
+    true_q_w_i.inverse() * Eigen::Vector3d{0.0, 0.0, 9.80665};
+  tilted_initial.q_w_i = Eigen::Quaterniond::FromTwoVectors(
+    tilted_stationary_accel.normalized(),
+    Eigen::Vector3d{0.0, 0.0, 1.0}).normalized();
+  propagator.reset_with_measurement(tilted_initial, zero_omega, tilted_stationary_accel);
+  for (int i = 1; i <= steps; ++i) {
+    propagator.add_measurement(
+      static_cast<int64_t>(i) * dt_ns,
+      zero_omega,
+      tilted_stationary_accel);
+  }
+  const auto tilted_gravity_state = propagator.state();
+  if (tilted_gravity_state.p_w_i.norm() > 1.0e-10 ||
+    tilted_gravity_state.v_w_i.norm() > 1.0e-10)
+  {
+    std::cerr << "IMU tilted gravity alignment failed to keep a stationary sample fixed\n";
+    return 1;
+  }
+
+  propagator.set_gravity_w(Eigen::Vector3d::Zero());
+  propagator.set_max_history_size(200);
+  propagator.reset(initial);
+  for (int i = 1; i <= steps; ++i) {
+    propagator.add_measurement(static_cast<int64_t>(i) * dt_ns, zero_omega, accel);
+  }
+  gaussian_lic_tracking::ImuState corrected_midpoint;
+  if (!propagator.query_state(500000000LL, corrected_midpoint)) {
+    std::cerr << "IMU delayed feedback query failed\n";
+    return 1;
+  }
+  corrected_midpoint.p_w_i.setZero();
+  corrected_midpoint.v_w_i.setZero();
+  if (!propagator.rebase_from_state(corrected_midpoint)) {
+    std::cerr << "IMU delayed feedback rebase failed\n";
+    return 1;
+  }
+  const auto rebased_state = propagator.state();
+  const double rebased_position_x_error = std::abs(rebased_state.p_w_i.x() - 0.125);
+  const double rebased_velocity_x_error = std::abs(rebased_state.v_w_i.x() - 0.5);
+  if (rebased_position_x_error > 1.0e-12 || rebased_velocity_x_error > 1.0e-12 ||
+    propagator.measurement_history_size() == 0U ||
+    propagator.measurements_after(500000000LL).empty())
+  {
+    std::cerr << "IMU delayed feedback rebase did not replay future measurements\n";
+    return 1;
+  }
+
   std::cout << "imu_propagator_probe OK\n";
   return 0;
 }

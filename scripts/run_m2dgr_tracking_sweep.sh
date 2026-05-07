@@ -117,6 +117,7 @@ run_config() {
         --lidar-nearest-distance-m 1.0
         --lidar-correction-gain 0.7
         --lidar-max-correction-m 0.25
+        --tracking-max-pose-step-m 0.08
       )
       ;;
     keyframe_025_tighter_nn)
@@ -125,6 +126,7 @@ run_config() {
         --lidar-nearest-distance-m 0.65
         --lidar-correction-gain 0.6
         --lidar-max-correction-m 0.20
+        --tracking-max-pose-step-m 0.08
       )
       ;;
     low_gain_tighter_step)
@@ -133,6 +135,7 @@ run_config() {
         --lidar-nearest-distance-m 0.55
         --lidar-correction-gain 0.35
         --lidar-max-correction-m 0.12
+        --tracking-max-pose-step-m 0.08
         --sliding-window-max-translation-step-m 0.5
       )
       ;;
@@ -145,6 +148,7 @@ run_config() {
         --sliding-window-pose-rotation-weight 4.0
         --sliding-window-smoothness-position-weight 0.3
         --sliding-window-smoothness-velocity-weight 0.3
+        --tracking-max-pose-step-m 0.08
       )
       ;;
     *)
@@ -163,7 +167,7 @@ run_config() {
     --timeout "${TIMEOUT_SEC}" \
     --post-play-settle "${POST_PLAY_SETTLE_SEC}" \
     --reference-tum "${REFERENCE_TUM}" \
-    --reference-trajectory-align first \
+    --reference-trajectory-align yaw \
     --reference-max-association-dt 0.2 \
     --reference-min-coverage 0.0 \
     --reference-max-rmse-m 2.0 \

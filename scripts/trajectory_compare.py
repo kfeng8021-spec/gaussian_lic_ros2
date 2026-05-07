@@ -78,6 +78,51 @@ def subtract_offset(position, offset):
     )
 
 
+def mean_position(positions):
+    if not positions:
+        return 0.0, 0.0, 0.0
+    inv_count = 1.0 / len(positions)
+    return (
+        sum(position[0] for position in positions) * inv_count,
+        sum(position[1] for position in positions) * inv_count,
+        sum(position[2] for position in positions) * inv_count,
+    )
+
+
+def yaw_alignment_transform(baseline_positions, current_positions):
+    baseline_mean = mean_position(baseline_positions)
+    current_mean = mean_position(current_positions)
+    dot_sum = 0.0
+    cross_sum = 0.0
+    for baseline_position, current_position in zip(baseline_positions, current_positions):
+        current_x = current_position[0] - current_mean[0]
+        current_y = current_position[1] - current_mean[1]
+        baseline_x = baseline_position[0] - baseline_mean[0]
+        baseline_y = baseline_position[1] - baseline_mean[1]
+        dot_sum += current_x * baseline_x + current_y * baseline_y
+        cross_sum += current_x * baseline_y - current_y * baseline_x
+    yaw = math.atan2(cross_sum, dot_sum) if dot_sum != 0.0 or cross_sum != 0.0 else 0.0
+    cos_yaw = math.cos(yaw)
+    sin_yaw = math.sin(yaw)
+    translated_current_mean_x = cos_yaw * current_mean[0] - sin_yaw * current_mean[1]
+    translated_current_mean_y = sin_yaw * current_mean[0] + cos_yaw * current_mean[1]
+    return {
+        "yaw_rad": yaw,
+        "cos": cos_yaw,
+        "sin": sin_yaw,
+        "tx": baseline_mean[0] - translated_current_mean_x,
+        "ty": baseline_mean[1] - translated_current_mean_y,
+        "tz": baseline_mean[2] - current_mean[2],
+    }
+
+
+def apply_yaw_alignment(position, transform):
+    x = transform["cos"] * position[0] - transform["sin"] * position[1] + transform["tx"]
+    y = transform["sin"] * position[0] + transform["cos"] * position[1] + transform["ty"]
+    z = position[2] + transform["tz"]
+    return x, y, z
+
+
 def distance(lhs, rhs):
     dx = lhs[0] - rhs[0]
     dy = lhs[1] - rhs[1]
@@ -104,21 +149,31 @@ def compute_report(args):
     if coverage < args.min_coverage:
         errors.append(f"coverage {coverage:.2%} < min_coverage {args.min_coverage:.2%}")
 
-    offset = (0.0, 0.0, 0.0)
+    baseline_positions = [translation_tuple(pair[0]) for pair in matches]
+    raw_current_positions = [translation_tuple(pair[1]) for pair in matches]
+    alignment_details = {}
     if matches and args.align == "first":
-        baseline_first = translation_tuple(matches[0][0])
-        current_first = translation_tuple(matches[0][1])
+        baseline_first = baseline_positions[0]
+        current_first = raw_current_positions[0]
         offset = (
             current_first[0] - baseline_first[0],
             current_first[1] - baseline_first[1],
             current_first[2] - baseline_first[2],
         )
-
-    baseline_positions = [translation_tuple(pair[0]) for pair in matches]
-    current_positions = [
-        subtract_offset(translation_tuple(pair[1]), offset)
-        for pair in matches
-    ]
+        current_positions = [subtract_offset(position, offset) for position in raw_current_positions]
+        alignment_details = {"translation_offset": offset}
+    elif matches and args.align == "yaw":
+        yaw_transform = yaw_alignment_transform(baseline_positions, raw_current_positions)
+        current_positions = [
+            apply_yaw_alignment(position, yaw_transform)
+            for position in raw_current_positions
+        ]
+        alignment_details = {
+            "yaw_rad": yaw_transform["yaw_rad"],
+            "translation": [yaw_transform["tx"], yaw_transform["ty"], yaw_transform["tz"]],
+        }
+    else:
+        current_positions = raw_current_positions
     translation_errors = [
         distance(baseline_position, current_position)
         for baseline_position, current_position in zip(baseline_positions, current_positions)
@@ -165,6 +220,7 @@ def compute_report(args):
         "baseline": str(Path(args.baseline).expanduser().resolve()),
         "current": str(Path(args.current).expanduser().resolve()),
         "alignment": args.align,
+        "alignment_details": alignment_details,
         "max_association_dt_sec": args.max_association_dt,
         "baseline_poses": len(baseline),
         "current_poses": len(current),
@@ -195,9 +251,12 @@ def main(argv=None):
     parser.add_argument("--output", help="Optional JSON report path")
     parser.add_argument(
         "--align",
-        choices=("none", "first"),
+        choices=("none", "first", "yaw"),
         default="none",
-        help="Apply no alignment, or remove the first matched translation offset.",
+        help=(
+            "Apply no alignment, remove the first matched translation offset, or fit a "
+            "no-scale yaw+xyz translation transform for local-world-to-reference ATE."
+        ),
     )
     parser.add_argument("--max-association-dt", type=float, default=0.02)
     parser.add_argument("--min-matches", type=int, default=2)

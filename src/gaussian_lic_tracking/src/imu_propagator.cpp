@@ -5,6 +5,8 @@
 
 #include <cmath>
 #include <algorithm>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 
 namespace gaussian_lic_tracking
@@ -12,9 +14,13 @@ namespace gaussian_lic_tracking
 
 void ImuPropagator::reset(const ImuState & state)
 {
+  if (!state_is_valid(state)) {
+    throw std::runtime_error("IMU reset state must be finite with a non-zero quaternion");
+  }
   state_ = state;
   state_.q_w_i.normalize();
   history_.clear();
+  measurement_history_.clear();
   push_history(state_);
   initialized_ = true;
   has_last_measurement_ = false;
@@ -25,13 +31,15 @@ void ImuPropagator::reset_with_measurement(
   const Eigen::Vector3d & angular_velocity_rad_s,
   const Eigen::Vector3d & linear_acceleration_m_s2)
 {
-  if (!angular_velocity_rad_s.allFinite() || !linear_acceleration_m_s2.allFinite()) {
+  const ImuMeasurement measurement{state.stamp_ns, angular_velocity_rad_s, linear_acceleration_m_s2};
+  if (!measurement_is_valid(measurement)) {
     throw std::runtime_error("IMU seed measurements must be finite");
   }
   reset(state);
   last_angular_velocity_rad_s_ = angular_velocity_rad_s;
   last_linear_acceleration_m_s2_ = linear_acceleration_m_s2;
   has_last_measurement_ = true;
+  remember_measurement(measurement);
 }
 
 void ImuPropagator::set_gravity_w(const Eigen::Vector3d & gravity_w)
@@ -48,8 +56,12 @@ void ImuPropagator::set_max_history_size(const size_t max_history_size)
     throw std::runtime_error("IMU history size must be at least 2");
   }
   max_history_size_ = max_history_size;
+  max_measurement_history_size_ = max_history_size;
   while (history_.size() > max_history_size_) {
     history_.pop_front();
+  }
+  while (measurement_history_.size() > max_measurement_history_size_) {
+    measurement_history_.pop_front();
   }
 }
 
@@ -84,6 +96,66 @@ bool ImuPropagator::query_state(const int64_t stamp_ns, ImuState & state) const
   return true;
 }
 
+bool ImuPropagator::rebase_from_state(const ImuState & corrected_state)
+{
+  if (!initialized_ || !state_is_valid(corrected_state)) {
+    return false;
+  }
+
+  std::optional<ImuMeasurement> seed_measurement;
+  std::vector<ImuMeasurement> replay_measurements;
+  replay_measurements.reserve(measurement_history_.size());
+  for (const auto & measurement : measurement_history_) {
+    if (measurement.stamp_ns <= corrected_state.stamp_ns) {
+      seed_measurement = measurement;
+    } else {
+      replay_measurements.push_back(measurement);
+    }
+  }
+  if (!seed_measurement.has_value()) {
+    return false;
+  }
+
+  ImuState rebased = corrected_state;
+  rebased.q_w_i.normalize();
+  state_ = rebased;
+  history_.clear();
+  measurement_history_.clear();
+  push_history(state_);
+  last_angular_velocity_rad_s_ = seed_measurement->angular_velocity_rad_s;
+  last_linear_acceleration_m_s2_ = seed_measurement->linear_acceleration_m_s2;
+  has_last_measurement_ = true;
+  remember_measurement(seed_measurement.value());
+
+  try {
+    for (const auto & measurement : replay_measurements) {
+      add_measurement(
+        measurement.stamp_ns,
+        measurement.angular_velocity_rad_s,
+        measurement.linear_acceleration_m_s2);
+    }
+  } catch (const std::exception &) {
+    reset(corrected_state);
+    last_angular_velocity_rad_s_ = seed_measurement->angular_velocity_rad_s;
+    last_linear_acceleration_m_s2_ = seed_measurement->linear_acceleration_m_s2;
+    has_last_measurement_ = true;
+    remember_measurement(seed_measurement.value());
+    return false;
+  }
+  return true;
+}
+
+std::vector<ImuMeasurement> ImuPropagator::measurements_after(const int64_t stamp_ns) const
+{
+  std::vector<ImuMeasurement> output;
+  for (const auto & measurement : measurement_history_) {
+    if (measurement.stamp_ns > stamp_ns) {
+      output.push_back(measurement);
+    }
+  }
+  return output;
+}
+
 void ImuPropagator::push_history(const ImuState & state)
 {
   history_.push_back(state);
@@ -92,11 +164,47 @@ void ImuPropagator::push_history(const ImuState & state)
   }
 }
 
+void ImuPropagator::remember_measurement(const ImuMeasurement & measurement)
+{
+  if (!measurement_is_valid(measurement)) {
+    throw std::runtime_error("IMU measurements must be finite");
+  }
+  if (!measurement_history_.empty() && measurement.stamp_ns <= measurement_history_.back().stamp_ns) {
+    if (measurement.stamp_ns == measurement_history_.back().stamp_ns) {
+      measurement_history_.back() = measurement;
+      return;
+    }
+    throw std::runtime_error("IMU measurement history must be strictly increasing");
+  }
+  measurement_history_.push_back(measurement);
+  while (measurement_history_.size() > max_measurement_history_size_) {
+    measurement_history_.pop_front();
+  }
+}
+
+bool ImuPropagator::state_is_valid(const ImuState & state)
+{
+  return state.p_w_i.allFinite() && state.v_w_i.allFinite() &&
+         state.gyro_bias.allFinite() && state.accel_bias.allFinite() &&
+         state.q_w_i.coeffs().allFinite() &&
+         state.q_w_i.norm() > std::numeric_limits<double>::epsilon();
+}
+
+bool ImuPropagator::measurement_is_valid(const ImuMeasurement & measurement)
+{
+  return measurement.angular_velocity_rad_s.allFinite() &&
+         measurement.linear_acceleration_m_s2.allFinite();
+}
+
 void ImuPropagator::add_measurement(
   const int64_t stamp_ns,
   const Eigen::Vector3d & angular_velocity_rad_s,
   const Eigen::Vector3d & linear_acceleration_m_s2)
 {
+  const ImuMeasurement measurement{stamp_ns, angular_velocity_rad_s, linear_acceleration_m_s2};
+  if (!measurement_is_valid(measurement)) {
+    throw std::runtime_error("IMU measurements must be finite");
+  }
   if (!initialized_) {
     ImuState initial;
     initial.stamp_ns = stamp_ns;
@@ -104,6 +212,7 @@ void ImuPropagator::add_measurement(
     last_angular_velocity_rad_s_ = angular_velocity_rad_s;
     last_linear_acceleration_m_s2_ = linear_acceleration_m_s2;
     has_last_measurement_ = true;
+    remember_measurement(measurement);
     return;
   }
   if (stamp_ns <= state_.stamp_ns) {
@@ -137,6 +246,7 @@ void ImuPropagator::add_measurement(
   last_angular_velocity_rad_s_ = angular_velocity_rad_s;
   last_linear_acceleration_m_s2_ = linear_acceleration_m_s2;
   has_last_measurement_ = true;
+  remember_measurement(measurement);
   push_history(state_);
 }
 

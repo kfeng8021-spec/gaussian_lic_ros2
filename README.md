@@ -819,7 +819,9 @@ Compare a current TUM trajectory against an archived ROS1 baseline:
   --max-path-drift 0.05
 ```
 
-The trajectory gate associates poses by timestamp, reports translation RMSE/mean/max plus path-length drift, and exits non-zero when any threshold fails. Use `--align first` only for datasets whose baseline and current trajectories differ by a known initial translation offset.
+The trajectory gate associates poses by timestamp, reports translation RMSE/mean/max plus path-length drift, and exits non-zero when any threshold fails. Use `--align first` only for datasets whose baseline and current trajectories differ by a known initial translation offset. Use `--align yaw` for local-world frontend trajectories, such as M2DGR native tracking, where the estimator origin/yaw is arbitrary but scale is fixed.
+
+M2DGR `room_01` native tracking now has a 60s slow-replay reference pass at `results/m2dgr/room_01_tracking_sweep_yaw_guarded008_60s/all_frames_default_60s/native_tracking_report.json`: 106 odometry poses, 105 yaw-aligned GT matches, RMSE 0.4479 m, mean 0.4342 m, max 0.7597 m, and zero report errors. This is a frontend trajectory parity checkpoint, not a replacement for the remaining full-dataset ROS1 mapper/render strict artifacts.
 
 Compare a current PLY map against an archived ROS1 baseline:
 

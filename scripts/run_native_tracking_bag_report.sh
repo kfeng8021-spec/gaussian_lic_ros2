@@ -30,6 +30,7 @@ RAW_POINTCLOUD_QOS_RELIABILITY=reliable
 RAW_POINTCLOUD_QOS_DEPTH=256
 POINTCLOUD_IMU_WAIT_QUEUE_SIZE=512
 IMU_HISTORY_SIZE=12000
+TRACKING_MAX_POSE_STEP_M=0.25
 LIDAR_TO_IMU_TRANSLATION_M="[0.04165, 0.02326, -0.0284]"
 LIDAR_TO_IMU_RPY_RAD="[0.0, 0.0, 0.0]"
 CAMERA_TO_IMU_TRANSLATION_M="[0.0673699, 0.0412418, 0.0764217]"
@@ -125,6 +126,7 @@ Options:
   --pointcloud-imu-wait-queue-size N
                                Point-cloud queue while waiting for IMU catch-up. Default: 512.
   --imu-history-size N         IMU propagation history for delayed point-cloud timestamp queries. Default: 12000.
+  --tracking-max-pose-step-m M Max accepted native tracking pose step per point-cloud frame. Default: 0.25.
   --require-deskew             Require nonzero trajectory deskew queries and hits in the report.
   --lidar-to-imu-translation V  YAML vector for LiDAR->IMU translation. Default: FAST-LIVO2.
   --lidar-to-imu-rpy V          YAML vector for LiDAR->IMU RPY radians. Default: FAST-LIVO2 identity.
@@ -193,7 +195,7 @@ Options:
   --require-reference-trajectory
                                Require reference trajectory samples and trajectory_compare.py gate.
   --min-reference-poses N      Minimum reference poses when required. Default: 10.
-  --reference-trajectory-align none|first
+  --reference-trajectory-align none|first|yaw
                                Alignment mode passed to trajectory_compare.py. Default: first.
   --reference-max-association-dt SEC
                                Max timestamp association delta for reference comparison. Default: 0.2.
@@ -315,6 +317,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --imu-history-size)
       IMU_HISTORY_SIZE="$2"
+      shift 2
+      ;;
+    --tracking-max-pose-step-m)
+      TRACKING_MAX_POSE_STEP_M="$2"
       shift 2
       ;;
     --require-deskew)
@@ -635,6 +641,7 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   raw_pointcloud_qos_depth:="${RAW_POINTCLOUD_QOS_DEPTH}" \
   pointcloud_imu_wait_queue_size:="${POINTCLOUD_IMU_WAIT_QUEUE_SIZE}" \
   imu_history_size:="${IMU_HISTORY_SIZE}" \
+  tracking_max_pose_step_m:="${TRACKING_MAX_POSE_STEP_M}" \
   lidar_min_points:="${LIDAR_MIN_POINTS}" \
   lidar_keyframe_translation_m:="${LIDAR_KEYFRAME_TRANSLATION_M}" \
   lidar_to_imu_translation_m:="${LIDAR_TO_IMU_TRANSLATION_M}" \

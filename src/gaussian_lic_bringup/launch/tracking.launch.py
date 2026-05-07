@@ -124,6 +124,7 @@ def generate_launch_description():
     se3_photometric_huber_delta = LaunchConfiguration("se3_photometric_huber_delta")
     se3_photometric_max_abs_residual = LaunchConfiguration("se3_photometric_max_abs_residual")
     enable_gaussian_snapshot = LaunchConfiguration("enable_gaussian_snapshot")
+    tracking_max_pose_step_m = LaunchConfiguration("tracking_max_pose_step_m")
     trajectory_control_interval_ns = LaunchConfiguration("trajectory_control_interval_ns")
     enable_sliding_window_optimizer = LaunchConfiguration("enable_sliding_window_optimizer")
     sliding_window_max_states = LaunchConfiguration("sliding_window_max_states")
@@ -135,6 +136,15 @@ def generate_launch_description():
     sliding_window_max_feedback_translation_m = LaunchConfiguration("sliding_window_max_feedback_translation_m")
     sliding_window_max_feedback_rotation_rad = LaunchConfiguration("sliding_window_max_feedback_rotation_rad")
     sliding_window_max_feedback_velocity_mps = LaunchConfiguration("sliding_window_max_feedback_velocity_mps")
+    sliding_window_max_feedback_velocity_norm_mps = LaunchConfiguration(
+        "sliding_window_max_feedback_velocity_norm_mps"
+    )
+    sliding_window_max_feedback_gyro_bias_norm = LaunchConfiguration(
+        "sliding_window_max_feedback_gyro_bias_norm"
+    )
+    sliding_window_max_feedback_accel_bias_norm = LaunchConfiguration(
+        "sliding_window_max_feedback_accel_bias_norm"
+    )
     sliding_window_max_normal_equation_condition = LaunchConfiguration(
         "sliding_window_max_normal_equation_condition"
     )
@@ -246,6 +256,7 @@ def generate_launch_description():
             DeclareLaunchArgument("se3_photometric_huber_delta", default_value="0.15"),
             DeclareLaunchArgument("se3_photometric_max_abs_residual", default_value="1.0"),
             DeclareLaunchArgument("enable_gaussian_snapshot", default_value="true"),
+            DeclareLaunchArgument("tracking_max_pose_step_m", default_value="0.25"),
             DeclareLaunchArgument("trajectory_control_interval_ns", default_value="50000000"),
             DeclareLaunchArgument("enable_sliding_window_optimizer", default_value="true"),
             DeclareLaunchArgument("sliding_window_max_states", default_value="12"),
@@ -257,6 +268,9 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_max_feedback_translation_m", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_max_feedback_rotation_rad", default_value="0.5"),
             DeclareLaunchArgument("sliding_window_max_feedback_velocity_mps", default_value="5.0"),
+            DeclareLaunchArgument("sliding_window_max_feedback_velocity_norm_mps", default_value="5.0"),
+            DeclareLaunchArgument("sliding_window_max_feedback_gyro_bias_norm", default_value="0.5"),
+            DeclareLaunchArgument("sliding_window_max_feedback_accel_bias_norm", default_value="2.5"),
             DeclareLaunchArgument("sliding_window_max_normal_equation_condition", default_value="10000000000000.0"),
             DeclareLaunchArgument("sliding_window_min_normal_equation_rank_ratio", default_value="0.8"),
             DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0"),
@@ -366,6 +380,7 @@ def generate_launch_description():
                         "se3_photometric_huber_delta": se3_photometric_huber_delta,
                         "se3_photometric_max_abs_residual": se3_photometric_max_abs_residual,
                         "enable_gaussian_snapshot": enable_gaussian_snapshot,
+                        "tracking_max_pose_step_m": tracking_max_pose_step_m,
                         "trajectory_control_interval_ns": trajectory_control_interval_ns,
                         "enable_sliding_window_optimizer": enable_sliding_window_optimizer,
                         "sliding_window_max_states": sliding_window_max_states,
@@ -377,6 +392,9 @@ def generate_launch_description():
                         "sliding_window_max_feedback_translation_m": sliding_window_max_feedback_translation_m,
                         "sliding_window_max_feedback_rotation_rad": sliding_window_max_feedback_rotation_rad,
                         "sliding_window_max_feedback_velocity_mps": sliding_window_max_feedback_velocity_mps,
+                        "sliding_window_max_feedback_velocity_norm_mps": sliding_window_max_feedback_velocity_norm_mps,
+                        "sliding_window_max_feedback_gyro_bias_norm": sliding_window_max_feedback_gyro_bias_norm,
+                        "sliding_window_max_feedback_accel_bias_norm": sliding_window_max_feedback_accel_bias_norm,
                         "sliding_window_max_normal_equation_condition": sliding_window_max_normal_equation_condition,
                         "sliding_window_min_normal_equation_rank_ratio": sliding_window_min_normal_equation_rank_ratio,
                         "sliding_window_max_state_gap_s": sliding_window_max_state_gap_s,
