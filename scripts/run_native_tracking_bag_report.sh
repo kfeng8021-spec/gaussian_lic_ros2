@@ -16,6 +16,12 @@ MIN_POINT_FRAMES=10
 LIDAR_MIN_POINTS=32
 LIDAR_MAX_FRAME_POINTS=4000
 LIDAR_MAX_MAP_POINTS=40000
+LIDAR_NEAREST_DISTANCE_M=1.0
+LIDAR_CORRECTION_GAIN=0.7
+LIDAR_MAX_CORRECTION_M=0.25
+LIDAR_MAX_ROTATION_RAD=0.08
+LIDAR_ROBUST_KERNEL_M=0.15
+LIDAR_KEYFRAME_TRANSLATION_M=0.0
 LIDAR_TIME_MODE=auto
 LIDAR_SCAN_ORDER_DURATION_S=0.1
 RAW_IMU_QOS_RELIABILITY=reliable
@@ -31,6 +37,18 @@ CAMERA_TO_IMU_RPY_RAD="[-1.5768568829, 0.0154178108, -1.5646936365]"
 SLIDING_WINDOW_MAX_ITERATIONS=3
 SLIDING_WINDOW_MAX_STATE_GAP_S=1.0
 SLIDING_WINDOW_MAX_NORMAL_EQUATION_CONDITION=10000000000000.0
+SLIDING_WINDOW_MAX_TRANSLATION_STEP_M=1.0
+SLIDING_WINDOW_IMU_WEIGHT=1.0
+SLIDING_WINDOW_IMU_ROTATION_WEIGHT=1.0
+SLIDING_WINDOW_IMU_VELOCITY_WEIGHT=1.0
+SLIDING_WINDOW_IMU_POSITION_WEIGHT=1.0
+SLIDING_WINDOW_BIAS_WEIGHT=1.0
+SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT=2.0
+SLIDING_WINDOW_POSE_ROTATION_WEIGHT=2.0
+SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT=0.1
+SLIDING_WINDOW_SMOOTHNESS_POSITION_WEIGHT=0.1
+SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT=0.1
+SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT=0.1
 REQUIRE_BA_FEEDBACK=false
 REQUIRE_NONDEGENERATE_BA=false
 REQUIRE_DESKEW=false
@@ -89,6 +107,13 @@ Options:
   --lidar-min-points N         Tracking LiDAR frame minimum. Default: 32.
   --lidar-max-frame-points N   Max LiDAR points used per frame factor. Default: 4000.
   --lidar-max-map-points N     Max LiDAR map points retained by the native factor. Default: 40000.
+  --lidar-nearest-distance-m M  LiDAR correspondence gate. Default: 1.0.
+  --lidar-correction-gain G     Bounded LiDAR correction gain. Default: 0.7.
+  --lidar-max-correction-m M    Max LiDAR translation correction per frame. Default: 0.25.
+  --lidar-max-rotation-rad R    Max LiDAR rotation correction per frame. Default: 0.08.
+  --lidar-robust-kernel-m M     LiDAR robust kernel delta. Default: 0.15.
+  --lidar-keyframe-translation-m M
+                               Keyframe insertion threshold. Default: 0.0 for strict replay sweeps.
   --enable-scan-order-deskew   Use explicit scan-order point timestamps when the bag has no per-point time field.
   --lidar-scan-order-duration-s SEC
                                Scan duration for --enable-scan-order-deskew. Default: 0.1.
@@ -111,6 +136,30 @@ Options:
                                Max active-window state gap before BA is marked degenerate. Default: 1.0.
   --sliding-window-max-condition C
                                Max normal-equation condition before BA is marked degenerate. Default: 1e13.
+  --sliding-window-max-translation-step-m M
+                               Max LM translation increment per state. Default: 1.0.
+  --sliding-window-imu-weight W
+                               IMU residual weight. Default: 1.0.
+  --sliding-window-imu-rotation-weight W
+                               IMU rotation residual weight. Default: 1.0.
+  --sliding-window-imu-velocity-weight W
+                               IMU velocity residual weight. Default: 1.0.
+  --sliding-window-imu-position-weight W
+                               IMU position residual weight. Default: 1.0.
+  --sliding-window-bias-weight W
+                               IMU bias random-walk residual weight. Default: 1.0.
+  --sliding-window-pose-translation-weight W
+                               Pose prior translation weight. Default: 2.0.
+  --sliding-window-pose-rotation-weight W
+                               Pose prior rotation weight. Default: 2.0.
+  --sliding-window-smoothness-rotation-weight W
+                               Trajectory smoothness rotation weight. Default: 0.1.
+  --sliding-window-smoothness-position-weight W
+                               Trajectory smoothness position weight. Default: 0.1.
+  --sliding-window-smoothness-velocity-weight W
+                               Trajectory smoothness velocity weight. Default: 0.1.
+  --sliding-window-smoothness-bias-weight W
+                               Bias smoothness weight. Default: 0.1.
   --require-ba-feedback        Require accepted sliding-window feedback.
   --require-nondegenerate-ba   Require the last reported BA normal equation and state cadence to be non-degenerate.
   --enable-visual-factors      Require mapper-rendered-image visual factors to be present externally.
@@ -212,6 +261,30 @@ while [[ $# -gt 0 ]]; do
       LIDAR_MAX_MAP_POINTS="$2"
       shift 2
       ;;
+    --lidar-nearest-distance-m)
+      LIDAR_NEAREST_DISTANCE_M="$2"
+      shift 2
+      ;;
+    --lidar-correction-gain)
+      LIDAR_CORRECTION_GAIN="$2"
+      shift 2
+      ;;
+    --lidar-max-correction-m)
+      LIDAR_MAX_CORRECTION_M="$2"
+      shift 2
+      ;;
+    --lidar-max-rotation-rad)
+      LIDAR_MAX_ROTATION_RAD="$2"
+      shift 2
+      ;;
+    --lidar-robust-kernel-m)
+      LIDAR_ROBUST_KERNEL_M="$2"
+      shift 2
+      ;;
+    --lidar-keyframe-translation-m)
+      LIDAR_KEYFRAME_TRANSLATION_M="$2"
+      shift 2
+      ;;
     --enable-scan-order-deskew)
       LIDAR_TIME_MODE=scan_order
       shift
@@ -274,6 +347,54 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sliding-window-max-condition)
       SLIDING_WINDOW_MAX_NORMAL_EQUATION_CONDITION="$2"
+      shift 2
+      ;;
+    --sliding-window-max-translation-step-m)
+      SLIDING_WINDOW_MAX_TRANSLATION_STEP_M="$2"
+      shift 2
+      ;;
+    --sliding-window-imu-weight)
+      SLIDING_WINDOW_IMU_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-imu-rotation-weight)
+      SLIDING_WINDOW_IMU_ROTATION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-imu-velocity-weight)
+      SLIDING_WINDOW_IMU_VELOCITY_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-imu-position-weight)
+      SLIDING_WINDOW_IMU_POSITION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-bias-weight)
+      SLIDING_WINDOW_BIAS_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-pose-translation-weight)
+      SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-pose-rotation-weight)
+      SLIDING_WINDOW_POSE_ROTATION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-rotation-weight)
+      SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-position-weight)
+      SLIDING_WINDOW_SMOOTHNESS_POSITION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-velocity-weight)
+      SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-bias-weight)
+      SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT="$2"
       shift 2
       ;;
     --require-ba-feedback)
@@ -515,19 +636,35 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   pointcloud_imu_wait_queue_size:="${POINTCLOUD_IMU_WAIT_QUEUE_SIZE}" \
   imu_history_size:="${IMU_HISTORY_SIZE}" \
   lidar_min_points:="${LIDAR_MIN_POINTS}" \
-  lidar_keyframe_translation_m:=0.0 \
+  lidar_keyframe_translation_m:="${LIDAR_KEYFRAME_TRANSLATION_M}" \
   lidar_to_imu_translation_m:="${LIDAR_TO_IMU_TRANSLATION_M}" \
   lidar_to_imu_rpy_rad:="${LIDAR_TO_IMU_RPY_RAD}" \
   camera_to_imu_translation_m:="${CAMERA_TO_IMU_TRANSLATION_M}" \
   camera_to_imu_rpy_rad:="${CAMERA_TO_IMU_RPY_RAD}" \
   lidar_time_mode:="${LIDAR_TIME_MODE}" \
   lidar_scan_order_duration_s:="${LIDAR_SCAN_ORDER_DURATION_S}" \
-  lidar_nearest_distance_m:=1.0 \
+  lidar_nearest_distance_m:="${LIDAR_NEAREST_DISTANCE_M}" \
+  lidar_correction_gain:="${LIDAR_CORRECTION_GAIN}" \
+  lidar_max_correction_m:="${LIDAR_MAX_CORRECTION_M}" \
+  lidar_max_rotation_rad:="${LIDAR_MAX_ROTATION_RAD}" \
+  lidar_robust_kernel_m:="${LIDAR_ROBUST_KERNEL_M}" \
   lidar_max_frame_points:="${LIDAR_MAX_FRAME_POINTS}" \
   lidar_max_map_points:="${LIDAR_MAX_MAP_POINTS}" \
   sliding_window_max_iterations:="${SLIDING_WINDOW_MAX_ITERATIONS}" \
   sliding_window_max_state_gap_s:="${SLIDING_WINDOW_MAX_STATE_GAP_S}" \
   sliding_window_max_normal_equation_condition:="${SLIDING_WINDOW_MAX_NORMAL_EQUATION_CONDITION}" \
+  sliding_window_max_translation_step_m:="${SLIDING_WINDOW_MAX_TRANSLATION_STEP_M}" \
+  sliding_window_imu_weight:="${SLIDING_WINDOW_IMU_WEIGHT}" \
+  sliding_window_imu_rotation_weight:="${SLIDING_WINDOW_IMU_ROTATION_WEIGHT}" \
+  sliding_window_imu_velocity_weight:="${SLIDING_WINDOW_IMU_VELOCITY_WEIGHT}" \
+  sliding_window_imu_position_weight:="${SLIDING_WINDOW_IMU_POSITION_WEIGHT}" \
+  sliding_window_bias_weight:="${SLIDING_WINDOW_BIAS_WEIGHT}" \
+  sliding_window_pose_translation_weight:="${SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT}" \
+  sliding_window_pose_rotation_weight:="${SLIDING_WINDOW_POSE_ROTATION_WEIGHT}" \
+  sliding_window_smoothness_rotation_weight:="${SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT}" \
+  sliding_window_smoothness_position_weight:="${SLIDING_WINDOW_SMOOTHNESS_POSITION_WEIGHT}" \
+  sliding_window_smoothness_velocity_weight:="${SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT}" \
+  sliding_window_smoothness_bias_weight:="${SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT}" \
   >"${launch_log}" 2>&1 &
 launch_pid=$!
 

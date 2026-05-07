@@ -246,6 +246,14 @@ def audit_sequence(
     if not reference:
         missing.append("native_reference_trajectory")
 
+    raw_ok = bool(raw)
+    if split_components:
+        raw_ok = raw_ok and all(bool(matches) for matches in split_components.values())
+    frontend_ok = bool(frontend)
+    baseline_ok = bool(baseline)
+    current_ok = bool(current)
+    reference_ok = bool(reference)
+
     return {
         "sequence": sequence,
         "roots": [str(root) for root in roots],
@@ -255,6 +263,11 @@ def audit_sequence(
         "ros1_baseline_artifacts": baseline,
         "ros2_current_artifacts": current,
         "native_reference_trajectory": reference,
+        "raw_ok": raw_ok,
+        "frontend_ok": frontend_ok,
+        "baseline_ok": baseline_ok,
+        "current_ok": current_ok,
+        "reference_ok": reference_ok,
         "ok": not missing,
         "missing": missing,
     }
@@ -355,10 +368,20 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             for sequence in catalog["required_sequences"]
         ]
         missing_items = sorted({item for seq in sequences for item in seq["missing"]})
+        raw_ok = all(seq["raw_ok"] for seq in sequences)
+        frontend_ok = all(seq["frontend_ok"] for seq in sequences)
+        baseline_ok = all(seq["baseline_ok"] for seq in sequences)
+        current_ok = all(seq["current_ok"] for seq in sequences)
+        reference_ok = all(seq["reference_ok"] for seq in sequences)
         profiles[profile] = {
             "dataset": catalog["dataset"],
             "source_urls": catalog["source_urls"],
             "required_sequences": sequences,
+            "raw_ok": raw_ok,
+            "frontend_ok": frontend_ok,
+            "baseline_ok": baseline_ok,
+            "current_ok": current_ok,
+            "reference_ok": reference_ok,
             "ok": all(seq["ok"] for seq in sequences),
             "missing": missing_items,
         }
@@ -376,6 +399,11 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "strict_parity_matrix": matrix,
         "profiles": profiles,
     }
+    report["raw_frontend_ok"] = all(
+        profile["raw_ok"] and profile["frontend_ok"] for profile in profiles.values()
+    )
+    report["baseline_artifacts_ok"] = all(profile["baseline_ok"] for profile in profiles.values())
+    report["native_references_ok"] = all(profile["reference_ok"] for profile in profiles.values())
     report["ok"] = report["disk_ok"] and all(profile["ok"] for profile in profiles.values())
     if args.cleanup_candidates > 0:
         report["cleanup_candidates"] = cleanup_candidates(repo_root, args.matrix, args.cleanup_candidates)
@@ -394,21 +422,42 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"{'PASS' if report['disk_ok'] else 'FAIL'}",
         f"Strict evidence currently materialized: "
         f"`{matrix.get('required_non_pending_count', 0)}/{matrix.get('required_count', 0)}`",
+        f"Raw/frontend inputs local: `{'PASS' if report['raw_frontend_ok'] else 'INCOMPLETE'}`",
+        f"ROS1 baseline artifacts local: `{'PASS' if report['baseline_artifacts_ok'] else 'INCOMPLETE'}`",
+        f"Native reference trajectories local: `{'PASS' if report['native_references_ok'] else 'INCOMPLETE'}`",
         "",
-        "| Profile | Dataset | Status | Missing Inputs |",
-        "| --- | --- | --- | --- |",
+        "| Profile | Dataset | Raw | Frontend | Baseline | Current | Reference | Status | Missing Inputs |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for profile, payload in report["profiles"].items():
         missing = ", ".join(payload["missing"]) if payload["missing"] else "none"
         status = "PASS" if payload["ok"] else "MISSING"
-        lines.append(f"| `{profile}` | {payload['dataset']} | {status} | {missing} |")
+        lines.append(
+            f"| `{profile}` | {payload['dataset']} | "
+            f"{'PASS' if payload['raw_ok'] else 'MISS'} | "
+            f"{'PASS' if payload['frontend_ok'] else 'MISS'} | "
+            f"{'PASS' if payload['baseline_ok'] else 'MISS'} | "
+            f"{'PASS' if payload['current_ok'] else 'MISS'} | "
+            f"{'PASS' if payload['reference_ok'] else 'MISS'} | "
+            f"{status} | {missing} |"
+        )
 
     lines.extend(["", "## Sequence Detail", ""])
     for profile, payload in report["profiles"].items():
         lines.append(f"### {profile}")
         for sequence in payload["required_sequences"]:
             missing = ", ".join(sequence["missing"]) if sequence["missing"] else "none"
-            lines.append(f"- `{sequence['sequence']}`: {'PASS' if sequence['ok'] else 'MISSING'}; missing: {missing}")
+            gates = (
+                f"raw={'PASS' if sequence['raw_ok'] else 'MISS'}, "
+                f"frontend={'PASS' if sequence['frontend_ok'] else 'MISS'}, "
+                f"baseline={'PASS' if sequence['baseline_ok'] else 'MISS'}, "
+                f"current={'PASS' if sequence['current_ok'] else 'MISS'}, "
+                f"reference={'PASS' if sequence['reference_ok'] else 'MISS'}"
+            )
+            lines.append(
+                f"- `{sequence['sequence']}`: {'PASS' if sequence['ok'] else 'MISSING'} "
+                f"({gates}); missing: {missing}"
+            )
             for key in (
                 "raw_ros1_bag",
                 "frontend_raw_rosbag2",
