@@ -1,9 +1,9 @@
 # Strict Data Input Audit
 
-Generated: `2026-05-08T05:03:57+00:00`
+Generated: `2026-05-08T06:08:09+00:00`
 Data root: `/home/frank/data`
-Disk free: `105.35 GiB` (minimum requested `100.00 GiB`) - PASS
-Strict evidence currently materialized: `11/12`
+Disk free: `105.34 GiB` (minimum requested `100.00 GiB`) - PASS
+Strict evidence currently materialized: `12/12`
 Raw/frontend inputs local: `PASS`
 ROS1 baseline artifacts local: `INCOMPLETE`
 Native reference trajectories local: `INCOMPLETE`
@@ -41,11 +41,12 @@ Native reference trajectories local: `INCOMPLETE`
   - ros2_current_artifacts: `/home/frank/gaussian_lic_ros2/results/fastlivo/hku2_strict_current`
 
 ### fastlivo2
-- `CBD_Building_01`: MISSING (raw=PASS, frontend=PASS, baseline=PASS, current=PASS, reference=MISS); missing: native_reference_trajectory
+- `CBD_Building_01`: PASS (raw=PASS, frontend=PASS, baseline=PASS, current=PASS, reference=PASS); missing: none
   - raw_ros1_bag: `/home/frank/data/fast_livo/CBD_Building_01.bag`
   - frontend_raw_rosbag2: `/home/frank/data/fast_livo/CBD_Building_01_frontend_raw`
   - ros1_baseline_artifacts: `/home/frank/gaussian_lic_ros2/baseline/fastlivo2/CBD_Building_01`
   - ros2_current_artifacts: `/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_current_round_no_opacity_prune_probe`
+  - native_reference_trajectory: `/home/frank/gaussian_lic_ros2/baseline/fastlivo2/CBD_Building_01/native_reference/cocolic_livo_reference_10hz.tum`
 - `Retail_Street`: MISSING (raw=PASS, frontend=PASS, baseline=MISS, current=PASS, reference=MISS); missing: ros1_baseline_artifacts, native_reference_trajectory
   - raw_ros1_bag: `/home/frank/data/fast_livo/Retail_Street.bag`
   - frontend_raw_rosbag2: `/home/frank/data/fast_livo/Retail_Street_frontend_raw`
@@ -99,10 +100,6 @@ Native reference trajectories local: `INCOMPLETE`
 - `/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_tracking_sweep_rebase_60s` - 0.00 GiB
 - `/home/frank/gaussian_lic_ros2/results/fastlivo/Visual_Challenge_upstream_baseline_failure` - 0.00 GiB
 - `/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_sparse_depth_extrinsic_windowed_visual_60s` - 0.00 GiB
-- `/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_tracking_sweep_rebase_gated_60s` - 0.00 GiB
-- `/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_scan_order_deskew_source_id_queue_gate_60s` - 0.00 GiB
-- `/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_depth_dt1s_valid_sampling_60s` - 0.00 GiB
-- `/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_valid_depth_sampling_default_60s` - 0.00 GiB
 
 ## Source URLs
 

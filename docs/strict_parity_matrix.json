@@ -887,12 +887,79 @@
     },
     {
       "id": "fastlivo2/CBD_Building_01/native_tracking_reference_parity",
-      "kind": "pending",
+      "kind": "native_tracking_report",
       "profile": "fastlivo2",
       "dataset": "FAST-LIVO2",
       "sequence": "CBD_Building_01",
       "required": true,
-      "reason": "frontend_raw CBD bag does not contain a trusted reference odometry topic, and the archived mapper-contract TUM is not a valid native trajectory reference; full native trajectory parity remains missing."
+      "report": "results/fastlivo2/CBD_Building_01_native_tracking_cocolic_reference_imu_scale_full_120s/native_tracking_report.json",
+      "requires_reference_parity": true,
+      "thresholds": [
+        {
+          "path": "metrics.trajectory_poses",
+          "min": 1000
+        },
+        {
+          "path": "metrics.topic_counts./points_for_gs",
+          "min": 1000
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_total_imu_factors",
+          "min": 1000
+        },
+        {
+          "path": "metrics.tracking_status.last.total_window_point_correspondences",
+          "min": 1
+        },
+        {
+          "path": "metrics.tracking_status.last.total_window_plane_correspondences",
+          "min": 1
+        },
+        {
+          "path": "metrics.tracking_status.last.trajectory_deskew_queries",
+          "min": 1
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_normal_equation_rank_ratio",
+          "min": 0.999
+        },
+        {
+          "path": "metrics.tracking_status.last.sliding_window_numeric_jacobian_blocks",
+          "max": 0
+        },
+        {
+          "path": "gate_config.external_reference_tum_poses",
+          "min": 1000
+        },
+        {
+          "path": "gate_config.imu_linear_acceleration_scale",
+          "min": 9.80665
+        },
+        {
+          "path": "trajectory_compare.matched_poses",
+          "min": 1000
+        },
+        {
+          "path": "trajectory_compare.coverage",
+          "min": 0.4
+        },
+        {
+          "path": "trajectory_compare.translation.rmse_m",
+          "max": 2.0
+        },
+        {
+          "path": "trajectory_compare.translation.mean_m",
+          "max": 1.5
+        },
+        {
+          "path": "trajectory_compare.translation.max_m",
+          "max": 5.0
+        },
+        {
+          "path": "trajectory_compare.path_length.relative_drift",
+          "max": 0.75
+        }
+      ]
     },
     {
       "id": "fastlivo/full_sequence_strict",

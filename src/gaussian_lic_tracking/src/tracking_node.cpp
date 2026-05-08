@@ -401,6 +401,9 @@ public:
     imu_gravity_magnitude_m_s2_ = finite_positive_parameter(
       "imu_gravity_magnitude_m_s2",
       declare_parameter<double>("imu_gravity_magnitude_m_s2", 9.80665));
+    imu_linear_acceleration_scale_ = finite_positive_parameter(
+      "imu_linear_acceleration_scale",
+      declare_parameter<double>("imu_linear_acceleration_scale", 1.0));
     imu_gravity_autocalibration_min_norm_m_s2_ = finite_positive_parameter(
       "imu_gravity_autocalibration_min_norm_m_s2",
       declare_parameter<double>("imu_gravity_autocalibration_min_norm_m_s2", 6.0));
@@ -682,10 +685,12 @@ private:
         msg.angular_velocity.x,
         msg.angular_velocity.y,
         msg.angular_velocity.z};
-      const Eigen::Vector3d linear_acceleration{
+      const Eigen::Vector3d raw_linear_acceleration{
         msg.linear_acceleration.x,
         msg.linear_acceleration.y,
         msg.linear_acceleration.z};
+      const Eigen::Vector3d linear_acceleration =
+        imu_linear_acceleration_scale_ * raw_linear_acceleration;
       if (!angular_velocity.allFinite() || !linear_acceleration.allFinite()) {
         ++imu_invalid_measurements_;
         RCLCPP_WARN_THROTTLE(
@@ -3572,6 +3577,7 @@ private:
   bool enable_imu_gravity_autocalibration_{true};
   int imu_gravity_autocalibration_samples_{50};
   double imu_gravity_magnitude_m_s2_{9.80665};
+  double imu_linear_acceleration_scale_{1.0};
   double imu_gravity_autocalibration_min_norm_m_s2_{6.0};
   double imu_gravity_autocalibration_max_norm_m_s2_{14.0};
   Eigen::Vector3d configured_imu_gravity_w_{0.0, 0.0, -9.80665};

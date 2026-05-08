@@ -22,6 +22,7 @@ LIDAR_MAX_CORRECTION_M=0.25
 LIDAR_MAX_ROTATION_RAD=0.08
 LIDAR_ROBUST_KERNEL_M=0.15
 LIDAR_KEYFRAME_TRANSLATION_M=0.0
+MAX_LIDAR_INVALID_FRAMES=0
 LIDAR_TIME_MODE=auto
 LIDAR_SCAN_ORDER_DURATION_S=0.1
 RAW_IMU_QOS_RELIABILITY=reliable
@@ -30,6 +31,7 @@ RAW_POINTCLOUD_QOS_RELIABILITY=reliable
 RAW_POINTCLOUD_QOS_DEPTH=256
 POINTCLOUD_IMU_WAIT_QUEUE_SIZE=512
 IMU_HISTORY_SIZE=12000
+IMU_LINEAR_ACCELERATION_SCALE=1.0
 TRACKING_MAX_POSE_STEP_M=0.25
 LIDAR_TO_IMU_TRANSLATION_M="[0.04165, 0.02326, -0.0284]"
 LIDAR_TO_IMU_RPY_RAD="[0.0, 0.0, 0.0]"
@@ -115,6 +117,7 @@ Options:
   --lidar-robust-kernel-m M     LiDAR robust kernel delta. Default: 0.15.
   --lidar-keyframe-translation-m M
                                Keyframe insertion threshold. Default: 0.0 for strict replay sweeps.
+  --max-lidar-invalid-frames N  Maximum invalid LiDAR frames tolerated by report gate. Default: 0.
   --enable-scan-order-deskew   Use explicit scan-order point timestamps when the bag has no per-point time field.
   --lidar-scan-order-duration-s SEC
                                Scan duration for --enable-scan-order-deskew. Default: 0.1.
@@ -126,6 +129,8 @@ Options:
   --pointcloud-imu-wait-queue-size N
                                Point-cloud queue while waiting for IMU catch-up. Default: 512.
   --imu-history-size N         IMU propagation history for delayed point-cloud timestamp queries. Default: 12000.
+  --imu-linear-acceleration-scale S
+                               Scale applied to incoming IMU linear_acceleration before propagation. Use 9.80665 for FAST-LIVO/FAST-LIVO2 normalized-g bags.
   --tracking-max-pose-step-m M Max accepted native tracking pose step per point-cloud frame. Default: 0.25.
   --require-deskew             Require nonzero trajectory deskew queries and hits in the report.
   --lidar-to-imu-translation V  YAML vector for LiDAR->IMU translation. Default: FAST-LIVO2.
@@ -287,6 +292,10 @@ while [[ $# -gt 0 ]]; do
       LIDAR_KEYFRAME_TRANSLATION_M="$2"
       shift 2
       ;;
+    --max-lidar-invalid-frames)
+      MAX_LIDAR_INVALID_FRAMES="$2"
+      shift 2
+      ;;
     --enable-scan-order-deskew)
       LIDAR_TIME_MODE=scan_order
       shift
@@ -317,6 +326,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --imu-history-size)
       IMU_HISTORY_SIZE="$2"
+      shift 2
+      ;;
+    --imu-linear-acceleration-scale)
+      IMU_LINEAR_ACCELERATION_SCALE="$2"
       shift 2
       ;;
     --tracking-max-pose-step-m)
@@ -641,6 +654,7 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   raw_pointcloud_qos_depth:="${RAW_POINTCLOUD_QOS_DEPTH}" \
   pointcloud_imu_wait_queue_size:="${POINTCLOUD_IMU_WAIT_QUEUE_SIZE}" \
   imu_history_size:="${IMU_HISTORY_SIZE}" \
+  imu_linear_acceleration_scale:="${IMU_LINEAR_ACCELERATION_SCALE}" \
   tracking_max_pose_step_m:="${TRACKING_MAX_POSE_STEP_M}" \
   lidar_min_points:="${LIDAR_MIN_POINTS}" \
   lidar_keyframe_translation_m:="${LIDAR_KEYFRAME_TRANSLATION_M}" \
@@ -753,6 +767,8 @@ unset record_pid
 stop_process_group "${launch_pid}" TERM
 unset launch_pid
 
+IMU_LINEAR_ACCELERATION_SCALE_REPORT="${IMU_LINEAR_ACCELERATION_SCALE}" \
+MAX_LIDAR_INVALID_FRAMES_REPORT="${MAX_LIDAR_INVALID_FRAMES}" \
 python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${MIN_POSES}" "${MIN_STATUS_SAMPLES}" "${MIN_POINT_FRAMES}" "${REQUIRE_BA_FEEDBACK}" \
   "${REQUIRE_REFERENCE_TRAJECTORY}" "${MIN_REFERENCE_POSES}" "${REQUIRE_NONDEGENERATE_BA}" \
@@ -766,6 +782,7 @@ python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${SE3_PHOTOMETRIC_MIN_COVERAGE_TILES}" "${MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC}" \
   "${REFERENCE_TUM_PATH}" <<'PY'
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -795,6 +812,23 @@ se3_photometric_min_coverage_tiles = int(sys.argv[23])
 mapper_feedback_sync_tolerance_sec = float(sys.argv[24])
 reference_tum_path = Path(sys.argv[25]) if sys.argv[25] else None
 has_external_reference_tum = reference_tum_path is not None and reference_tum_path.is_file() and reference_tum_path.stat().st_size > 0
+imu_linear_acceleration_scale = float(os.environ["IMU_LINEAR_ACCELERATION_SCALE_REPORT"])
+max_lidar_invalid_frames = int(os.environ["MAX_LIDAR_INVALID_FRAMES_REPORT"])
+
+
+def count_tum_poses(path: Path | None) -> int:
+    if path is None or not path.is_file():
+        return 0
+    count = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                count += 1
+    return count
+
+
+external_reference_pose_count = count_tum_poses(reference_tum_path)
 
 metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 topic_counts = metrics.get("topic_counts", {})
@@ -823,7 +857,6 @@ for key in (
     "external_odometry_prior_stamp_regressions",
     "imu_invalid_measurements",
     "external_odometry_prior_invalid_messages",
-    "lidar_invalid_frames",
     "lidar_invalid_points",
     "lidar_invalid_point_times",
     "lidar_out_of_range_point_times",
@@ -838,6 +871,10 @@ for key in (
 ):
     if int(last.get(key, 0)) != 0:
         errors.append(f"{key} is {last.get(key)}")
+
+lidar_invalid_frames = int(last.get("lidar_invalid_frames", 0))
+if lidar_invalid_frames > max_lidar_invalid_frames:
+    errors.append(f"lidar_invalid_frames {lidar_invalid_frames} > {max_lidar_invalid_frames}")
 
 if int(last.get("sliding_window_normal_equation_rows", 0)) <= 0:
     errors.append("sliding_window_normal_equation_rows is zero")
@@ -987,6 +1024,9 @@ report = {
         "se3_photometric_coverage_grid_rows": se3_photometric_coverage_grid_rows,
         "se3_photometric_min_coverage_tiles": se3_photometric_min_coverage_tiles,
         "reference_tum_path": str(reference_tum_path) if reference_tum_path else "",
+        "external_reference_tum_poses": external_reference_pose_count,
+        "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
+        "max_lidar_invalid_frames": max_lidar_invalid_frames,
     },
     "metrics": metrics,
 }

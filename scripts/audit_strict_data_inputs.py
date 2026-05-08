@@ -175,6 +175,19 @@ def reference_files(root: Path, sequence: str, limit: int) -> list[Path]:
     return candidates
 
 
+def repo_native_reference_files(root: Path, sequence: str, limit: int) -> list[Path]:
+    candidates: list[Path] = []
+    for path in limited_rglob(root, REFERENCE_PATTERNS, limit * 64):
+        text = normalize(str(path))
+        if "nativereference" not in text:
+            continue
+        if sequence_matches(path, sequence):
+            candidates.append(path)
+            if len(candidates) >= limit:
+                break
+    return candidates
+
+
 def candidate_roots(data_root: Path, profile: str) -> list[Path]:
     roots = []
     for item in CATALOG[profile]["roots"]:
@@ -228,6 +241,8 @@ def audit_sequence(
     results_root = repo_root / "results" / profile
     baselines = artifact_dirs(baseline_root, max_candidates * 8)
     currents = artifact_dirs(results_root, max_candidates * 16)
+    references.extend(repo_native_reference_files(baseline_root, sequence, max_candidates))
+    references.extend(repo_native_reference_files(results_root, sequence, max_candidates))
 
     raw = find_matches(raw_paths, sequence, max_candidates)
     split_components = split_raw_component_matches(

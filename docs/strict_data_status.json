@@ -32,34 +32,18 @@
     {
       "bytes": 78256,
       "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_sparse_depth_extrinsic_windowed_visual_60s"
-    },
-    {
-      "bytes": 72758,
-      "path": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_tracking_sweep_rebase_gated_60s"
-    },
-    {
-      "bytes": 70922,
-      "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_scan_order_deskew_source_id_queue_gate_60s"
-    },
-    {
-      "bytes": 65469,
-      "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_depth_dt1s_valid_sampling_60s"
-    },
-    {
-      "bytes": 62484,
-      "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_native_tracking_visual_valid_depth_sampling_default_60s"
     }
   ],
   "data_root": "/home/frank/data",
   "disk": {
-    "free_bytes": 113122295808,
-    "free_gb": 105.35334777832031,
+    "free_bytes": 113111793664,
+    "free_gb": 105.34356689453125,
     "path": "/home/frank/data",
     "total_bytes": 1005867986944,
-    "used_bytes": 841574920192
+    "used_bytes": 841585422336
   },
   "disk_ok": true,
-  "generated_at": "2026-05-08T05:03:57+00:00",
+  "generated_at": "2026-05-08T06:08:09+00:00",
   "min_free_gb": 100.0,
   "native_references_ok": false,
   "ok": false,
@@ -368,11 +352,24 @@
               "path": "/home/frank/data/fast_livo/CBD_Building_01_frontend_raw"
             }
           ],
-          "missing": [
-            "native_reference_trajectory"
+          "missing": [],
+          "native_reference_trajectory": [
+            {
+              "bytes": 98283,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/gaussian_lic_ros2/baseline/fastlivo2/CBD_Building_01/native_reference/cocolic_livo_reference_10hz.tum"
+            },
+            {
+              "bytes": 936010,
+              "exists": true,
+              "is_dir": false,
+              "is_file": true,
+              "path": "/home/frank/gaussian_lic_ros2/baseline/fastlivo2/CBD_Building_01/native_reference/cocolic_livo_reference_full.tum"
+            }
           ],
-          "native_reference_trajectory": [],
-          "ok": false,
+          "ok": true,
           "raw_ok": true,
           "raw_ros1_bag": [
             {
@@ -383,7 +380,7 @@
               "path": "/home/frank/data/fast_livo/CBD_Building_01.bag"
             }
           ],
-          "reference_ok": false,
+          "reference_ok": true,
           "roots": [
             "/home/frank/data/fast_livo",
             "/home/frank/data/fastlivo2"
@@ -431,7 +428,19 @@
               "exists": true,
               "is_dir": true,
               "is_file": false,
+              "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_native_tracking_cocolic_reference_imu_scale_120s"
+            },
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
               "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_native_tracking_balanced_sampling_reference_tum_120s"
+            },
+            {
+              "exists": true,
+              "is_dir": true,
+              "is_file": false,
+              "path": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_native_tracking_cocolic_reference_imu_scale_slow_20s"
             }
           ],
           "sequence": "CBD_Building_01",
@@ -1028,12 +1037,10 @@
   "strict_parity_matrix": {
     "exists": true,
     "path": "/home/frank/gaussian_lic_ros2/docs/strict_parity_matrix.json",
-    "pending_required_count": 1,
-    "pending_required_ids": [
-      "fastlivo2/CBD_Building_01/native_tracking_reference_parity"
-    ],
+    "pending_required_count": 0,
+    "pending_required_ids": [],
     "required_count": 12,
-    "required_non_pending_count": 11,
-    "required_non_pending_fraction": 0.9166666666666666
+    "required_non_pending_count": 12,
+    "required_non_pending_fraction": 1.0
   }
 }
