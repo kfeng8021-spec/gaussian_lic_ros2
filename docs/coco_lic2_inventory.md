@@ -178,7 +178,20 @@ Current ROS2 implementation status:
   with FAST-LIVO/FAST-LIVO2/M2DGR/MCD/R3LIVE covered, because the additions
   above are new libraries + probes only — `tracking_node` default behavior is
   unchanged.
-- Remaining work: hook the new continuous-time factors into `tracking_node`
-  as an opt-in path next to the existing discrete-state sliding window;
-  publish reference-trajectory parity reports comparing the continuous-time
-  tracker against upstream Coco-LIC on the existing 12/12 strict matrix.
+- `gaussian_lic_tracking::spline::ContinuousTimeSlidingWindowEstimator`
+  (port of Coco-LIC's `OdometryManager` streaming driver) combines
+  `TrajectoryEstimator` and `SplineMarginalizationInfo` into the online
+  sliding-window estimator. Streaming IMU / LiDAR samples are buffered,
+  promoted into a persistent active-factor list when they fall inside the
+  current optimizable interior, and the window extends knot-by-knot via
+  linear extrapolation as new measurements arrive. When the active window
+  exceeds `window_knot_count`, the oldest `marginalize_oldest_count` knots
+  are dropped. `continuous_time_sliding_window_probe` covers single-step,
+  streaming, and marginalization regimes.
+- Remaining work: replace `NumericDiffCostFunction` in the continuous-time
+  estimator with analytic `So3SplineView::JacobianStruct` knot Jacobians
+  ported from upstream; wire `ContinuousTimeSlidingWindowEstimator` into
+  `tracking_node` as an opt-in path next to the existing discrete-state
+  sliding window; publish reference-trajectory parity reports comparing
+  the continuous-time tracker against upstream Coco-LIC on the existing
+  12/12 strict matrix.
