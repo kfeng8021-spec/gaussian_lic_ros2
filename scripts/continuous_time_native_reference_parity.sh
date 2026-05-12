@@ -25,6 +25,17 @@ PRIOR_TUM="${PRIOR_TUM:-}"
 PLAYBACK_DURATION="${PLAYBACK_DURATION:-12}"
 PLAYBACK_RATE="${PLAYBACK_RATE:-0.5}"
 OUTPUT_DIR="${OUTPUT_DIR:-${WORKSPACE}/results/fastlivo2/CBD_Building_01_continuous_time_native_parity}"
+POINTCLOUD_ENABLE="${POINTCLOUD_ENABLE:-true}"
+POINTCLOUD_FACTOR_WEIGHT="${POINTCLOUD_FACTOR_WEIGHT:-1.0}"
+ENABLE_VOXEL_PLANE_EXTRACTION="${ENABLE_VOXEL_PLANE_EXTRACTION:-true}"
+ENABLE_PERSISTENT_PLANE_MAP="${ENABLE_PERSISTENT_PLANE_MAP:-true}"
+VOXEL_PLANE_SIZE_M="${VOXEL_PLANE_SIZE_M:-0.8}"
+VOXEL_PLANE_MIN_POINTS="${VOXEL_PLANE_MIN_POINTS:-6}"
+VOXEL_PLANE_EIGEN_RATIO="${VOXEL_PLANE_EIGEN_RATIO:-0.10}"
+VOXEL_PLANE_MAX_INLIER_M="${VOXEL_PLANE_MAX_INLIER_M:-0.20}"
+VOXEL_PLANE_MAX_CORRESPONDENCES="${VOXEL_PLANE_MAX_CORRESPONDENCES:-48}"
+MAX_POSITION_UPDATE_M="${MAX_POSITION_UPDATE_M:-2.0}"
+MAX_ROTATION_UPDATE_RAD="${MAX_ROTATION_UPDATE_RAD:-0.50}"
 
 source "${SOURCE_SETUP}"
 source "${WORKSPACE}/install/setup.bash"
@@ -48,13 +59,17 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p marginalize_oldest_count:=1 \
   -p seed_min_imu_count:=30 \
   -p step_period_seconds:=0.20 \
-  -p pointcloud_enable:=true \
-  -p enable_voxel_plane_extraction:=true \
-  -p voxel_plane_size_m:=0.8 \
-  -p voxel_plane_min_points:=6 \
-  -p voxel_plane_eigen_ratio:=0.10 \
-  -p voxel_plane_max_inlier_m:=0.20 \
-  -p voxel_plane_max_correspondences:=48 \
+  -p pointcloud_enable:="${POINTCLOUD_ENABLE}" \
+  -p pointcloud_factor_weight:="${POINTCLOUD_FACTOR_WEIGHT}" \
+  -p enable_voxel_plane_extraction:="${ENABLE_VOXEL_PLANE_EXTRACTION}" \
+  -p enable_persistent_plane_map:="${ENABLE_PERSISTENT_PLANE_MAP}" \
+  -p voxel_plane_size_m:="${VOXEL_PLANE_SIZE_M}" \
+  -p voxel_plane_min_points:="${VOXEL_PLANE_MIN_POINTS}" \
+  -p voxel_plane_eigen_ratio:="${VOXEL_PLANE_EIGEN_RATIO}" \
+  -p voxel_plane_max_inlier_m:="${VOXEL_PLANE_MAX_INLIER_M}" \
+  -p voxel_plane_max_correspondences:="${VOXEL_PLANE_MAX_CORRESPONDENCES}" \
+  -p max_position_update_m:="${MAX_POSITION_UPDATE_M}" \
+  -p max_rotation_update_rad:="${MAX_ROTATION_UPDATE_RAD}" \
   -p enable_external_odometry_prior:="$([ -n "${PRIOR_TUM}" ] && echo true || echo false)" \
   -p external_odometry_prior_topic:=/external_odometry_prior \
   > "${NODE_LOG}" 2>&1 &
