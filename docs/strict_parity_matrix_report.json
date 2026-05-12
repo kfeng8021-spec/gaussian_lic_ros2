@@ -1,0 +1,324 @@
+{
+  "covered_profiles": [
+    "fastlivo",
+    "fastlivo2",
+    "m2dgr",
+    "mcd",
+    "r3live"
+  ],
+  "entries": [
+    {
+      "errors": [],
+      "id": "fastlivo2/CBD_Building_01/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 1063.0,
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_current_round_no_opacity_prune_probe/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "CBD_Building_01"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo2/CBD_Building_01/native_tracking_visual_ba_120s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_native_tracking_visual_ba_sync50ms_120s/native_tracking_report.json",
+      "required": true,
+      "sequence": "CBD_Building_01"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo2/Bright_Screen_Wall/mapper_contract_curated",
+      "kind": "reproduction_report",
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Bright_Screen_Wall_current_extrinsic_color_fullseq/reproduction_report_combined.json",
+      "required": false,
+      "sequence": "Bright_Screen_Wall_fastlivo2_color_8s"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo2/Retail_Street/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/Retail_Street_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "Retail_Street"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/hku1/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 981.0,
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/hku1_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "hku1"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/hku2/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 811.0,
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/hku2_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "hku2"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/Visual_Challenge/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 1217.0,
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/Visual_Challenge_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "Visual_Challenge"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/LiDAR_Degenerate/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 593.0,
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/LiDAR_Degenerate_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "LiDAR_Degenerate"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/hku1/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/hku1_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "hku1"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/hku2/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/hku2_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "hku2"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/Visual_Challenge/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/Visual_Challenge_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "Visual_Challenge"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/LiDAR_Degenerate/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo/LiDAR_Degenerate_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "LiDAR_Degenerate"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_01/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 700.0,
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "room_01"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_02/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 752.0,
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_02_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "room_02"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_03/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 1277.0,
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_03_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "room_03"
+    },
+    {
+      "errors": [],
+      "id": "mcd/ntu_day_01/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "mcd",
+      "report": "/home/frank/gaussian_lic_ros2/results/mcd/ntu_day_01_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "ntu_day_01"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_01/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "room_01"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_01/native_tracking_yaw_reference_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_01_tracking_sweep_yaw_guarded008_60s/all_frames_default_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "room_01"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_02/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_02_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "room_02"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/room_03/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "/home/frank/gaussian_lic_ros2/results/m2dgr/room_03_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "room_03"
+    },
+    {
+      "errors": [],
+      "id": "r3live/hku_park_00/native_tracking_scan_order_60s",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "r3live",
+      "report": "/home/frank/gaussian_lic_ros2/results/r3live/hku_park_00_native_tracking_scan_order_60s/native_tracking_report.json",
+      "required": false,
+      "sequence": "hku_park_00"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo2/CBD_Building_01/native_tracking_reference_parity",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_native_tracking_cocolic_reference_imu_scale_full_120s/native_tracking_report.json",
+      "required": true,
+      "sequence": "CBD_Building_01"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo/full_sequence_strict",
+      "kind": "pending",
+      "ok": true,
+      "profile": "fastlivo",
+      "report": "",
+      "required": false,
+      "sequence": "all_required_sequences"
+    },
+    {
+      "errors": [],
+      "id": "m2dgr/full_sequence_strict",
+      "kind": "pending",
+      "ok": true,
+      "profile": "m2dgr",
+      "report": "",
+      "required": false,
+      "sequence": "all_required_sequences"
+    },
+    {
+      "errors": [],
+      "id": "mcd/ntu_day_01/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 1804.0,
+      "ok": true,
+      "profile": "mcd",
+      "report": "/home/frank/gaussian_lic_ros2/results/mcd/ntu_day_01_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "ntu_day_01"
+    },
+    {
+      "errors": [],
+      "id": "mcd/full_sequence_strict",
+      "kind": "pending",
+      "ok": true,
+      "profile": "mcd",
+      "report": "",
+      "required": false,
+      "sequence": "all_required_sequences"
+    },
+    {
+      "errors": [],
+      "id": "r3live/hku_park_00/mapper_contract_cuda_strict",
+      "kind": "reproduction_report",
+      "matched_render_pairs": 2280.0,
+      "ok": true,
+      "profile": "r3live",
+      "report": "/home/frank/gaussian_lic_ros2/results/r3live/hku_park_00_strict_current/reproduction_report_strict.json",
+      "required": true,
+      "sequence": "hku_park_00"
+    },
+    {
+      "errors": [],
+      "id": "r3live/full_sequence_strict",
+      "kind": "pending",
+      "ok": true,
+      "profile": "r3live",
+      "report": "",
+      "required": false,
+      "sequence": "all_required_sequences"
+    },
+    {
+      "errors": [],
+      "id": "fastlivo2/CBD_Building_01/continuous_time_native_parity",
+      "kind": "native_tracking_report",
+      "ok": true,
+      "profile": "fastlivo2",
+      "report": "/home/frank/gaussian_lic_ros2/results/fastlivo2/CBD_Building_01_continuous_time_native_parity/native_tracking_report.json",
+      "required": true,
+      "sequence": "CBD_Building_01"
+    }
+  ],
+  "manifest": "gaussian_lic_strict_parity_matrix/v1",
+  "missing_profiles": [],
+  "ok": true,
+  "required_count": 13,
+  "required_ok_count": 13,
+  "schema": "gaussian_lic_strict_parity_matrix_report/v1",
+  "target_profiles": [
+    "fastlivo",
+    "fastlivo2",
+    "m2dgr",
+    "mcd",
+    "r3live"
+  ]
+}

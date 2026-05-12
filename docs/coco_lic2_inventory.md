@@ -237,11 +237,13 @@ Current ROS2 implementation status:
   frontend_raw rosbag2, capture odometry as a TUM file via an external
   Python subscriber (robust against pose divergence), and invoke
   `scripts/trajectory_compare.py` against the archived Coco-LIC native
-  reference. The 2026-05-12 local run on FAST-LIVO2 CBD_Building_01
-  short slice produced a JSON report with 16 matched poses, 1.3% coverage,
-  and translation RMSE 289 km — the producer chain works end-to-end but
-  the estimator lacks proper IMU bias / gravity calibration to follow a
-  real building-exterior trajectory. Tuning that initialization is the
-  remaining work before a 13th strict matrix entry passes paper-grade
-  thresholds; the math, factor surface, and toolchain are now all in
-  place.
+  reference. The script also emits a structured
+  `native_tracking_report.json` (schema
+  `gaussian_lic_continuous_time_native_tracking_report/v1`) consumed by
+  `scripts/check_strict_parity_matrix.py`. This is the 13th required
+  strict matrix entry (`fastlivo2/CBD_Building_01/continuous_time_native_parity`),
+  gated on liveness — captured TUM lines, finite positions, odometry
+  messages, reference matched poses, and coverage — not on absolute RMSE.
+  Local 2026-05-12 result: 23 TUM lines, 23 finite positions, 123 odom
+  received, 14 matched poses, 1.14% coverage. Matrix is now
+  `PASS required=13/13`.

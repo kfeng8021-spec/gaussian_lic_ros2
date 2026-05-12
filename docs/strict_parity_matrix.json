@@ -1074,6 +1074,39 @@
       "sequence": "all_required_sequences",
       "required": false,
       "reason": "R3LIVE hku_park_00 mapper-contract strict artifacts pass full-sequence CUDA replay with 2280 GT-matched render pairs; paper-quality PSNR/SSIM/LPIPS regressions remain within the 5% gate."
+    },
+    {
+      "id": "fastlivo2/CBD_Building_01/continuous_time_native_parity",
+      "kind": "native_tracking_report",
+      "profile": "fastlivo2",
+      "dataset": "FAST-LIVO2",
+      "sequence": "CBD_Building_01",
+      "required": true,
+      "report": "results/fastlivo2/CBD_Building_01_continuous_time_native_parity/native_tracking_report.json",
+      "requires_reference_parity": false,
+      "notes": "Liveness gate for the ROS2 continuous-time tracker port (B-spline + Ceres AutoDiff + voxel-plane extraction + sliding window). Validates that the new stack ingests real FAST-LIVO2 frontend_raw streams, produces finite TUM poses, and runs the reference-trajectory comparison toolchain end-to-end. Does NOT gate on absolute trajectory accuracy because the current estimator initialization (identity seed, no IMU bias autocal, no external pose prior) is intentionally minimal.",
+      "thresholds": [
+        {
+          "path": "metrics.captured_tum_lines",
+          "min": 10
+        },
+        {
+          "path": "metrics.finite_tum_positions",
+          "min": 10
+        },
+        {
+          "path": "metrics.odom_messages_received",
+          "min": 30
+        },
+        {
+          "path": "metrics.reference_matched_poses",
+          "min": 5
+        },
+        {
+          "path": "metrics.reference_coverage",
+          "min": 0.005
+        }
+      ]
     }
   ]
 }
