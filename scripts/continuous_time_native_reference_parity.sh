@@ -51,6 +51,14 @@ LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA_M="${LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA
 LIDAR_POSE_PRIOR_VELOCITY_HUBER_DELTA_MPS="${LIDAR_POSE_PRIOR_VELOCITY_HUBER_DELTA_MPS:-0.25}"
 LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD="${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD:-0.25}"
 LIDAR_POSE_FACTOR_KEYFRAME_STRIDE="${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE:-5}"
+LIDAR_POSE_FACTOR_MIN_POINTS="${LIDAR_POSE_FACTOR_MIN_POINTS:-32}"
+LIDAR_POSE_FACTOR_MAX_FRAME_POINTS="${LIDAR_POSE_FACTOR_MAX_FRAME_POINTS:-2000}"
+LIDAR_POSE_FACTOR_MAX_MAP_POINTS="${LIDAR_POSE_FACTOR_MAX_MAP_POINTS:-20000}"
+LIDAR_POSE_FACTOR_NEAREST_DISTANCE_M="${LIDAR_POSE_FACTOR_NEAREST_DISTANCE_M:-0.35}"
+LIDAR_POSE_FACTOR_CORRECTION_GAIN="${LIDAR_POSE_FACTOR_CORRECTION_GAIN:-0.7}"
+LIDAR_POSE_FACTOR_MAX_CORRECTION_M="${LIDAR_POSE_FACTOR_MAX_CORRECTION_M:-0.25}"
+LIDAR_POSE_FACTOR_MAX_ROTATION_RAD="${LIDAR_POSE_FACTOR_MAX_ROTATION_RAD:-0.08}"
+LIDAR_POSE_FACTOR_ROBUST_KERNEL_M="${LIDAR_POSE_FACTOR_ROBUST_KERNEL_M:-0.15}"
 ENABLE_LIDAR_PLANE_NORMAL_FACTOR="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR:-false}"
 LIDAR_PLANE_NORMAL_FACTOR_WEIGHT="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT:-0.1}"
 LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD:-0.10}"
@@ -138,6 +146,14 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p lidar_pose_prior_velocity_huber_delta_mps:="${LIDAR_POSE_PRIOR_VELOCITY_HUBER_DELTA_MPS}" \
   -p lidar_pose_prior_orientation_huber_delta_rad:="${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD}" \
   -p lidar_pose_factor_keyframe_stride:="${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE}" \
+  -p lidar_pose_factor_min_points:="${LIDAR_POSE_FACTOR_MIN_POINTS}" \
+  -p lidar_pose_factor_max_frame_points:="${LIDAR_POSE_FACTOR_MAX_FRAME_POINTS}" \
+  -p lidar_pose_factor_max_map_points:="${LIDAR_POSE_FACTOR_MAX_MAP_POINTS}" \
+  -p lidar_pose_factor_nearest_distance_m:="${LIDAR_POSE_FACTOR_NEAREST_DISTANCE_M}" \
+  -p lidar_pose_factor_correction_gain:="${LIDAR_POSE_FACTOR_CORRECTION_GAIN}" \
+  -p lidar_pose_factor_max_correction_m:="${LIDAR_POSE_FACTOR_MAX_CORRECTION_M}" \
+  -p lidar_pose_factor_max_rotation_rad:="${LIDAR_POSE_FACTOR_MAX_ROTATION_RAD}" \
+  -p lidar_pose_factor_robust_kernel_m:="${LIDAR_POSE_FACTOR_ROBUST_KERNEL_M}" \
   -p enable_lidar_plane_normal_factor:="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" \
   -p lidar_plane_normal_factor_weight:="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}" \
   -p lidar_plane_normal_huber_delta_rad:="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}" \
@@ -372,6 +388,14 @@ native = {
     "lidar_pose_prior_velocity_huber_delta_mps": float("${LIDAR_POSE_PRIOR_VELOCITY_HUBER_DELTA_MPS}"),
     "lidar_pose_prior_orientation_huber_delta_rad": float("${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD}"),
     "lidar_pose_factor_keyframe_stride": int("${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE}"),
+    "lidar_pose_factor_min_points": int("${LIDAR_POSE_FACTOR_MIN_POINTS}"),
+    "lidar_pose_factor_max_frame_points": int("${LIDAR_POSE_FACTOR_MAX_FRAME_POINTS}"),
+    "lidar_pose_factor_max_map_points": int("${LIDAR_POSE_FACTOR_MAX_MAP_POINTS}"),
+    "lidar_pose_factor_nearest_distance_m": float("${LIDAR_POSE_FACTOR_NEAREST_DISTANCE_M}"),
+    "lidar_pose_factor_correction_gain": float("${LIDAR_POSE_FACTOR_CORRECTION_GAIN}"),
+    "lidar_pose_factor_max_correction_m": float("${LIDAR_POSE_FACTOR_MAX_CORRECTION_M}"),
+    "lidar_pose_factor_max_rotation_rad": float("${LIDAR_POSE_FACTOR_MAX_ROTATION_RAD}"),
+    "lidar_pose_factor_robust_kernel_m": float("${LIDAR_POSE_FACTOR_ROBUST_KERNEL_M}"),
     "enable_lidar_plane_normal_factor": "${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" == "true",
     "lidar_plane_normal_factor_weight": float("${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}"),
     "lidar_plane_normal_huber_delta_rad": float("${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}"),
