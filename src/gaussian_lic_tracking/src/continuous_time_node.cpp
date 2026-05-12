@@ -315,6 +315,13 @@ public:
 
     step_period_seconds_ =
       declare_parameter<double>("step_period_seconds", 0.10);
+    pose_output_period_seconds_ =
+      declare_parameter<double>("pose_output_period_seconds", 0.0);
+    if (!std::isfinite(pose_output_period_seconds_) ||
+      pose_output_period_seconds_ < 0.0)
+    {
+      throw std::runtime_error("pose_output_period_seconds must be finite and non-negative");
+    }
     diagnostic_log_period_steps_ =
       static_cast<int>(declare_parameter<int>("diagnostic_log_period_steps", 50));
     if (diagnostic_log_period_steps_ < 0) {
@@ -716,6 +723,12 @@ public:
       imu_linear_acceleration_scale_);
 
     step_period_ns_ = static_cast<int64_t>(std::llround(step_period_seconds_ * 1.0e9));
+    pose_output_period_ns_ =
+      pose_output_period_seconds_ > 0.0 ?
+      static_cast<int64_t>(std::llround(pose_output_period_seconds_ * 1.0e9)) : 0;
+    if (pose_output_period_seconds_ > 0.0 && pose_output_period_ns_ <= 0) {
+      throw std::runtime_error("pose_output_period_seconds rounds to a non-positive period");
+    }
     knot_interval_ns_ =
       static_cast<int64_t>(std::llround(options.dt_s * 1.0e9));
   }
@@ -2123,19 +2136,38 @@ private:
     }
     const int64_t newest = estimator_->newest_knot_stamp_ns();
     const int64_t query_ns = newest - 2 * knot_interval_ns_;
+    if (pose_output_period_ns_ > 0) {
+      if (last_published_query_ns_ == 0) {
+        publish_pose_at(query_ns);
+        return;
+      }
+      int64_t next_query_ns = last_published_query_ns_ + pose_output_period_ns_;
+      while (next_query_ns <= query_ns) {
+        if (!publish_pose_at(next_query_ns)) {
+          break;
+        }
+        next_query_ns += pose_output_period_ns_;
+      }
+      return;
+    }
+    publish_pose_at(query_ns);
+  }
+
+  bool publish_pose_at(int64_t query_ns)
+  {
     // Rate limit: only publish when query stamp advances. The Ceres step
     // can fire many times per timer batch when the executor catches up
     // after a busy IMU/PointCloud callback; without this guard, the same
     // pose can be emitted hundreds of times.
     if (last_published_query_ns_ != 0 && query_ns <= last_published_query_ns_) {
-      return;
+      return false;
     }
-    last_published_query_ns_ = query_ns;
     Eigen::Quaterniond q;
     Eigen::Vector3d p;
     if (!estimator_->query_pose(query_ns, q, p)) {
-      return;
+      return false;
     }
+    last_published_query_ns_ = query_ns;
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = to_ros_time(query_ns);
     odom.header.frame_id = world_frame_id_;
@@ -2182,6 +2214,7 @@ private:
         ++tum_lines_written_;
       }
     }
+    return true;
   }
 
   std::string raw_imu_topic_;
@@ -2388,8 +2421,10 @@ private:
   std::size_t persistent_point_map_update_skips_{0};
 
   double step_period_seconds_{0.10};
+  double pose_output_period_seconds_{0.0};
   int diagnostic_log_period_steps_{50};
   int64_t step_period_ns_{0};
+  int64_t pose_output_period_ns_{0};
   int64_t knot_interval_ns_{50000000};
   int64_t last_published_query_ns_{0};
   std::size_t last_logged_rejected_solver_steps_{0};

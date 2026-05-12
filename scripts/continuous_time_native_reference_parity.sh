@@ -139,6 +139,8 @@ MAX_POSITION_UPDATE_M="${MAX_POSITION_UPDATE_M:-2.0}"
 MAX_ROTATION_UPDATE_RAD="${MAX_ROTATION_UPDATE_RAD:-0.50}"
 UPDATE_GATE_EDGE_KNOT_MARGIN="${UPDATE_GATE_EDGE_KNOT_MARGIN:-0}"
 POSITION_EXTRAPOLATION_DAMPING="${POSITION_EXTRAPOLATION_DAMPING:-0.0}"
+STEP_PERIOD_SECONDS="${STEP_PERIOD_SECONDS:-0.20}"
+POSE_OUTPUT_PERIOD_SECONDS="${POSE_OUTPUT_PERIOD_SECONDS:-0.0}"
 
 source "${SOURCE_SETUP}"
 source "${WORKSPACE}/install/setup.bash"
@@ -175,7 +177,8 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p seed_min_imu_count:=30 \
   -p enable_startup_bias_autocal:="${ENABLE_STARTUP_BIAS_AUTOCAL}" \
   -p imu_linear_acceleration_scale:="${IMU_LINEAR_ACCELERATION_SCALE}" \
-  -p step_period_seconds:=0.20 \
+  -p step_period_seconds:="${STEP_PERIOD_SECONDS}" \
+  -p pose_output_period_seconds:="${POSE_OUTPUT_PERIOD_SECONDS}" \
   -p diagnostic_log_period_steps:="${DIAGNOSTIC_LOG_PERIOD_STEPS}" \
   -p pointcloud_enable:="${POINTCLOUD_ENABLE}" \
   -p pointcloud_factor_weight:="${POINTCLOUD_FACTOR_WEIGHT}" \
@@ -527,6 +530,8 @@ native = {
     "visual_se3_delta_sign": float("${VISUAL_SE3_DELTA_SIGN}"),
     "update_gate_edge_knot_margin": int("${UPDATE_GATE_EDGE_KNOT_MARGIN}"),
     "position_extrapolation_damping": float("${POSITION_EXTRAPOLATION_DAMPING}"),
+    "step_period_seconds": float("${STEP_PERIOD_SECONDS}"),
+    "pose_output_period_seconds": float("${POSE_OUTPUT_PERIOD_SECONDS}"),
     "apply_position_update_on_rotation_reject": "${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT}" == "true",
     "apply_limited_rotation_update": "${APPLY_LIMITED_ROTATION_UPDATE}" == "true",
     "scale_position_with_limited_rotation": "${SCALE_POSITION_WITH_LIMITED_ROTATION}" == "true",
