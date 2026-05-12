@@ -7,6 +7,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include <Eigen/Cholesky>
 #include <Eigen/Eigenvalues>
 #include <Eigen/SVD>
 
@@ -41,6 +42,72 @@ double plane_condition_confidence(const double condition, const double max_condi
     return 0.0;
   }
   return std::clamp(1.0 - condition / max_condition, 0.0, 1.0);
+}
+
+Eigen::Matrix3d skew_matrix(const Eigen::Vector3d & value)
+{
+  Eigen::Matrix3d skew;
+  skew << 0.0, -value.z(), value.y(),
+    value.z(), 0.0, -value.x(),
+    -value.y(), value.x(), 0.0;
+  return skew;
+}
+
+Eigen::Quaterniond quaternion_from_tangent(const Eigen::Vector3d & tangent)
+{
+  const double angle = tangent.norm();
+  if (!std::isfinite(angle) || angle <= 1.0e-12) {
+    return Eigen::Quaterniond::Identity();
+  }
+  return Eigen::Quaterniond(Eigen::AngleAxisd(angle, tangent / angle)).normalized();
+}
+
+bool fit_local_plane(
+  const std::vector<std::pair<double, Eigen::Vector3d>> & neighbors,
+  const Eigen::Vector3d & point_w,
+  const LidarFactorConfig & config,
+  Eigen::Vector3d & centroid,
+  Eigen::Vector3d & normal,
+  double & signed_distance,
+  double & confidence)
+{
+  if (neighbors.size() < config.plane_min_neighbors) {
+    return false;
+  }
+  centroid.setZero();
+  for (const auto & neighbor : neighbors) {
+    centroid += neighbor.second;
+  }
+  centroid /= static_cast<double>(neighbors.size());
+
+  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+  for (const auto & neighbor : neighbors) {
+    const Eigen::Vector3d centered = neighbor.second - centroid;
+    covariance += centered * centered.transpose();
+  }
+  covariance /= static_cast<double>(neighbors.size());
+
+  const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(covariance);
+  if (solver.info() != Eigen::Success) {
+    return false;
+  }
+  const auto eigenvalues = solver.eigenvalues();
+  const double condition = eigenvalues[1] > 1.0e-12
+    ? eigenvalues[0] / eigenvalues[1]
+    : std::numeric_limits<double>::infinity();
+  if (condition > config.plane_max_condition) {
+    return false;
+  }
+
+  normal = solver.eigenvectors().col(0).normalized();
+  signed_distance = normal.dot(point_w - centroid);
+  if (std::abs(signed_distance) > config.nearest_distance_m) {
+    return false;
+  }
+  confidence =
+    correspondence_confidence(std::abs(signed_distance), config.robust_kernel_m) *
+    plane_condition_confidence(condition, config.plane_max_condition);
+  return confidence > 0.0;
 }
 }
 
@@ -452,6 +519,169 @@ LidarPoseCorrection LidarFactor::compute_pose_correction(
   correction.applied = true;
   correction.matched_points = last_matches;
   correction.mean_residual_m = last_mean_residual;
+  correction.delta_p_w = p_est - predicted_pose.p_w_i;
+  correction.delta_q = (q_est * predicted_pose.q_w_i.normalized().inverse()).normalized();
+  return correction;
+}
+
+LidarPoseCorrection LidarFactor::compute_point_to_plane_pose_correction(
+  const std::vector<Eigen::Vector3d> & frame_points_i,
+  const TrajectoryPose & predicted_pose) const
+{
+  LidarPoseCorrection correction;
+  if (!pose_is_finite(predicted_pose)) {
+    return correction;
+  }
+
+  const auto sampled = sample_points(frame_points_i, config_.max_frame_points);
+  if (sampled.size() < config_.min_points || map_points_w_.size() < config_.plane_min_neighbors) {
+    return correction;
+  }
+
+  const double max_distance_sq = config_.nearest_distance_m * config_.nearest_distance_m;
+  Eigen::Quaterniond q_est = predicted_pose.q_w_i.normalized();
+  Eigen::Vector3d p_est = predicted_pose.p_w_i;
+  size_t last_matches = 0U;
+  double last_mean_abs_residual = 0.0;
+
+  const auto evaluate_pose =
+    [&](const Eigen::Quaterniond & q_w_i, const Eigen::Vector3d & p_w_i,
+      size_t & matches, double & mean_abs_residual) -> bool
+    {
+      matches = 0U;
+      mean_abs_residual = 0.0;
+      double weighted_residual_sum = 0.0;
+      double weight_sum = 0.0;
+      for (const auto & point_i : sampled) {
+        const Eigen::Vector3d point_w = q_w_i * point_i + p_w_i;
+        const auto neighbors =
+          find_nearest_map_neighbors(point_w, max_distance_sq, config_.plane_min_neighbors);
+        Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+        Eigen::Vector3d normal = Eigen::Vector3d::UnitZ();
+        double signed_distance = 0.0;
+        double confidence = 0.0;
+        if (!fit_local_plane(
+            neighbors, point_w, config_, centroid, normal, signed_distance, confidence))
+        {
+          continue;
+        }
+        weighted_residual_sum += confidence * std::abs(signed_distance);
+        weight_sum += confidence;
+        ++matches;
+      }
+      if (matches < config_.min_points || weight_sum <= std::numeric_limits<double>::epsilon()) {
+        return false;
+      }
+      mean_abs_residual = weighted_residual_sum / weight_sum;
+      return true;
+    };
+
+  for (size_t iteration = 0U; iteration < config_.pose_iterations; ++iteration) {
+    Eigen::Matrix<double, 6, 6> hessian = Eigen::Matrix<double, 6, 6>::Zero();
+    Eigen::Matrix<double, 6, 1> gradient = Eigen::Matrix<double, 6, 1>::Zero();
+    double weighted_residual_sum = 0.0;
+    double weight_sum = 0.0;
+    size_t matches = 0U;
+
+    for (const auto & point_i : sampled) {
+      const Eigen::Vector3d point_i_rotated = q_est * point_i;
+      const Eigen::Vector3d point_w = point_i_rotated + p_est;
+      const auto neighbors =
+        find_nearest_map_neighbors(point_w, max_distance_sq, config_.plane_min_neighbors);
+      Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+      Eigen::Vector3d normal = Eigen::Vector3d::UnitZ();
+      double signed_distance = 0.0;
+      double confidence = 0.0;
+      if (!fit_local_plane(
+          neighbors, point_w, config_, centroid, normal, signed_distance, confidence))
+      {
+        continue;
+      }
+
+      Eigen::Matrix<double, 1, 6> jacobian;
+      jacobian.template block<1, 3>(0, 0) = -normal.transpose() * skew_matrix(point_i_rotated);
+      jacobian.template block<1, 3>(0, 3) = normal.transpose();
+      const double weight = std::max(confidence, 1.0e-6);
+      hessian.noalias() += weight * jacobian.transpose() * jacobian;
+      gradient.noalias() += weight * jacobian.transpose() * signed_distance;
+      weighted_residual_sum += weight * std::abs(signed_distance);
+      weight_sum += weight;
+      ++matches;
+    }
+
+    if (matches < config_.min_points || weight_sum <= std::numeric_limits<double>::epsilon()) {
+      break;
+    }
+
+    const double current_mean_residual = weighted_residual_sum / weight_sum;
+    hessian.diagonal().array() += 1.0e-6;
+    const Eigen::LDLT<Eigen::Matrix<double, 6, 6>> ldlt(hessian);
+    if (ldlt.info() != Eigen::Success) {
+      break;
+    }
+    Eigen::Matrix<double, 6, 1> step = ldlt.solve(-gradient);
+    if (!step.allFinite()) {
+      break;
+    }
+    step *= config_.correction_gain;
+
+    Eigen::Vector3d rotation_step = step.template head<3>();
+    Eigen::Vector3d translation_step = step.template tail<3>();
+    const double rotation_norm = rotation_step.norm();
+    if (rotation_norm > config_.max_rotation_rad && rotation_norm > 1.0e-12) {
+      rotation_step *= config_.max_rotation_rad / rotation_norm;
+    }
+    const double translation_norm = translation_step.norm();
+    if (translation_norm > config_.max_correction_m && translation_norm > 1.0e-12) {
+      translation_step *= config_.max_correction_m / translation_norm;
+    }
+
+    Eigen::Quaterniond next_q =
+      (quaternion_from_tangent(rotation_step) * q_est).normalized();
+    Eigen::Vector3d next_p = p_est + translation_step;
+    const Eigen::Vector3d total_p = next_p - predicted_pose.p_w_i;
+    const double total_p_norm = total_p.norm();
+    if (total_p_norm > config_.max_correction_m && total_p_norm > 1.0e-12) {
+      next_p = predicted_pose.p_w_i + total_p * (config_.max_correction_m / total_p_norm);
+    }
+    Eigen::Quaterniond total_q =
+      (next_q * predicted_pose.q_w_i.normalized().inverse()).normalized();
+    Eigen::AngleAxisd total_aa(total_q);
+    double total_angle = total_aa.angle();
+    if (total_angle > kPi) {
+      total_angle -= 2.0 * kPi;
+    }
+    if (std::abs(total_angle) > config_.max_rotation_rad) {
+      const double clamped = std::copysign(config_.max_rotation_rad, total_angle);
+      total_q = Eigen::Quaterniond(Eigen::AngleAxisd(clamped, total_aa.axis())).normalized();
+      next_q = (total_q * predicted_pose.q_w_i.normalized()).normalized();
+    }
+
+    size_t candidate_matches = 0U;
+    double candidate_mean_residual = 0.0;
+    if (!evaluate_pose(next_q, next_p, candidate_matches, candidate_mean_residual) ||
+      candidate_mean_residual > current_mean_residual * 1.05)
+    {
+      break;
+    }
+
+    q_est = next_q;
+    p_est = next_p;
+    last_matches = candidate_matches;
+    last_mean_abs_residual = candidate_mean_residual;
+
+    if (translation_step.norm() < 1.0e-6 && rotation_step.norm() < 1.0e-6) {
+      break;
+    }
+  }
+
+  if (last_matches < config_.min_points) {
+    return correction;
+  }
+
+  correction.applied = true;
+  correction.matched_points = last_matches;
+  correction.mean_residual_m = last_mean_abs_residual;
   correction.delta_p_w = p_est - predicted_pose.p_w_i;
   correction.delta_q = (q_est * predicted_pose.q_w_i.normalized().inverse()).normalized();
   return correction;

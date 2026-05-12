@@ -314,6 +314,23 @@ int main()
     return 1;
   }
 
+  const auto plane_pose_correction =
+    factor.compute_point_to_plane_pose_correction(plane_scan, plane_prediction);
+  const Eigen::Vector3d plane_corrected_p =
+    plane_prediction.p_w_i + plane_pose_correction.delta_p_w;
+  std::cout << " lidar_plane_pose_correction matched="
+            << plane_pose_correction.matched_points
+            << " mean_residual_m=" << plane_pose_correction.mean_residual_m
+            << " delta_p=" << plane_pose_correction.delta_p_w.transpose()
+            << " corrected_z=" << plane_corrected_p.z() << "\n";
+  if (!plane_pose_correction.applied ||
+    plane_pose_correction.matched_points < config.min_points ||
+    std::abs(plane_corrected_p.z()) > 1.0e-6)
+  {
+    std::cerr << "LiDAR point-to-plane pose correction failed to recover plane offset\n";
+    return 1;
+  }
+
   factor.clear();
   const auto empty_correction = factor.compute_translation_correction(scan, predicted);
   if (empty_correction.applied) {

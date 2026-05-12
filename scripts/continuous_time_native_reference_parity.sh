@@ -74,6 +74,7 @@ LIDAR_SCAN_TO_SCAN_MAX_ANGULAR_VELOCITY_RADPS="${LIDAR_SCAN_TO_SCAN_MAX_ANGULAR_
 LIDAR_SCAN_TO_SCAN_ORIENTATION_WEIGHT="${LIDAR_SCAN_TO_SCAN_ORIENTATION_WEIGHT:-0.0}"
 LIDAR_SCAN_TO_SCAN_ORIENTATION_HUBER_DELTA_RAD="${LIDAR_SCAN_TO_SCAN_ORIENTATION_HUBER_DELTA_RAD:-0.25}"
 LIDAR_SCAN_TO_SCAN_USE_ODOMETRY_PREDICTION="${LIDAR_SCAN_TO_SCAN_USE_ODOMETRY_PREDICTION:-false}"
+LIDAR_SCAN_TO_SCAN_USE_POINT_TO_PLANE_CORRECTION="${LIDAR_SCAN_TO_SCAN_USE_POINT_TO_PLANE_CORRECTION:-true}"
 LIDAR_SCAN_TO_SCAN_DEAD_RECKON_ON_REJECT="${LIDAR_SCAN_TO_SCAN_DEAD_RECKON_ON_REJECT:-false}"
 LIDAR_SCAN_TO_SCAN_APPLY_POSE_SEED="${LIDAR_SCAN_TO_SCAN_APPLY_POSE_SEED:-false}"
 LIDAR_SCAN_TO_SCAN_STORE_CORRECTED_POSE="${LIDAR_SCAN_TO_SCAN_STORE_CORRECTED_POSE:-true}"
@@ -253,6 +254,7 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p lidar_scan_to_scan_orientation_weight:="${LIDAR_SCAN_TO_SCAN_ORIENTATION_WEIGHT}" \
   -p lidar_scan_to_scan_orientation_huber_delta_rad:="${LIDAR_SCAN_TO_SCAN_ORIENTATION_HUBER_DELTA_RAD}" \
   -p lidar_scan_to_scan_use_odometry_prediction:="${LIDAR_SCAN_TO_SCAN_USE_ODOMETRY_PREDICTION}" \
+  -p lidar_scan_to_scan_use_point_to_plane_correction:="${LIDAR_SCAN_TO_SCAN_USE_POINT_TO_PLANE_CORRECTION}" \
   -p lidar_scan_to_scan_dead_reckon_on_reject:="${LIDAR_SCAN_TO_SCAN_DEAD_RECKON_ON_REJECT}" \
   -p lidar_scan_to_scan_apply_pose_seed:="${LIDAR_SCAN_TO_SCAN_APPLY_POSE_SEED}" \
   -p lidar_scan_to_scan_store_corrected_pose:="${LIDAR_SCAN_TO_SCAN_STORE_CORRECTED_POSE}" \
@@ -569,6 +571,7 @@ native = {
     "lidar_scan_to_scan_orientation_weight": float("${LIDAR_SCAN_TO_SCAN_ORIENTATION_WEIGHT}"),
     "lidar_scan_to_scan_orientation_huber_delta_rad": float("${LIDAR_SCAN_TO_SCAN_ORIENTATION_HUBER_DELTA_RAD}"),
     "lidar_scan_to_scan_use_odometry_prediction": "${LIDAR_SCAN_TO_SCAN_USE_ODOMETRY_PREDICTION}" == "true",
+    "lidar_scan_to_scan_use_point_to_plane_correction": "${LIDAR_SCAN_TO_SCAN_USE_POINT_TO_PLANE_CORRECTION}" == "true",
     "lidar_scan_to_scan_dead_reckon_on_reject": "${LIDAR_SCAN_TO_SCAN_DEAD_RECKON_ON_REJECT}" == "true",
     "lidar_scan_to_scan_apply_pose_seed": "${LIDAR_SCAN_TO_SCAN_APPLY_POSE_SEED}" == "true",
     "lidar_scan_to_scan_pose_seed_position_gain": float("${LIDAR_SCAN_TO_SCAN_POSE_SEED_POSITION_GAIN}"),

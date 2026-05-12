@@ -69,6 +69,10 @@ public:
     const std::vector<Eigen::Vector3d> & frame_points_i,
     const TrajectoryPose & predicted_pose) const;
 
+  LidarPoseCorrection compute_point_to_plane_pose_correction(
+    const std::vector<Eigen::Vector3d> & frame_points_i,
+    const TrajectoryPose & predicted_pose) const;
+
   SlidingWindowPointToPointFactor build_point_to_point_factor(
     const std::vector<Eigen::Vector3d> & frame_points_i,
     const TrajectoryPose & predicted_pose) const;
