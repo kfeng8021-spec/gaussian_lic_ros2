@@ -98,7 +98,16 @@ public:
     options.marginalize_oldest_count =
       static_cast<int>(declare_parameter<int>("marginalize_oldest_count", 1));
     options.max_iterations_per_step =
-      static_cast<int>(declare_parameter<int>("max_iterations_per_step", 12));
+      static_cast<int>(declare_parameter<int>("max_iterations_per_step", 1));
+    options.imu_info_gyro =
+      declare_parameter<double>("imu_info_gyro", 10.0);
+    options.imu_info_accel =
+      declare_parameter<double>("imu_info_accel", 1.0);
+    if (!std::isfinite(options.imu_info_gyro) || options.imu_info_gyro <= 0.0 ||
+      !std::isfinite(options.imu_info_accel) || options.imu_info_accel <= 0.0)
+    {
+      throw std::runtime_error("imu_info_gyro and imu_info_accel must be finite and positive");
+    }
     options.lidar_huber_delta_m =
       declare_parameter<double>("lidar_huber_delta_m", 0.10);
     lidar_huber_delta_m_ = options.lidar_huber_delta_m;
@@ -121,6 +130,13 @@ public:
       declare_parameter<double>("max_rotation_update_rad", 0.50);
     enable_startup_bias_autocal_ =
       declare_parameter<bool>("enable_startup_bias_autocal", true);
+    imu_linear_acceleration_scale_ =
+      declare_parameter<double>("imu_linear_acceleration_scale", 1.0);
+    if (!std::isfinite(imu_linear_acceleration_scale_) ||
+      imu_linear_acceleration_scale_ <= 0.0)
+    {
+      throw std::runtime_error("imu_linear_acceleration_scale must be finite and positive");
+    }
 
     step_period_seconds_ =
       declare_parameter<double>("step_period_seconds", 0.10);
@@ -269,9 +285,10 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "continuous_time_node ready (imu=%s, odom=%s, dt=%.3fs, window=%d knots)",
+      "continuous_time_node ready (imu=%s, odom=%s, dt=%.3fs, window=%d knots, imu_accel_scale=%.5f)",
       raw_imu_topic_.c_str(), odometry_topic_.c_str(),
-      options.dt_s, options.window_knot_count);
+      options.dt_s, options.window_knot_count,
+      imu_linear_acceleration_scale_);
 
     step_period_ns_ = static_cast<int64_t>(std::llround(step_period_seconds_ * 1.0e9));
     knot_interval_ns_ =
@@ -302,7 +319,7 @@ private:
       msg->angular_velocity.x,
       msg->angular_velocity.y,
       msg->angular_velocity.z);
-    sample.accel = Eigen::Vector3d(
+    sample.accel = imu_linear_acceleration_scale_ * Eigen::Vector3d(
       msg->linear_acceleration.x,
       msg->linear_acceleration.y,
       msg->linear_acceleration.z);
@@ -821,6 +838,7 @@ private:
 
   bool enable_imu_gravity_autocal_{true};
   bool enable_startup_bias_autocal_{true};
+  double imu_linear_acceleration_scale_{1.0};
   bool enable_voxel_plane_extraction_{false};
   bool enable_persistent_plane_map_{true};
   bool enable_external_odometry_prior_{false};

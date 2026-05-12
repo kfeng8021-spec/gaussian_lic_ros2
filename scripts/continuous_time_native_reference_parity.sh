@@ -26,8 +26,15 @@ PLAYBACK_DURATION="${PLAYBACK_DURATION:-12}"
 PLAYBACK_RATE="${PLAYBACK_RATE:-0.5}"
 OUTPUT_DIR="${OUTPUT_DIR:-${WORKSPACE}/results/fastlivo2/CBD_Building_01_continuous_time_native_parity}"
 ENABLE_STARTUP_BIAS_AUTOCAL="${ENABLE_STARTUP_BIAS_AUTOCAL:-true}"
+# FAST-LIVO/FAST-LIVO2 frontend_raw bags store IMU linear_acceleration in
+# normalized-g units (~1.0 at rest). The continuous-time residuals operate in
+# m/s^2, matching the rest of the native tracker stack.
+IMU_LINEAR_ACCELERATION_SCALE="${IMU_LINEAR_ACCELERATION_SCALE:-9.80665}"
 POINTCLOUD_ENABLE="${POINTCLOUD_ENABLE:-true}"
 POINTCLOUD_FACTOR_WEIGHT="${POINTCLOUD_FACTOR_WEIGHT:-0.1}"
+MAX_ITERATIONS_PER_STEP="${MAX_ITERATIONS_PER_STEP:-1}"
+IMU_INFO_GYRO="${IMU_INFO_GYRO:-10.0}"
+IMU_INFO_ACCEL="${IMU_INFO_ACCEL:-1.0}"
 ENABLE_VOXEL_PLANE_EXTRACTION="${ENABLE_VOXEL_PLANE_EXTRACTION:-true}"
 ENABLE_PERSISTENT_PLANE_MAP="${ENABLE_PERSISTENT_PLANE_MAP:-true}"
 ENABLE_PERSISTENT_POINT_MAP="${ENABLE_PERSISTENT_POINT_MAP:-false}"
@@ -66,8 +73,12 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p knot_interval_seconds:=0.05 \
   -p window_knot_count:=10 \
   -p marginalize_oldest_count:=1 \
+  -p max_iterations_per_step:="${MAX_ITERATIONS_PER_STEP}" \
+  -p imu_info_gyro:="${IMU_INFO_GYRO}" \
+  -p imu_info_accel:="${IMU_INFO_ACCEL}" \
   -p seed_min_imu_count:=30 \
   -p enable_startup_bias_autocal:="${ENABLE_STARTUP_BIAS_AUTOCAL}" \
+  -p imu_linear_acceleration_scale:="${IMU_LINEAR_ACCELERATION_SCALE}" \
   -p step_period_seconds:=0.20 \
   -p pointcloud_enable:="${POINTCLOUD_ENABLE}" \
   -p pointcloud_factor_weight:="${POINTCLOUD_FACTOR_WEIGHT}" \
@@ -254,6 +265,10 @@ native = {
     "bag": "${BAG_DIR##*/}",
     "playback_duration_s": float("${PLAYBACK_DURATION}"),
     "playback_rate": float("${PLAYBACK_RATE}"),
+    "imu_linear_acceleration_scale": float("${IMU_LINEAR_ACCELERATION_SCALE}"),
+    "max_iterations_per_step": int("${MAX_ITERATIONS_PER_STEP}"),
+    "imu_info_gyro": float("${IMU_INFO_GYRO}"),
+    "imu_info_accel": float("${IMU_INFO_ACCEL}"),
     "metrics": {
         "captured_tum_lines": tum_lines,
         "finite_tum_positions": finite_positions,

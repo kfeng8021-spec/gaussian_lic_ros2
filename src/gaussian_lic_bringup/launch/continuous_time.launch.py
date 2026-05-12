@@ -20,6 +20,8 @@ def generate_launch_description() -> LaunchDescription:
     window_knot_count = LaunchConfiguration("window_knot_count")
     marginalize_oldest_count = LaunchConfiguration("marginalize_oldest_count")
     max_iterations_per_step = LaunchConfiguration("max_iterations_per_step")
+    imu_info_gyro = LaunchConfiguration("imu_info_gyro")
+    imu_info_accel = LaunchConfiguration("imu_info_accel")
     lidar_huber_delta_m = LaunchConfiguration("lidar_huber_delta_m")
     step_period_seconds = LaunchConfiguration("step_period_seconds")
     seed_min_imu_count = LaunchConfiguration("seed_min_imu_count")
@@ -27,6 +29,7 @@ def generate_launch_description() -> LaunchDescription:
     hold_accel_bias_constant = LaunchConfiguration("hold_accel_bias_constant")
     hold_gyro_bias_constant = LaunchConfiguration("hold_gyro_bias_constant")
     enable_startup_bias_autocal = LaunchConfiguration("enable_startup_bias_autocal")
+    imu_linear_acceleration_scale = LaunchConfiguration("imu_linear_acceleration_scale")
     max_position_update_m = LaunchConfiguration("max_position_update_m")
     max_rotation_update_rad = LaunchConfiguration("max_rotation_update_rad")
     pointcloud_enable = LaunchConfiguration("pointcloud_enable")
@@ -54,7 +57,9 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("knot_interval_seconds", default_value="0.05"),
         DeclareLaunchArgument("window_knot_count", default_value="8"),
         DeclareLaunchArgument("marginalize_oldest_count", default_value="1"),
-        DeclareLaunchArgument("max_iterations_per_step", default_value="12"),
+        DeclareLaunchArgument("max_iterations_per_step", default_value="1"),
+        DeclareLaunchArgument("imu_info_gyro", default_value="10.0"),
+        DeclareLaunchArgument("imu_info_accel", default_value="1.0"),
         DeclareLaunchArgument("lidar_huber_delta_m", default_value="0.10"),
         DeclareLaunchArgument("step_period_seconds", default_value="0.10"),
         DeclareLaunchArgument("seed_min_imu_count", default_value="25"),
@@ -62,6 +67,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("hold_accel_bias_constant", default_value="false"),
         DeclareLaunchArgument("hold_gyro_bias_constant", default_value="false"),
         DeclareLaunchArgument("enable_startup_bias_autocal", default_value="true"),
+        DeclareLaunchArgument("imu_linear_acceleration_scale", default_value="1.0"),
         DeclareLaunchArgument("max_position_update_m", default_value="2.0"),
         DeclareLaunchArgument("max_rotation_update_rad", default_value="0.50"),
         DeclareLaunchArgument("pointcloud_enable", default_value="true"),
@@ -106,6 +112,8 @@ def generate_launch_description() -> LaunchDescription:
                 "window_knot_count": window_knot_count,
                 "marginalize_oldest_count": marginalize_oldest_count,
                 "max_iterations_per_step": max_iterations_per_step,
+                "imu_info_gyro": imu_info_gyro,
+                "imu_info_accel": imu_info_accel,
                 "lidar_huber_delta_m": lidar_huber_delta_m,
                 "step_period_seconds": step_period_seconds,
                 "seed_min_imu_count": seed_min_imu_count,
@@ -113,6 +121,7 @@ def generate_launch_description() -> LaunchDescription:
                 "hold_accel_bias_constant": hold_accel_bias_constant,
                 "hold_gyro_bias_constant": hold_gyro_bias_constant,
                 "enable_startup_bias_autocal": enable_startup_bias_autocal,
+                "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
                 "max_position_update_m": max_position_update_m,
                 "max_rotation_update_rad": max_rotation_update_rad,
                 "pointcloud_enable": pointcloud_enable,
