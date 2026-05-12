@@ -707,6 +707,10 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     max_rotation_update > impl_->options.max_rotation_update_rad;
   impl_->diagnostics.last_step_max_position_update_m = max_position_update;
   impl_->diagnostics.last_step_max_rotation_update_rad = max_rotation_update;
+  const auto mark_applied_update = [&]() {
+    ++impl_->diagnostics.accepted_solver_steps;
+    impl_->diagnostics.last_step_update_accepted = true;
+  };
   if (invalid_update) {
     ++impl_->diagnostics.rejected_solver_steps;
     impl_->diagnostics.last_step_update_rejected = true;
@@ -758,6 +762,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
         impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
         impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
       }
+      mark_applied_update();
       return true;
     }
     ++impl_->diagnostics.rejected_solver_steps;
@@ -788,6 +793,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
       impl_->diagnostics.last_step_rotation_limited = true;
       impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
       impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
+      mark_applied_update();
       return true;
     }
     if (!impl_->options.apply_position_update_on_rotation_reject) {
@@ -805,6 +811,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     impl_->diagnostics.last_step_rotation_limited = true;
     impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
     impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
+    mark_applied_update();
     return true;
   }
 
@@ -815,8 +822,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
   impl_->gyro_bias = estimator.gyro_bias();
   impl_->accel_bias = estimator.accel_bias();
   impl_->gravity_world = estimator.gravity_world();
-  ++impl_->diagnostics.accepted_solver_steps;
-  impl_->diagnostics.last_step_update_accepted = true;
+  mark_applied_update();
   return true;
 }
 

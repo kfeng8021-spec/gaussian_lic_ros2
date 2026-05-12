@@ -278,6 +278,13 @@ void check_limited_position_update_clamps_without_rejecting()
       static_cast<int>(diag.last_step_position_limited));
     std::exit(1);
   }
+  if (diag.accepted_solver_steps != 1 || !diag.last_step_update_accepted) {
+    std::fprintf(stderr,
+      "limited-position update was not marked applied: accepted=%zu last=%d\n",
+      diag.accepted_solver_steps,
+      static_cast<int>(diag.last_step_update_accepted));
+    std::exit(1);
+  }
   if (!(diag.last_position_limited_position_update_m > options.max_position_update_m)) {
     std::fprintf(stderr,
       "limited-position magnitude was not recorded: %.9f\n",
