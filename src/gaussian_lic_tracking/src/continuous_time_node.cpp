@@ -151,8 +151,16 @@ public:
 
     enable_imu_gravity_autocal_ =
       declare_parameter<bool>("enable_imu_gravity_autocal", true);
+    // Default off: the current single-frame voxel-plane factor cannot
+    // pull the trajectory in a stable way without an accumulating
+    // world-frame plane map (the plane equation is derived from points
+    // viewed through the same trajectory it would constrain — see notes
+    // in `on_pointcloud`). Local M2DGR experiment shows this factor
+    // actively hurts RMSE (~39 km → ~250 km on 8 s slice with GT prior).
+    // Reactivate with `enable_voxel_plane_extraction:=true` once the
+    // persistent-map upgrade lands.
     enable_voxel_plane_extraction_ =
-      declare_parameter<bool>("enable_voxel_plane_extraction", true);
+      declare_parameter<bool>("enable_voxel_plane_extraction", false);
     spline::LidarPlaneExtractorOptions extractor_options;
     extractor_options.voxel_size_m =
       declare_parameter<double>("voxel_plane_size_m", 0.5);
@@ -348,11 +356,48 @@ private:
           static_cast<double>(fz));
       }
       const auto planes = plane_extractor_.extract(points);
+
+      // Transform each LiDAR-frame plane to world frame via the estimator's
+      // current pose at the scan stamp. World-frame planes become stationary
+      // constraints — the factor then truly pulls the trajectory back when
+      // it drifts, instead of being a same-frame identity check.
+      Eigen::Quaterniond q_b_w_at_scan = Eigen::Quaterniond::Identity();
+      Eigen::Vector3d p_b_w_at_scan = Eigen::Vector3d::Zero();
+      const bool have_scan_pose =
+        estimator_->query_pose(stamp_ns, q_b_w_at_scan, p_b_w_at_scan);
+      // Compose: world = R_b_w * R_l_b * p_lidar + R_b_w * p_l_b + p_b_w
+      //                = R_w_l * p_lidar + p_w_l   (where R_w_l = R_b_w * R_l_b,
+      //                                                  p_w_l = R_b_w * p_l_b + p_b_w)
+      // Plane in LiDAR frame: n_l^T p_l + d_l = 0
+      // After substituting p_l = R_w_l^T (p_w - p_w_l):
+      //   n_l^T R_w_l^T (p_w - p_w_l) + d_l = 0
+      //   (R_w_l n_l)^T p_w - (R_w_l n_l)^T p_w_l + d_l = 0
+      // So n_world = R_w_l n_l, d_world = d_l - n_world^T p_w_l.
+      const Eigen::Matrix3d R_l_b = extrinsics.q_lidar_to_imu.toRotationMatrix();
+      const Eigen::Vector3d p_l_b = extrinsics.p_lidar_in_imu;
+      const Eigen::Matrix3d R_b_w = q_b_w_at_scan.toRotationMatrix();
+      const Eigen::Matrix3d R_w_l = R_b_w * R_l_b;
+      const Eigen::Vector3d p_w_l = R_b_w * p_l_b + p_b_w_at_scan;
+
       int accepted = 0;
       for (const auto & plane : planes) {
-        const auto correspondence = spline::LidarPlaneExtractor::to_correspondence(plane);
+        spline::LidarPointCorrespondence pc;
+        pc.geometry = spline::LidarFeatureGeometry::kPlane;
+        pc.point_lidar = plane.sample_point;
+        if (have_scan_pose) {
+          const Eigen::Vector3d n_world = R_w_l * plane.normal;
+          const double d_world = plane.offset - n_world.dot(p_w_l);
+          pc.plane.head<3>() = n_world;
+          pc.plane[3] = d_world;
+        } else {
+          // Falling back to LiDAR-frame plane until the estimator has a
+          // valid pose at the scan stamp — this still degenerates into
+          // a same-frame identity for the first few frames.
+          pc.plane.head<3>() = plane.normal;
+          pc.plane[3] = plane.offset;
+        }
         estimator_->add_lidar_correspondence(
-          stamp_ns, correspondence, extrinsics, pointcloud_factor_weight_);
+          stamp_ns, pc, extrinsics, pointcloud_factor_weight_);
         ++accepted;
       }
       accepted_pointcloud_correspondences_ += static_cast<std::size_t>(accepted);
