@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <cmath>
+
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
@@ -39,6 +41,10 @@ struct LidarPointCorrespondence
 {
   Eigen::Vector3d point_lidar{Eigen::Vector3d::Zero()};
   LidarFeatureGeometry geometry{LidarFeatureGeometry::kPlane};
+  // Coco-LIC's `use_lidar_scale` multiplies each residual by a local feature
+  // confidence. Keep the default at 1 so existing factors retain their old
+  // semantics unless the frontend explicitly supplies a scale.
+  double scale{1.0};
   // Plane: (nx, ny, nz, d) such that residual = n · p_M + d.
   Eigen::Vector4d plane{Eigen::Vector4d::Zero()};
   // Edge: any point on the edge line + its tangent normal.
@@ -100,7 +106,7 @@ public:
         (p_map - correspondence_.edge_point).cross(correspondence_.edge_normal);
       r = dist_vec.norm();
     }
-    return weight_ * r;
+    return weight_ * scale() * r;
   }
 
   // Linearization: derivative w.r.t. perturbation of body pose at the spline
@@ -133,15 +139,21 @@ public:
 
     Eigen::Matrix<double, 1, 6> jacobian;
     jacobian.head<3>() =
-      (dr_dp_map.transpose() * r_world_to_map * (-r_imu_to_world * skew(p_imu))) * weight_;
+      (dr_dp_map.transpose() * r_world_to_map * (-r_imu_to_world * skew(p_imu))) *
+      weight_ * scale();
     jacobian.tail<3>() =
-      (dr_dp_map.transpose() * r_world_to_map) * weight_;
+      (dr_dp_map.transpose() * r_world_to_map) * weight_ * scale();
     return jacobian;
   }
 
   double normalized_time() const { return u_; }
   double inv_dt_s() const { return inv_dt_s_; }
   double weight() const { return weight_; }
+  double scale() const
+  {
+    return std::isfinite(correspondence_.scale) && correspondence_.scale > 0.0 ?
+      correspondence_.scale : 1.0;
+  }
   const LidarPointCorrespondence & correspondence() const { return correspondence_; }
   const LidarExtrinsics & extrinsics() const { return extrinsics_; }
 

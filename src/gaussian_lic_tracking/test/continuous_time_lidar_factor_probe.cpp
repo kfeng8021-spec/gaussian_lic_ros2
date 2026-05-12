@@ -76,6 +76,33 @@ void check_plane_residual_distance_offset()
   }
 }
 
+void check_lidar_scale_multiplies_residual_and_jacobian()
+{
+  LidarFactorState state = identity_state();
+  for (auto & p : state.position_knots) {
+    p.z() = 0.25;
+  }
+  LidarExtrinsics extrinsics;
+  LidarPointCorrespondence pc;
+  pc.point_lidar = Eigen::Vector3d(2.0, -1.0, 0.0);
+  pc.geometry = LidarFeatureGeometry::kPlane;
+  pc.scale = 0.5;
+  pc.plane << 0.0, 0.0, 1.0, 0.0;
+  ContinuousTimeLidarFactor factor(0.5, 1.0, pc, extrinsics, 2.0);
+  const double r = factor.residual(state);
+  if (std::abs(r - 0.25) > 1.0e-6) {
+    std::fprintf(stderr,
+      "lidar scale residual mismatch: expected 0.25 got %.6g\n", r);
+    std::exit(1);
+  }
+  const auto jacobian = factor.body_pose_jacobian(state);
+  if (std::abs(jacobian[5] - 1.0) > 1.0e-6) {
+    std::fprintf(stderr,
+      "lidar scale jacobian mismatch: expected dz 1 got %.6g\n", jacobian[5]);
+    std::exit(1);
+  }
+}
+
 void check_body_pose_jacobian_finite_difference_plane()
 {
   // Use a perturbed initial state so the analytic body-pose Jacobian is not
@@ -140,6 +167,7 @@ int main()
   try {
     check_plane_residual_zero_for_consistent_point();
     check_plane_residual_distance_offset();
+    check_lidar_scale_multiplies_residual_and_jacobian();
     check_body_pose_jacobian_finite_difference_plane();
     check_edge_residual_finite();
   } catch (const std::exception & exception) {

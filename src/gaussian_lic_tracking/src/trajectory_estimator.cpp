@@ -22,6 +22,23 @@ namespace
 
 constexpr int N = TrajectoryEstimator::N;
 
+double positive_or_one(double value)
+{
+  return std::isfinite(value) && value > 0.0 ? value : 1.0;
+}
+
+ceres::LossFunction * make_weighted_huber_loss(double raw_delta, double residual_weight)
+{
+  if (raw_delta <= 0.0) {
+    return nullptr;
+  }
+  const double effective_delta = raw_delta * positive_or_one(residual_weight);
+  if (!std::isfinite(effective_delta) || effective_delta <= 0.0) {
+    return nullptr;
+  }
+  return new ceres::HuberLoss(effective_delta);
+}
+
 // AutoDiff-compatible functors. The operator() is templated on Scalar so
 // Ceres can substitute `ceres::Jet<double, N>` and get exact analytic
 // Jacobians via dual numbers. The templated math lives in the cumulative
@@ -148,13 +165,16 @@ struct LidarAutoDiffFunctor
       const Eigen::Matrix<T, 3, 1> plane_normal_t =
         correspondence.plane.template head<3>().cast<T>();
       const T plane_offset_t = T(correspondence.plane[3]);
-      residuals[0] = T(weight) * (plane_normal_t.dot(p_map) + plane_offset_t);
+      residuals[0] =
+        T(weight) * T(positive_or_one(correspondence.scale)) *
+        (plane_normal_t.dot(p_map) + plane_offset_t);
     } else {
       const Eigen::Matrix<T, 3, 1> edge_point_t = correspondence.edge_point.cast<T>();
       const Eigen::Matrix<T, 3, 1> edge_normal_t = correspondence.edge_normal.cast<T>();
       const Eigen::Matrix<T, 3, 1> diff = p_map - edge_point_t;
       const Eigen::Matrix<T, 3, 1> cross_vec = diff.cross(edge_normal_t);
-      residuals[0] = T(weight) * cross_vec.norm();
+      residuals[0] =
+        T(weight) * T(positive_or_one(correspondence.scale)) * cross_vec.norm();
     }
     return true;
   }
@@ -559,10 +579,8 @@ bool TrajectoryEstimator::add_lidar_factor(
     parameter_blocks.push_back(impl_->position_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_m > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_m);
-  }
+  ceres::LossFunction * loss =
+    make_weighted_huber_loss(huber_delta_m, weight * positive_or_one(correspondence.scale));
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->lidar_residual_blocks.push_back(block);
   ++lidar_factor_count_;
@@ -613,10 +631,7 @@ bool TrajectoryEstimator::add_lidar_plane_normal_factor(
     parameter_blocks.push_back(impl_->rotation_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_rad > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_rad);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_rad, weight);
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->lidar_residual_blocks.push_back(block);
   ++lidar_normal_factor_count_;
@@ -662,10 +677,7 @@ bool TrajectoryEstimator::add_position_prior_factor(
     parameter_blocks.push_back(impl_->position_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_m > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_m);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_m, weight);
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->position_prior_residual_blocks.push_back(block);
   ++position_prior_factor_count_;
@@ -711,10 +723,7 @@ bool TrajectoryEstimator::add_velocity_prior_factor(
     parameter_blocks.push_back(impl_->position_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_mps > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_mps);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_mps, weight);
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->velocity_prior_residual_blocks.push_back(block);
   ++velocity_prior_factor_count_;
@@ -760,10 +769,7 @@ bool TrajectoryEstimator::add_angular_velocity_prior_factor(
     parameter_blocks.push_back(impl_->rotation_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_radps > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_radps);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_radps, weight);
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->orientation_prior_residual_blocks.push_back(block);
   ++angular_velocity_prior_factor_count_;
@@ -809,10 +815,7 @@ bool TrajectoryEstimator::add_orientation_prior_factor(
     parameter_blocks.push_back(impl_->rotation_storage[base + i].data());
   }
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_rad > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_rad);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_rad, weight);
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->orientation_prior_residual_blocks.push_back(block);
   ++orientation_prior_factor_count_;
@@ -840,10 +843,7 @@ bool TrajectoryEstimator::add_gyro_bias_prior_factor(
   auto * cost = new ceres::AutoDiffCostFunction<
     BiasPriorAutoDiffFunctor, 3, 3>(new BiasPriorAutoDiffFunctor(functor));
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_radps > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_radps);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_radps, weight);
   const auto block = impl_->problem->AddResidualBlock(
     cost, loss, impl_->gyro_bias_storage.data());
   impl_->bias_prior_residual_blocks.push_back(block);
@@ -872,10 +872,7 @@ bool TrajectoryEstimator::add_accel_bias_prior_factor(
   auto * cost = new ceres::AutoDiffCostFunction<
     BiasPriorAutoDiffFunctor, 3, 3>(new BiasPriorAutoDiffFunctor(functor));
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_mps2 > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_mps2);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_mps2, weight);
   const auto block = impl_->problem->AddResidualBlock(
     cost, loss, impl_->accel_bias_storage.data());
   impl_->bias_prior_residual_blocks.push_back(block);
@@ -904,10 +901,7 @@ bool TrajectoryEstimator::add_position_smoothness_factor(
     PositionSmoothnessAutoDiffFunctor, 3,
     3, 3, 3>(new PositionSmoothnessAutoDiffFunctor(functor));
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_m > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_m);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_m, weight);
   const auto block = impl_->problem->AddResidualBlock(
     cost, loss,
     impl_->position_storage[first_knot_index].data(),
@@ -939,10 +933,7 @@ bool TrajectoryEstimator::add_rotation_smoothness_factor(
     RotationSmoothnessAutoDiffFunctor, 3,
     4, 4, 4>(new RotationSmoothnessAutoDiffFunctor(functor));
 
-  ceres::LossFunction * loss = nullptr;
-  if (huber_delta_rad > 0.0) {
-    loss = new ceres::HuberLoss(huber_delta_rad);
-  }
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_rad, weight);
   const auto block = impl_->problem->AddResidualBlock(
     cost, loss,
     impl_->rotation_storage[first_knot_index].data(),

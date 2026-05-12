@@ -720,6 +720,17 @@ public:
       declare_parameter<double>("pointcloud_max_range_m", 30.0);
     pointcloud_factor_weight_ =
       declare_parameter<double>("pointcloud_factor_weight", 0.1);
+    pointcloud_use_lidar_scale_ =
+      declare_parameter<bool>("pointcloud_use_lidar_scale", true);
+    pointcloud_min_lidar_scale_ =
+      declare_parameter<double>("pointcloud_min_lidar_scale", 0.1);
+    if (!std::isfinite(pointcloud_factor_weight_) || pointcloud_factor_weight_ <= 0.0 ||
+      !std::isfinite(pointcloud_min_lidar_scale_) ||
+      pointcloud_min_lidar_scale_ < 0.0 ||
+      pointcloud_min_lidar_scale_ > 1.0)
+    {
+      throw std::runtime_error("pointcloud factor weight/scale parameters are invalid");
+    }
     enable_lidar_point_deskew_ =
       declare_parameter<bool>("enable_lidar_point_deskew", false);
     lidar_max_abs_point_time_offset_s_ =
@@ -1991,6 +2002,14 @@ private:
           const auto match = persistent_plane_map_.match(centroid_world, n_world);
           if (match) {
             pc.plane = match->plane;
+            pc.scale = lidar_surface_feature_scale(
+              match->point_to_plane_distance_m, plane.sample_point.norm());
+            if (!lidar_feature_scale_is_accepted(pc.scale)) {
+              if (defer_plane_updates_for_scan) {
+                deferred_planes.push_back(plane);
+              }
+              continue;
+            }
             const int64_t plane_stamp_ns =
               nearest_point_stamp_ns(points, point_stamps_ns, plane.sample_point, stamp_ns);
             estimator_->add_lidar_correspondence(
@@ -2026,6 +2045,14 @@ private:
           // a same-frame identity for the first few frames.
           pc.plane.head<3>() = plane.normal;
           pc.plane[3] = plane.offset;
+        }
+        const Eigen::Vector3d point_for_scale =
+          has_world_plane ? (R_w_l * pc.point_lidar + p_w_l) : pc.point_lidar;
+        const double plane_residual =
+          pc.plane.head<3>().dot(point_for_scale) + pc.plane[3];
+        pc.scale = lidar_surface_feature_scale(plane_residual, pc.point_lidar.norm());
+        if (!lidar_feature_scale_is_accepted(pc.scale)) {
+          continue;
         }
         const int64_t plane_stamp_ns =
           nearest_point_stamp_ns(points, point_stamps_ns, plane.sample_point, stamp_ns);
@@ -2106,6 +2133,11 @@ private:
         point_stamps_ns.push_back(point_stamp_ns);
       }
       pc.point_lidar = Eigen::Vector3d(rx, ry, rz);
+      pc.scale = lidar_surface_feature_scale(
+        pc.plane.head<3>().dot(pc.point_lidar) + pc.plane[3], range);
+      if (!lidar_feature_scale_is_accepted(pc.scale)) {
+        continue;
+      }
       estimator_->add_lidar_correspondence(
         point_stamp_ns, pc, extrinsics, pointcloud_factor_weight_,
         lidar_huber_delta_m_);
@@ -2484,6 +2516,29 @@ private:
     return found;
   }
 
+  double lidar_surface_feature_scale(double abs_point_to_plane_m, double range_m) const
+  {
+    if (!pointcloud_use_lidar_scale_) {
+      return 1.0;
+    }
+    if (!std::isfinite(abs_point_to_plane_m) || !std::isfinite(range_m)) {
+      return 0.0;
+    }
+    const double safe_range = std::max(range_m, 1.0e-6);
+    const double denominator = std::sqrt(std::sqrt(safe_range * safe_range));
+    if (!std::isfinite(denominator) || denominator <= 1.0e-9) {
+      return 0.0;
+    }
+    return std::clamp(
+      1.0 - 0.9 * std::abs(abs_point_to_plane_m) / denominator, 0.0, 1.0);
+  }
+
+  bool lidar_feature_scale_is_accepted(double scale) const
+  {
+    return !pointcloud_use_lidar_scale_ ||
+           (std::isfinite(scale) && scale > pointcloud_min_lidar_scale_);
+  }
+
   int add_persistent_point_map_correspondences(
     int64_t stamp_ns,
     const std::vector<Eigen::Vector3d> & points_lidar,
@@ -2513,9 +2568,15 @@ private:
       Eigen::Vector3d nearest_world = Eigen::Vector3d::Zero();
       double nearest_distance_sq = 0.0;
       if (find_nearest_persistent_point(point_world, nearest_world, nearest_distance_sq)) {
+        const double feature_scale =
+          lidar_surface_feature_scale(std::sqrt(nearest_distance_sq), range);
+        if (!lidar_feature_scale_is_accepted(feature_scale)) {
+          continue;
+        }
         for (int axis = 0; axis < 3; ++axis) {
           spline::LidarPointCorrespondence pc;
           pc.geometry = spline::LidarFeatureGeometry::kPlane;
+          pc.scale = feature_scale;
           pc.point_lidar = point_lidar;
           pc.plane.setZero();
           pc.plane[axis] = 1.0;
@@ -3153,6 +3214,8 @@ private:
   double pointcloud_min_range_m_{0.3};
   double pointcloud_max_range_m_{30.0};
   double pointcloud_factor_weight_{0.1};
+  bool pointcloud_use_lidar_scale_{true};
+  double pointcloud_min_lidar_scale_{0.1};
   bool enable_lidar_point_deskew_{false};
   double lidar_max_abs_point_time_offset_s_{0.25};
   double lidar_max_deskew_delta_m_{1.0};

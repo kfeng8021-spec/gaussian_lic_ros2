@@ -42,6 +42,8 @@ ENABLE_STARTUP_BIAS_AUTOCAL="${ENABLE_STARTUP_BIAS_AUTOCAL:-true}"
 IMU_LINEAR_ACCELERATION_SCALE="${IMU_LINEAR_ACCELERATION_SCALE:-9.80665}"
 POINTCLOUD_ENABLE="${POINTCLOUD_ENABLE:-true}"
 POINTCLOUD_FACTOR_WEIGHT="${POINTCLOUD_FACTOR_WEIGHT:-0.1}"
+POINTCLOUD_USE_LIDAR_SCALE="${POINTCLOUD_USE_LIDAR_SCALE:-true}"
+POINTCLOUD_MIN_LIDAR_SCALE="${POINTCLOUD_MIN_LIDAR_SCALE:-0.1}"
 POINTCLOUD_WAIT_QUEUE_MAX_SIZE="${POINTCLOUD_WAIT_QUEUE_MAX_SIZE:-100}"
 ENABLE_LIDAR_POINT_DESKEW="${ENABLE_LIDAR_POINT_DESKEW:-false}"
 LIDAR_MAX_ABS_POINT_TIME_OFFSET_S="${LIDAR_MAX_ABS_POINT_TIME_OFFSET_S:-0.25}"
@@ -225,6 +227,8 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p diagnostic_log_period_steps:="${DIAGNOSTIC_LOG_PERIOD_STEPS}" \
   -p pointcloud_enable:="${POINTCLOUD_ENABLE}" \
   -p pointcloud_factor_weight:="${POINTCLOUD_FACTOR_WEIGHT}" \
+  -p pointcloud_use_lidar_scale:="${POINTCLOUD_USE_LIDAR_SCALE}" \
+  -p pointcloud_min_lidar_scale:="${POINTCLOUD_MIN_LIDAR_SCALE}" \
   -p pointcloud_wait_queue_max_size:="${POINTCLOUD_WAIT_QUEUE_MAX_SIZE}" \
   -p enable_lidar_point_deskew:="${ENABLE_LIDAR_POINT_DESKEW}" \
   -p lidar_max_abs_point_time_offset_s:="${LIDAR_MAX_ABS_POINT_TIME_OFFSET_S}" \
@@ -545,6 +549,9 @@ native = {
     "gyro_bias_prior_huber_delta_radps": float("${GYRO_BIAS_PRIOR_HUBER_DELTA_RADPS}"),
     "accel_bias_prior_weight": float("${ACCEL_BIAS_PRIOR_WEIGHT}"),
     "accel_bias_prior_huber_delta_mps2": float("${ACCEL_BIAS_PRIOR_HUBER_DELTA_MPS2}"),
+    "pointcloud_factor_weight": float("${POINTCLOUD_FACTOR_WEIGHT}"),
+    "pointcloud_use_lidar_scale": "${POINTCLOUD_USE_LIDAR_SCALE}" == "true",
+    "pointcloud_min_lidar_scale": float("${POINTCLOUD_MIN_LIDAR_SCALE}"),
     "pointcloud_wait_queue_max_size": int("${POINTCLOUD_WAIT_QUEUE_MAX_SIZE}"),
     "enable_lidar_point_deskew": "${ENABLE_LIDAR_POINT_DESKEW}" == "true",
     "lidar_max_abs_point_time_offset_s": float("${LIDAR_MAX_ABS_POINT_TIME_OFFSET_S}"),
