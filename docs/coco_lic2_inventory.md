@@ -191,11 +191,16 @@ Current ROS2 implementation status:
 - A new standalone ROS2 node, `continuous_time_node`, is the first
   executable that drives the ported continuous-time stack on live ROS2
   topics. It runs alongside (not inside) `tracking_node` so the existing
-  12/12 strict matrix is unaffected. The accompanying smoke
-  (`scripts/continuous_time_node_smoke.sh`) launches the node, publishes
-  80 synthetic IMU samples, and asserts the node emits at least one
-  optimized `nav_msgs/Odometry`. The local run records 26 odometry
-  messages on the smoke burst.
+  12/12 strict matrix is unaffected. The node consumes both
+  `sensor_msgs/Imu` and `sensor_msgs/PointCloud2`; PointCloud2 points are
+  iterated via `PointCloud2ConstIterator<float>`, filtered by range, and
+  fed as plane correspondences against a configurable plane prior
+  (default ground `[0,0,1,0]`). The accompanying smoke
+  (`scripts/continuous_time_node_smoke.{sh,py}`) launches the node,
+  publishes 80 synthetic IMU samples + 8 synthetic ground-plane
+  PointCloud2 messages, and asserts the node emits at least one optimized
+  `nav_msgs/Odometry`. The local run records 42 odometry messages on the
+  combined burst.
 - Closed-form analytic Jacobian helpers in `analytic_jacobians.hpp` cover
   the IMU position-knot, gyro-bias, accel-bias, and gravity Jacobians plus
   the LiDAR plane position-knot Jacobian, all validated against finite

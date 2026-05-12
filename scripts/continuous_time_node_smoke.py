@@ -7,13 +7,15 @@ odometry message on `/continuous_time/odometry`, and exits.
 
 from __future__ import annotations
 
+import math
+import struct
 import sys
 import time
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, PointCloud2, PointField
 from nav_msgs.msg import Odometry
 
 
@@ -31,12 +33,46 @@ def make_imu(stamp_ns: int) -> Imu:
     return msg
 
 
+def make_pointcloud2(stamp_ns: int) -> PointCloud2:
+    msg = PointCloud2()
+    msg.header.frame_id = "lidar_link"
+    msg.header.stamp.sec = int(stamp_ns // 1_000_000_000)
+    msg.header.stamp.nanosec = int(stamp_ns % 1_000_000_000)
+    msg.height = 1
+    points = []
+    radius = 5.0
+    n = 80
+    for i in range(n):
+        theta = 2.0 * math.pi * i / n
+        points.append((radius * math.cos(theta), radius * math.sin(theta), 0.0))
+    msg.width = len(points)
+    msg.fields = [
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+    ]
+    msg.is_bigendian = False
+    msg.point_step = 12
+    msg.row_step = msg.point_step * msg.width
+    msg.is_dense = True
+    buf = bytearray()
+    for x, y, z in points:
+        buf.extend(struct.pack("<fff", x, y, z))
+    msg.data = bytes(buf)
+    return msg
+
+
 class SmokeClient(Node):
     def __init__(self) -> None:
         super().__init__("continuous_time_node_smoke")
         self.imu_pub = self.create_publisher(
             Imu,
             "/imu_smoke",
+            QoSPresetProfiles.SENSOR_DATA.value,
+        )
+        self.pc_pub = self.create_publisher(
+            PointCloud2,
+            "/points_smoke",
             QoSPresetProfiles.SENSOR_DATA.value,
         )
         self.odom_count = 0
@@ -56,10 +92,12 @@ def main() -> int:
     node = SmokeClient()
     deadline = time.time() + 12.0
 
-    # Publish 80 IMU samples at 50 Hz to comfortably exceed the seed window.
+    # Publish 80 IMU samples + 8 PointCloud2 messages (one every 10 IMU samples).
     stamp_ns = 1_000_000_000
-    for _ in range(80):
+    for i in range(80):
         node.imu_pub.publish(make_imu(stamp_ns))
+        if i % 10 == 0:
+            node.pc_pub.publish(make_pointcloud2(stamp_ns))
         stamp_ns += 20_000_000  # 50 Hz
         rclpy.spin_once(node, timeout_sec=0.01)
 

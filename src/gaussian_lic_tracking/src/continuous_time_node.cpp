@@ -24,6 +24,8 @@
 #include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 
 #include <gaussian_lic_tracking/spline/continuous_time_sliding_window.hpp>
 
@@ -96,6 +98,49 @@ public:
     max_path_history_ =
       static_cast<int>(declare_parameter<int>("max_path_history", 5000));
 
+    raw_pointcloud_topic_ = declare_parameter<std::string>(
+      "raw_pointcloud_topic", "/points_for_gs");
+    pointcloud_enable_ =
+      declare_parameter<bool>("pointcloud_enable", true);
+    pointcloud_subsample_stride_ =
+      static_cast<int>(declare_parameter<int>("pointcloud_subsample_stride", 50));
+    pointcloud_max_points_per_msg_ =
+      static_cast<int>(declare_parameter<int>("pointcloud_max_points_per_msg", 256));
+    pointcloud_min_range_m_ =
+      declare_parameter<double>("pointcloud_min_range_m", 0.3);
+    pointcloud_max_range_m_ =
+      declare_parameter<double>("pointcloud_max_range_m", 30.0);
+    pointcloud_factor_weight_ =
+      declare_parameter<double>("pointcloud_factor_weight", 1.0);
+
+    const auto plane_param = declare_parameter<std::vector<double>>(
+      "lidar_ground_plane", std::vector<double>{0.0, 0.0, 1.0, 0.0});
+    if (plane_param.size() == 4) {
+      lidar_plane_ << plane_param[0], plane_param[1], plane_param[2], plane_param[3];
+      const double n_norm = lidar_plane_.head<3>().norm();
+      if (n_norm > 1.0e-9) {
+        lidar_plane_ /= n_norm;
+      }
+    }
+
+    const auto extrinsic_translation = declare_parameter<std::vector<double>>(
+      "lidar_to_imu_translation", std::vector<double>{0.0, 0.0, 0.0});
+    if (extrinsic_translation.size() == 3) {
+      lidar_to_imu_translation_ = Eigen::Vector3d(
+        extrinsic_translation[0],
+        extrinsic_translation[1],
+        extrinsic_translation[2]);
+    }
+    const auto extrinsic_rotation_xyzw = declare_parameter<std::vector<double>>(
+      "lidar_to_imu_rotation_xyzw", std::vector<double>{0.0, 0.0, 0.0, 1.0});
+    if (extrinsic_rotation_xyzw.size() == 4) {
+      lidar_to_imu_rotation_ = Eigen::Quaterniond(
+        extrinsic_rotation_xyzw[3],
+        extrinsic_rotation_xyzw[0],
+        extrinsic_rotation_xyzw[1],
+        extrinsic_rotation_xyzw[2]).normalized();
+    }
+
     estimator_ =
       std::make_unique<spline::ContinuousTimeSlidingWindowEstimator>(options);
 
@@ -104,6 +149,14 @@ public:
     imu_subscription_ = create_subscription<sensor_msgs::msg::Imu>(
       raw_imu_topic_, imu_qos,
       std::bind(&ContinuousTimeNode::on_imu, this, std::placeholders::_1));
+
+    if (pointcloud_enable_) {
+      rclcpp::QoS pc_qos(rclcpp::KeepLast(20));
+      pc_qos.best_effort();
+      pointcloud_subscription_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+        raw_pointcloud_topic_, pc_qos,
+        std::bind(&ContinuousTimeNode::on_pointcloud, this, std::placeholders::_1));
+    }
 
     odom_publisher_ = create_publisher<nav_msgs::msg::Odometry>(
       odometry_topic_, rclcpp::QoS(50));
@@ -169,6 +222,63 @@ private:
     }
     estimator_->add_imu_sample(stamp_ns, sample);
     ++accepted_imu_count_;
+  }
+
+  void on_pointcloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+  {
+    if (!msg || !pointcloud_enable_) {
+      return;
+    }
+    const int64_t stamp_ns = to_signed_nanoseconds(msg->header.stamp);
+    if (stamp_ns <= 0) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(estimator_mutex_);
+    if (!initialized_) {
+      return;
+    }
+    spline::LidarExtrinsics extrinsics;
+    extrinsics.q_lidar_to_imu = lidar_to_imu_rotation_;
+    extrinsics.p_lidar_in_imu = lidar_to_imu_translation_;
+
+    spline::LidarPointCorrespondence pc;
+    pc.geometry = spline::LidarFeatureGeometry::kPlane;
+    pc.plane = lidar_plane_;
+
+    int accepted = 0;
+    int stride_counter = 0;
+    sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
+    sensor_msgs::PointCloud2ConstIterator<float> iter_z(*msg, "z");
+    for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
+      if (stride_counter++ % std::max(1, pointcloud_subsample_stride_) != 0) {
+        continue;
+      }
+      const float fx = *iter_x;
+      const float fy = *iter_y;
+      const float fz = *iter_z;
+      if (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(fz)) {
+        continue;
+      }
+      const double rx = static_cast<double>(fx);
+      const double ry = static_cast<double>(fy);
+      const double rz = static_cast<double>(fz);
+      const double range = std::sqrt(rx * rx + ry * ry + rz * rz);
+      if (range < pointcloud_min_range_m_ || range > pointcloud_max_range_m_) {
+        continue;
+      }
+      pc.point_lidar = Eigen::Vector3d(rx, ry, rz);
+      estimator_->add_lidar_correspondence(
+        stamp_ns, pc, extrinsics, pointcloud_factor_weight_);
+      ++accepted;
+      if (pointcloud_max_points_per_msg_ > 0 &&
+        accepted >= pointcloud_max_points_per_msg_)
+      {
+        break;
+      }
+    }
+    accepted_pointcloud_correspondences_ += static_cast<std::size_t>(accepted);
+    ++pointcloud_messages_;
   }
 
   void on_step_timer()
@@ -247,6 +357,7 @@ private:
   }
 
   std::string raw_imu_topic_;
+  std::string raw_pointcloud_topic_;
   std::string odometry_topic_;
   std::string path_topic_;
   std::string body_frame_id_;
@@ -255,6 +366,7 @@ private:
   std::unique_ptr<spline::ContinuousTimeSlidingWindowEstimator> estimator_;
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_subscription_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::TimerBase::SharedPtr step_timer_;
@@ -271,6 +383,19 @@ private:
   std::size_t accepted_imu_count_{0};
   std::size_t dropped_imu_count_{0};
   std::size_t rejected_imu_count_{0};
+
+  bool pointcloud_enable_{true};
+  int pointcloud_subsample_stride_{50};
+  int pointcloud_max_points_per_msg_{256};
+  double pointcloud_min_range_m_{0.3};
+  double pointcloud_max_range_m_{30.0};
+  double pointcloud_factor_weight_{1.0};
+  std::size_t accepted_pointcloud_correspondences_{0};
+  std::size_t pointcloud_messages_{0};
+
+  Eigen::Vector4d lidar_plane_{0.0, 0.0, 1.0, 0.0};
+  Eigen::Vector3d lidar_to_imu_translation_{Eigen::Vector3d::Zero()};
+  Eigen::Quaterniond lidar_to_imu_rotation_{Eigen::Quaterniond::Identity()};
 
   double step_period_seconds_{0.10};
   int64_t step_period_ns_{0};

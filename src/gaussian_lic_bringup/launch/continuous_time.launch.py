@@ -13,6 +13,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description() -> LaunchDescription:
     raw_imu_topic = LaunchConfiguration("raw_imu_topic")
+    raw_pointcloud_topic = LaunchConfiguration("raw_pointcloud_topic")
     odometry_topic = LaunchConfiguration("odometry_topic")
     path_topic = LaunchConfiguration("path_topic")
     knot_interval_seconds = LaunchConfiguration("knot_interval_seconds")
@@ -24,11 +25,20 @@ def generate_launch_description() -> LaunchDescription:
     hold_gravity_constant = LaunchConfiguration("hold_gravity_constant")
     hold_accel_bias_constant = LaunchConfiguration("hold_accel_bias_constant")
     hold_gyro_bias_constant = LaunchConfiguration("hold_gyro_bias_constant")
+    pointcloud_enable = LaunchConfiguration("pointcloud_enable")
+    pointcloud_subsample_stride = LaunchConfiguration("pointcloud_subsample_stride")
+    pointcloud_max_points_per_msg = LaunchConfiguration("pointcloud_max_points_per_msg")
+    pointcloud_min_range_m = LaunchConfiguration("pointcloud_min_range_m")
+    pointcloud_max_range_m = LaunchConfiguration("pointcloud_max_range_m")
+    pointcloud_factor_weight = LaunchConfiguration("pointcloud_factor_weight")
     body_frame_id = LaunchConfiguration("body_frame_id")
     world_frame_id = LaunchConfiguration("world_frame_id")
 
     declarations = [
         DeclareLaunchArgument("raw_imu_topic", default_value="/imu_for_gs"),
+        DeclareLaunchArgument(
+            "raw_pointcloud_topic", default_value="/points_for_gs"
+        ),
         DeclareLaunchArgument(
             "odometry_topic",
             default_value="/gaussian_lic/continuous_time/odometry",
@@ -46,6 +56,12 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("hold_gravity_constant", default_value="true"),
         DeclareLaunchArgument("hold_accel_bias_constant", default_value="false"),
         DeclareLaunchArgument("hold_gyro_bias_constant", default_value="false"),
+        DeclareLaunchArgument("pointcloud_enable", default_value="true"),
+        DeclareLaunchArgument("pointcloud_subsample_stride", default_value="50"),
+        DeclareLaunchArgument("pointcloud_max_points_per_msg", default_value="256"),
+        DeclareLaunchArgument("pointcloud_min_range_m", default_value="0.3"),
+        DeclareLaunchArgument("pointcloud_max_range_m", default_value="30.0"),
+        DeclareLaunchArgument("pointcloud_factor_weight", default_value="1.0"),
         DeclareLaunchArgument("body_frame_id", default_value="imu_link"),
         DeclareLaunchArgument("world_frame_id", default_value="map"),
     ]
@@ -58,6 +74,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             {
                 "raw_imu_topic": raw_imu_topic,
+                "raw_pointcloud_topic": raw_pointcloud_topic,
                 "odometry_topic": odometry_topic,
                 "path_topic": path_topic,
                 "knot_interval_seconds": knot_interval_seconds,
@@ -69,6 +86,12 @@ def generate_launch_description() -> LaunchDescription:
                 "hold_gravity_constant": hold_gravity_constant,
                 "hold_accel_bias_constant": hold_accel_bias_constant,
                 "hold_gyro_bias_constant": hold_gyro_bias_constant,
+                "pointcloud_enable": pointcloud_enable,
+                "pointcloud_subsample_stride": pointcloud_subsample_stride,
+                "pointcloud_max_points_per_msg": pointcloud_max_points_per_msg,
+                "pointcloud_min_range_m": pointcloud_min_range_m,
+                "pointcloud_max_range_m": pointcloud_max_range_m,
+                "pointcloud_factor_weight": pointcloud_factor_weight,
                 "body_frame_id": body_frame_id,
                 "world_frame_id": world_frame_id,
             }

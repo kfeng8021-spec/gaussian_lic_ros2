@@ -19,6 +19,7 @@ NODE_LOG="${LOG_DIR}/node.log"
 ros2 run gaussian_lic_tracking continuous_time_node \
   --ros-args \
   -p raw_imu_topic:=/imu_smoke \
+  -p raw_pointcloud_topic:=/points_smoke \
   -p odometry_topic:=/continuous_time/odometry \
   -p path_topic:=/continuous_time/path \
   -p knot_interval_seconds:=0.05 \
@@ -26,6 +27,9 @@ ros2 run gaussian_lic_tracking continuous_time_node \
   -p marginalize_oldest_count:=1 \
   -p seed_min_imu_count:=15 \
   -p step_period_seconds:=0.05 \
+  -p pointcloud_enable:=true \
+  -p pointcloud_subsample_stride:=5 \
+  -p pointcloud_max_points_per_msg:=64 \
   > "${NODE_LOG}" 2>&1 &
 NODE_PID=$!
 
