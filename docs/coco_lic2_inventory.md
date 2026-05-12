@@ -212,10 +212,13 @@ Current ROS2 implementation status:
 - `scripts/continuous_time_node_bag_smoke.sh` runs the continuous-time
   node against a real `frontend_raw` rosbag2 (default FAST-LIVO2
   `CBD_Building_01`), counts emitted Odometry messages over a 15 s slice,
-  and reports liveness. Local run records 285 odometry messages with the
-  LiDAR factor disabled and 484 with it enabled at stride-200 subsampling
-  — the first end-to-end demonstration that the ported stack ingests real
-  IMU + LiDAR streams without crashing.
+  writes a TUM-format trajectory artifact via the new `output_tum_path`
+  parameter, and asserts the TUM file contains ≥1 non-comment line.
+  Local run records 285 odometry messages with the LiDAR factor disabled
+  and 484 (+834 TUM lines after the post-slice drain) with it enabled at
+  stride-200 subsampling — the first end-to-end demonstration that the
+  ported stack ingests real IMU + LiDAR streams without crashing and
+  emits the TUM trajectory artifact `trajectory_compare.py` expects.
 - Remaining work: port the SO(3) rotation-knot Jacobian (upstream
   `So3SplineView::JacobianStruct`); replace the configurable single-plane
   prior with per-frame plane / edge feature extraction so LiDAR factors

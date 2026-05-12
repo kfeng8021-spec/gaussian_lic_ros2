@@ -28,6 +28,7 @@ source "${WORKSPACE}/install/setup.bash"
 mkdir -p "${LOG_DIR}"
 NODE_LOG="${LOG_DIR}/node.log"
 PLAY_LOG="${LOG_DIR}/play.log"
+TUM_PATH="${LOG_DIR}/continuous_time_trajectory.tum"
 
 ros2 run gaussian_lic_tracking continuous_time_node \
   --ros-args \
@@ -41,6 +42,7 @@ ros2 run gaussian_lic_tracking continuous_time_node \
   -p seed_min_imu_count:=30 \
   -p step_period_seconds:=0.05 \
   -p pointcloud_enable:=true -p pointcloud_subsample_stride:=200 \
+  -p output_tum_path:="${TUM_PATH}" \
   > "${NODE_LOG}" 2>&1 &
 NODE_PID=$!
 
@@ -93,12 +95,17 @@ if [ -z "${ODOM_COUNT}" ]; then
   ODOM_COUNT=0
 fi
 
-if [ "${RC}" -eq 0 ] && [ "${ODOM_COUNT}" -gt 0 ]; then
-  echo "continuous_time_node_bag_smoke OK (bag=${BAG_DIR##*/}, slice=${PLAYBACK_DURATION}s, rate=${PLAYBACK_RATE}, odometry_msgs=${ODOM_COUNT})"
+TUM_LINES=0
+if [ -f "${TUM_PATH}" ]; then
+  TUM_LINES=$(grep -cv '^#' "${TUM_PATH}" 2>/dev/null || echo 0)
+fi
+
+if [ "${RC}" -eq 0 ] && [ "${ODOM_COUNT}" -gt 0 ] && [ "${TUM_LINES}" -gt 0 ]; then
+  echo "continuous_time_node_bag_smoke OK (bag=${BAG_DIR##*/}, slice=${PLAYBACK_DURATION}s, rate=${PLAYBACK_RATE}, odometry_msgs=${ODOM_COUNT}, tum_lines=${TUM_LINES}, tum_path=${TUM_PATH})"
   exit 0
 fi
 
-echo "continuous_time_node_bag_smoke FAIL (rc=${RC}, odometry_msgs=${ODOM_COUNT})"
+echo "continuous_time_node_bag_smoke FAIL (rc=${RC}, odometry_msgs=${ODOM_COUNT}, tum_lines=${TUM_LINES})"
 echo "--- node log (tail) ---"
 tail -30 "${NODE_LOG}" || true
 echo "--- play log (tail) ---"

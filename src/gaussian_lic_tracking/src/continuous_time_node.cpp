@@ -12,6 +12,8 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -97,6 +99,20 @@ public:
       static_cast<int>(declare_parameter<int>("seed_min_imu_count", 25));
     max_path_history_ =
       static_cast<int>(declare_parameter<int>("max_path_history", 5000));
+
+    output_tum_path_ = declare_parameter<std::string>("output_tum_path", "");
+    if (!output_tum_path_.empty()) {
+      output_tum_stream_.open(output_tum_path_, std::ios::out | std::ios::trunc);
+      if (!output_tum_stream_) {
+        RCLCPP_WARN(
+          get_logger(),
+          "could not open output_tum_path '%s' for writing",
+          output_tum_path_.c_str());
+      } else {
+        output_tum_stream_ << "# stamp_s tx ty tz qx qy qz qw" << std::endl;
+        output_tum_stream_.flush();
+      }
+    }
 
     raw_pointcloud_topic_ = declare_parameter<std::string>(
       "raw_pointcloud_topic", "/points_for_gs");
@@ -354,6 +370,17 @@ private:
     published_path_.header = pose_stamped.header;
     published_path_.poses.push_back(pose_stamped);
     path_publisher_->publish(published_path_);
+
+    if (output_tum_stream_.is_open()) {
+      const double stamp_s = static_cast<double>(query_ns) * 1.0e-9;
+      char line[256];
+      std::snprintf(
+        line, sizeof(line),
+        "%.9f %.6f %.6f %.6f %.6f %.6f %.6f %.6f",
+        stamp_s, p.x(), p.y(), p.z(), q.x(), q.y(), q.z(), q.w());
+      output_tum_stream_ << line << std::endl;
+      ++tum_lines_written_;
+    }
   }
 
   std::string raw_imu_topic_;
@@ -383,6 +410,10 @@ private:
   std::size_t accepted_imu_count_{0};
   std::size_t dropped_imu_count_{0};
   std::size_t rejected_imu_count_{0};
+
+  std::string output_tum_path_;
+  std::ofstream output_tum_stream_;
+  std::size_t tum_lines_written_{0};
 
   bool pointcloud_enable_{true};
   int pointcloud_subsample_stride_{50};
