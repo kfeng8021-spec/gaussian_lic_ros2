@@ -62,6 +62,18 @@ LIDAR_POSE_FACTOR_ROBUST_KERNEL_M="${LIDAR_POSE_FACTOR_ROBUST_KERNEL_M:-0.15}"
 ENABLE_LIDAR_PLANE_NORMAL_FACTOR="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR:-false}"
 LIDAR_PLANE_NORMAL_FACTOR_WEIGHT="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT:-0.1}"
 LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD:-0.10}"
+ENABLE_VISUAL_ROTATION_PRIOR="${ENABLE_VISUAL_ROTATION_PRIOR:-false}"
+VISUAL_ROTATION_PRIOR_WEIGHT="${VISUAL_ROTATION_PRIOR_WEIGHT:-0.1}"
+VISUAL_ROTATION_PRIOR_HUBER_DELTA_RAD="${VISUAL_ROTATION_PRIOR_HUBER_DELTA_RAD:-0.05}"
+VISUAL_ROTATION_MAX_SHIFT_PX="${VISUAL_ROTATION_MAX_SHIFT_PX:-12}"
+VISUAL_ROTATION_MIN_PIXELS="${VISUAL_ROTATION_MIN_PIXELS:-2000}"
+VISUAL_ROTATION_MAX_PIXELS="${VISUAL_ROTATION_MAX_PIXELS:-20000}"
+VISUAL_ROTATION_FRAME_STRIDE="${VISUAL_ROTATION_FRAME_STRIDE:-3}"
+VISUAL_ROTATION_MAX_DT_NS="${VISUAL_ROTATION_MAX_DT_NS:-200000000}"
+VISUAL_ROTATION_MAX_RMSE="${VISUAL_ROTATION_MAX_RMSE:-0.30}"
+VISUAL_ROTATION_PIXEL_TO_RAD_SCALE="${VISUAL_ROTATION_PIXEL_TO_RAD_SCALE:-1.0}"
+VISUAL_ROTATION_SIGN="${VISUAL_ROTATION_SIGN:-1.0}"
+CAMERA_TO_IMU_ROTATION_XYZW="${CAMERA_TO_IMU_ROTATION_XYZW:-[-0.4991948721, 0.5038197882, -0.4930665852, 0.5038406923]}"
 MAX_ITERATIONS_PER_STEP="${MAX_ITERATIONS_PER_STEP:-1}"
 IMU_INFO_GYRO="${IMU_INFO_GYRO:-10.0}"
 IMU_INFO_ACCEL="${IMU_INFO_ACCEL:-1.0}"
@@ -157,6 +169,18 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p enable_lidar_plane_normal_factor:="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" \
   -p lidar_plane_normal_factor_weight:="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}" \
   -p lidar_plane_normal_huber_delta_rad:="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}" \
+  -p enable_visual_rotation_prior:="${ENABLE_VISUAL_ROTATION_PRIOR}" \
+  -p visual_rotation_prior_weight:="${VISUAL_ROTATION_PRIOR_WEIGHT}" \
+  -p visual_rotation_prior_huber_delta_rad:="${VISUAL_ROTATION_PRIOR_HUBER_DELTA_RAD}" \
+  -p visual_rotation_max_shift_px:="${VISUAL_ROTATION_MAX_SHIFT_PX}" \
+  -p visual_rotation_min_pixels:="${VISUAL_ROTATION_MIN_PIXELS}" \
+  -p visual_rotation_max_pixels:="${VISUAL_ROTATION_MAX_PIXELS}" \
+  -p visual_rotation_frame_stride:="${VISUAL_ROTATION_FRAME_STRIDE}" \
+  -p visual_rotation_max_dt_ns:="${VISUAL_ROTATION_MAX_DT_NS}" \
+  -p visual_rotation_max_rmse:="${VISUAL_ROTATION_MAX_RMSE}" \
+  -p visual_rotation_pixel_to_rad_scale:="${VISUAL_ROTATION_PIXEL_TO_RAD_SCALE}" \
+  -p visual_rotation_sign:="${VISUAL_ROTATION_SIGN}" \
+  -p camera_to_imu_rotation_xyzw:="${CAMERA_TO_IMU_ROTATION_XYZW}" \
   -p lidar_huber_delta_m:="${LIDAR_HUBER_DELTA_M}" \
   -p enable_voxel_plane_extraction:="${ENABLE_VOXEL_PLANE_EXTRACTION}" \
   -p enable_persistent_plane_map:="${ENABLE_PERSISTENT_PLANE_MAP}" \
@@ -399,6 +423,18 @@ native = {
     "enable_lidar_plane_normal_factor": "${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" == "true",
     "lidar_plane_normal_factor_weight": float("${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}"),
     "lidar_plane_normal_huber_delta_rad": float("${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}"),
+    "enable_visual_rotation_prior": "${ENABLE_VISUAL_ROTATION_PRIOR}" == "true",
+    "visual_rotation_prior_weight": float("${VISUAL_ROTATION_PRIOR_WEIGHT}"),
+    "visual_rotation_prior_huber_delta_rad": float("${VISUAL_ROTATION_PRIOR_HUBER_DELTA_RAD}"),
+    "visual_rotation_max_shift_px": int("${VISUAL_ROTATION_MAX_SHIFT_PX}"),
+    "visual_rotation_min_pixels": int("${VISUAL_ROTATION_MIN_PIXELS}"),
+    "visual_rotation_max_pixels": int("${VISUAL_ROTATION_MAX_PIXELS}"),
+    "visual_rotation_frame_stride": int("${VISUAL_ROTATION_FRAME_STRIDE}"),
+    "visual_rotation_max_dt_ns": int("${VISUAL_ROTATION_MAX_DT_NS}"),
+    "visual_rotation_max_rmse": float("${VISUAL_ROTATION_MAX_RMSE}"),
+    "visual_rotation_pixel_to_rad_scale": float("${VISUAL_ROTATION_PIXEL_TO_RAD_SCALE}"),
+    "visual_rotation_sign": float("${VISUAL_ROTATION_SIGN}"),
+    "camera_to_imu_rotation_xyzw": "${CAMERA_TO_IMU_ROTATION_XYZW}",
     "update_gate_edge_knot_margin": int("${UPDATE_GATE_EDGE_KNOT_MARGIN}"),
     "position_extrapolation_damping": float("${POSITION_EXTRAPOLATION_DAMPING}"),
     "apply_position_update_on_rotation_reject": "${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT}" == "true",

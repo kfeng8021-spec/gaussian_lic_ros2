@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include <Eigen/Core>
@@ -27,11 +28,14 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
 #include <gaussian_lic_tracking/lidar_factor.hpp>
+#include <gaussian_lic_tracking/visual_factor.hpp>
 #include <gaussian_lic_tracking/spline/continuous_time_sliding_window.hpp>
 #include <gaussian_lic_tracking/spline/lidar_plane_extractor.hpp>
 
@@ -58,6 +62,81 @@ builtin_interfaces::msg::Time to_ros_time(int64_t stamp_ns)
   return t;
 }
 
+Eigen::Quaterniond quaternion_from_rotation_vector(const Eigen::Vector3d & rotation_vector)
+{
+  if (!rotation_vector.allFinite()) {
+    return Eigen::Quaterniond::Identity();
+  }
+  const double angle = rotation_vector.norm();
+  if (angle < 1.0e-12) {
+    return Eigen::Quaterniond::Identity();
+  }
+  return Eigen::Quaterniond(Eigen::AngleAxisd(angle, rotation_vector / angle)).normalized();
+}
+
+bool decode_image_gray(const sensor_msgs::msg::Image & msg, VisualFrame & frame)
+{
+  if (msg.width == 0U || msg.height == 0U || msg.data.empty()) {
+    return false;
+  }
+  const auto width = static_cast<size_t>(msg.width);
+  const auto height = static_cast<size_t>(msg.height);
+  const auto pixel_count = width * height;
+  frame.stamp_ns = to_signed_nanoseconds(msg.header.stamp);
+  frame.width = width;
+  frame.height = height;
+  frame.gray.assign(pixel_count, 0.0F);
+
+  const std::string & encoding = msg.encoding;
+  if (encoding == "mono8" || encoding == "8UC1") {
+    if (msg.step < width || msg.data.size() < msg.step * height) {
+      return false;
+    }
+    for (size_t y = 0; y < height; ++y) {
+      const size_t row = y * msg.step;
+      for (size_t x = 0; x < width; ++x) {
+        frame.gray[y * width + x] =
+          static_cast<float>(msg.data[row + x]) / 255.0F;
+      }
+    }
+    return true;
+  }
+
+  size_t channels = 0U;
+  bool bgr_order = false;
+  if (encoding == "rgb8") {
+    channels = 3U;
+  } else if (encoding == "bgr8") {
+    channels = 3U;
+    bgr_order = true;
+  } else if (encoding == "rgba8") {
+    channels = 4U;
+  } else if (encoding == "bgra8") {
+    channels = 4U;
+    bgr_order = true;
+  } else {
+    return false;
+  }
+  if (msg.step < width * channels || msg.data.size() < msg.step * height) {
+    return false;
+  }
+  for (size_t y = 0; y < height; ++y) {
+    const size_t row = y * msg.step;
+    for (size_t x = 0; x < width; ++x) {
+      const size_t base = row + x * channels;
+      const uint8_t c0 = msg.data[base + 0U];
+      const uint8_t c1 = msg.data[base + 1U];
+      const uint8_t c2 = msg.data[base + 2U];
+      const double r = bgr_order ? static_cast<double>(c2) : static_cast<double>(c0);
+      const double g = static_cast<double>(c1);
+      const double b = bgr_order ? static_cast<double>(c0) : static_cast<double>(c2);
+      frame.gray[y * width + x] =
+        static_cast<float>((0.299 * r + 0.587 * g + 0.114 * b) / 255.0);
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 class ContinuousTimeNode : public rclcpp::Node
@@ -68,6 +147,10 @@ public:
   {
     raw_imu_topic_ = declare_parameter<std::string>(
       "raw_imu_topic", "/imu_for_gs");
+    raw_image_topic_ = declare_parameter<std::string>(
+      "raw_image_topic", "/camera/image");
+    raw_camera_info_topic_ = declare_parameter<std::string>(
+      "raw_camera_info_topic", "/camera/camera_info");
     external_odometry_prior_topic_ = declare_parameter<std::string>(
       "external_odometry_prior_topic", "");
     enable_external_odometry_prior_ =
@@ -109,6 +192,15 @@ public:
         prior_to_imu_param[0],
         prior_to_imu_param[1],
         prior_to_imu_param[2]).normalized();
+    }
+    const auto camera_to_imu_param = declare_parameter<std::vector<double>>(
+      "camera_to_imu_rotation_xyzw", std::vector<double>{0.0, 0.0, 0.0, 1.0});
+    if (camera_to_imu_param.size() == 4) {
+      camera_to_imu_rotation_ = Eigen::Quaterniond(
+        camera_to_imu_param[3],
+        camera_to_imu_param[0],
+        camera_to_imu_param[1],
+        camera_to_imu_param[2]).normalized();
     }
     odometry_topic_ = declare_parameter<std::string>(
       "odometry_topic", "/gaussian_lic/continuous_time/odometry");
@@ -221,6 +313,46 @@ public:
       static_cast<int>(declare_parameter<int>("seed_min_imu_count", 25));
     max_path_history_ =
       static_cast<int>(declare_parameter<int>("max_path_history", 5000));
+    enable_visual_rotation_prior_ =
+      declare_parameter<bool>("enable_visual_rotation_prior", false);
+    visual_rotation_prior_weight_ =
+      declare_parameter<double>("visual_rotation_prior_weight", 0.1);
+    visual_rotation_prior_huber_delta_rad_ =
+      declare_parameter<double>("visual_rotation_prior_huber_delta_rad", 0.05);
+    visual_rotation_max_shift_px_ =
+      static_cast<int>(declare_parameter<int>("visual_rotation_max_shift_px", 12));
+    visual_rotation_min_pixels_ =
+      static_cast<int>(declare_parameter<int>("visual_rotation_min_pixels", 2000));
+    visual_rotation_max_pixels_ =
+      static_cast<int>(declare_parameter<int>("visual_rotation_max_pixels", 20000));
+    visual_rotation_frame_stride_ =
+      static_cast<int>(declare_parameter<int>("visual_rotation_frame_stride", 3));
+    visual_rotation_max_dt_ns_ =
+      declare_parameter<int64_t>("visual_rotation_max_dt_ns", 200000000LL);
+    visual_rotation_max_rmse_ =
+      declare_parameter<double>("visual_rotation_max_rmse", 0.30);
+    visual_rotation_pixel_to_rad_scale_ =
+      declare_parameter<double>("visual_rotation_pixel_to_rad_scale", 1.0);
+    visual_rotation_sign_ =
+      declare_parameter<double>("visual_rotation_sign", 1.0);
+    if (!std::isfinite(visual_rotation_prior_weight_) ||
+      visual_rotation_prior_weight_ < 0.0 ||
+      !std::isfinite(visual_rotation_prior_huber_delta_rad_) ||
+      visual_rotation_prior_huber_delta_rad_ < 0.0 ||
+      visual_rotation_max_shift_px_ < 0 ||
+      visual_rotation_min_pixels_ < 0 ||
+      visual_rotation_max_pixels_ <= 0 ||
+      visual_rotation_frame_stride_ <= 0 ||
+      visual_rotation_max_dt_ns_ < 0 ||
+      !std::isfinite(visual_rotation_max_rmse_) ||
+      visual_rotation_max_rmse_ < 0.0 ||
+      !std::isfinite(visual_rotation_pixel_to_rad_scale_) ||
+      visual_rotation_pixel_to_rad_scale_ < 0.0 ||
+      !std::isfinite(visual_rotation_sign_))
+    {
+      throw std::runtime_error("visual rotation prior parameters are invalid");
+    }
+    visual_factor_.set_max_pixels(static_cast<size_t>(visual_rotation_max_pixels_));
 
     output_tum_path_ = declare_parameter<std::string>("output_tum_path", "");
     if (!output_tum_path_.empty()) {
@@ -422,6 +554,17 @@ public:
         std::bind(&ContinuousTimeNode::on_pointcloud, this, std::placeholders::_1));
     }
 
+    if (enable_visual_rotation_prior_) {
+      rclcpp::QoS camera_qos(rclcpp::KeepLast(20));
+      camera_qos.best_effort();
+      camera_info_subscription_ = create_subscription<sensor_msgs::msg::CameraInfo>(
+        raw_camera_info_topic_, camera_qos,
+        std::bind(&ContinuousTimeNode::on_camera_info, this, std::placeholders::_1));
+      image_subscription_ = create_subscription<sensor_msgs::msg::Image>(
+        raw_image_topic_, camera_qos,
+        std::bind(&ContinuousTimeNode::on_image, this, std::placeholders::_1));
+    }
+
     if (enable_external_odometry_prior_ && !external_odometry_prior_topic_.empty()) {
       rclcpp::QoS prior_qos(rclcpp::KeepLast(20));
       prior_qos.reliable();
@@ -564,6 +707,140 @@ private:
       external_odometry_orientation_factor_weight_,
       external_odometry_orientation_factor_huber_delta_rad_);
     ++accepted_prior_orientation_factor_messages_;
+  }
+
+  void on_camera_info(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
+  {
+    if (!msg || !enable_visual_rotation_prior_) {
+      return;
+    }
+    const double fx = msg->k[0];
+    const double fy = msg->k[4];
+    const double cx = msg->k[2];
+    const double cy = msg->k[5];
+    if (!std::isfinite(fx) || !std::isfinite(fy) ||
+      !std::isfinite(cx) || !std::isfinite(cy) ||
+      fx <= 0.0 || fy <= 0.0)
+    {
+      ++visual_rotation_rejected_frames_;
+      return;
+    }
+    std::lock_guard<std::mutex> lock(estimator_mutex_);
+    visual_intrinsics_.fx = fx;
+    visual_intrinsics_.fy = fy;
+    visual_intrinsics_.cx = cx;
+    visual_intrinsics_.cy = cy;
+    have_visual_intrinsics_ = true;
+  }
+
+  void on_image(const sensor_msgs::msg::Image::SharedPtr msg)
+  {
+    if (!msg || !enable_visual_rotation_prior_) {
+      return;
+    }
+    VisualFrame frame;
+    if (!decode_image_gray(*msg, frame) || frame.stamp_ns <= 0) {
+      ++visual_rotation_rejected_frames_;
+      return;
+    }
+
+    std::lock_guard<std::mutex> lock(estimator_mutex_);
+    ++visual_rotation_image_frames_;
+    if (
+      visual_rotation_frame_stride_ > 1 &&
+      visual_rotation_image_frames_ %
+        static_cast<size_t>(visual_rotation_frame_stride_) != 0U)
+    {
+      last_visual_frame_ = std::move(frame);
+      have_last_visual_frame_ = true;
+      return;
+    }
+    if (!initialized_ || !estimator_ || !have_visual_intrinsics_) {
+      last_visual_frame_ = std::move(frame);
+      have_last_visual_frame_ = true;
+      return;
+    }
+    if (!have_last_visual_frame_) {
+      last_visual_frame_ = std::move(frame);
+      have_last_visual_frame_ = true;
+      return;
+    }
+    const int64_t dt_ns = frame.stamp_ns - last_visual_frame_.stamp_ns;
+    if (dt_ns <= 0 || (visual_rotation_max_dt_ns_ > 0 && dt_ns > visual_rotation_max_dt_ns_)) {
+      ++visual_rotation_rejected_frames_;
+      last_visual_frame_ = std::move(frame);
+      return;
+    }
+    if (frame.width != last_visual_frame_.width || frame.height != last_visual_frame_.height) {
+      ++visual_rotation_rejected_frames_;
+      last_visual_frame_ = std::move(frame);
+      have_visual_orientation_target_ = false;
+      return;
+    }
+
+    const auto alignment =
+      visual_factor_.estimate_translation(
+      last_visual_frame_, frame, visual_rotation_max_shift_px_);
+    if (!alignment.valid ||
+      alignment.compared_pixels < static_cast<size_t>(visual_rotation_min_pixels_) ||
+      (visual_rotation_max_rmse_ > 0.0 && alignment.rmse > visual_rotation_max_rmse_))
+    {
+      ++visual_rotation_rejected_frames_;
+      last_visual_frame_ = std::move(frame);
+      return;
+    }
+
+    if (!have_visual_orientation_target_) {
+      Eigen::Quaterniond q_seed;
+      Eigen::Vector3d p_seed;
+      if (!estimator_->query_pose(last_visual_frame_.stamp_ns, q_seed, p_seed)) {
+        ++visual_rotation_rejected_frames_;
+        last_visual_frame_ = std::move(frame);
+        return;
+      }
+      visual_orientation_target_ = q_seed.normalized();
+      have_visual_orientation_target_ = true;
+    }
+
+    const double inv_fx = 1.0 / visual_intrinsics_.fx;
+    const double inv_fy = 1.0 / visual_intrinsics_.fy;
+    const Eigen::Vector3d rotation_camera =
+      visual_rotation_sign_ * visual_rotation_pixel_to_rad_scale_ *
+      Eigen::Vector3d(
+      alignment.subpixel_dy * inv_fy,
+      -alignment.subpixel_dx * inv_fx,
+      0.0);
+    if (!rotation_camera.allFinite()) {
+      ++visual_rotation_rejected_frames_;
+      last_visual_frame_ = std::move(frame);
+      return;
+    }
+    const Eigen::Vector3d rotation_body = camera_to_imu_rotation_ * rotation_camera;
+    const Eigen::Quaterniond delta_q =
+      quaternion_from_rotation_vector(rotation_body);
+    visual_orientation_target_ = (visual_orientation_target_ * delta_q).normalized();
+    if (!visual_orientation_target_.coeffs().allFinite() ||
+      visual_orientation_target_.norm() <= 1.0e-9)
+    {
+      have_visual_orientation_target_ = false;
+      ++visual_rotation_rejected_frames_;
+      last_visual_frame_ = std::move(frame);
+      return;
+    }
+
+    if (visual_rotation_prior_weight_ > 0.0) {
+      estimator_->add_orientation_prior(
+        frame.stamp_ns, visual_orientation_target_,
+        visual_rotation_prior_weight_,
+        visual_rotation_prior_huber_delta_rad_);
+      ++visual_rotation_prior_factors_;
+    }
+    last_visual_rotation_dx_px_ = alignment.subpixel_dx;
+    last_visual_rotation_dy_px_ = alignment.subpixel_dy;
+    last_visual_rotation_angle_rad_ = rotation_body.norm();
+    last_visual_rotation_rmse_ = alignment.rmse;
+    ++visual_rotation_accepted_frames_;
+    last_visual_frame_ = std::move(frame);
   }
 
   void on_pointcloud(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
@@ -908,6 +1185,10 @@ private:
       "pointcloud_corr=%zu plane_matches=%zu plane_updates=%zu point_matches=%zu "
       "plane_update_skips=%zu point_updates=%zu point_update_skips=%zu "
       "plane_normal_factors=%zu "
+      "visual_rotation_images=%zu visual_rotation_accepted=%zu "
+      "visual_rotation_rejected=%zu visual_rotation_priors=%zu "
+      "visual_rotation_dx_px=%.9g visual_rotation_dy_px=%.9g "
+      "visual_rotation_angle_rad=%.9g visual_rotation_rmse=%.9g "
       "lidar_pose_priors=%zu lidar_pose_velocity_priors=%zu "
       "lidar_pose_matches=%zu lidar_pose_keyframes=%zu "
       "lidar_pose_rejected=%zu lidar_pose_last_residual=%.9g "
@@ -963,6 +1244,14 @@ private:
       persistent_point_map_updates_,
       persistent_point_map_update_skips_,
       persistent_plane_normal_factors_,
+      visual_rotation_image_frames_,
+      visual_rotation_accepted_frames_,
+      visual_rotation_rejected_frames_,
+      visual_rotation_prior_factors_,
+      last_visual_rotation_dx_px_,
+      last_visual_rotation_dy_px_,
+      last_visual_rotation_angle_rad_,
+      last_visual_rotation_rmse_,
       lidar_pose_prior_factors_,
       lidar_pose_prior_velocity_factors_,
       lidar_pose_prior_matches_,
@@ -1325,6 +1614,8 @@ private:
 
   std::string raw_imu_topic_;
   std::string raw_pointcloud_topic_;
+  std::string raw_image_topic_;
+  std::string raw_camera_info_topic_;
   std::string external_odometry_prior_topic_;
   std::string odometry_topic_;
   std::string path_topic_;
@@ -1335,6 +1626,8 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_subscription_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr external_odometry_subscription_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
@@ -1398,6 +1691,34 @@ private:
   Eigen::Vector4d lidar_plane_{0.0, 0.0, 1.0, 0.0};
   Eigen::Vector3d lidar_to_imu_translation_{Eigen::Vector3d::Zero()};
   Eigen::Quaterniond lidar_to_imu_rotation_{Eigen::Quaterniond::Identity()};
+  Eigen::Quaterniond camera_to_imu_rotation_{Eigen::Quaterniond::Identity()};
+
+  bool enable_visual_rotation_prior_{false};
+  double visual_rotation_prior_weight_{0.1};
+  double visual_rotation_prior_huber_delta_rad_{0.05};
+  int visual_rotation_max_shift_px_{12};
+  int visual_rotation_min_pixels_{2000};
+  int visual_rotation_max_pixels_{20000};
+  int visual_rotation_frame_stride_{3};
+  int64_t visual_rotation_max_dt_ns_{200000000LL};
+  double visual_rotation_max_rmse_{0.30};
+  double visual_rotation_pixel_to_rad_scale_{1.0};
+  double visual_rotation_sign_{1.0};
+  VisualFactor visual_factor_{200000};
+  VisualCameraIntrinsics visual_intrinsics_{};
+  bool have_visual_intrinsics_{false};
+  VisualFrame last_visual_frame_{};
+  bool have_last_visual_frame_{false};
+  Eigen::Quaterniond visual_orientation_target_{Eigen::Quaterniond::Identity()};
+  bool have_visual_orientation_target_{false};
+  std::size_t visual_rotation_image_frames_{0};
+  std::size_t visual_rotation_accepted_frames_{0};
+  std::size_t visual_rotation_rejected_frames_{0};
+  std::size_t visual_rotation_prior_factors_{0};
+  double last_visual_rotation_dx_px_{0.0};
+  double last_visual_rotation_dy_px_{0.0};
+  double last_visual_rotation_angle_rad_{0.0};
+  double last_visual_rotation_rmse_{0.0};
 
   bool enable_imu_gravity_autocal_{true};
   bool enable_startup_bias_autocal_{true};
