@@ -16,6 +16,7 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 #include <Eigen/Core>
@@ -389,6 +390,14 @@ private:
     }
     const int64_t newest = estimator_->newest_knot_stamp_ns();
     const int64_t query_ns = newest - 2 * knot_interval_ns_;
+    // Rate limit: only publish when query stamp advances. The Ceres step
+    // can fire many times per timer batch when the executor catches up
+    // after a busy IMU/PointCloud callback; without this guard, the same
+    // pose can be emitted hundreds of times.
+    if (last_published_query_ns_ != 0 && query_ns <= last_published_query_ns_) {
+      return;
+    }
+    last_published_query_ns_ = query_ns;
     Eigen::Quaterniond q;
     Eigen::Vector3d p;
     if (!estimator_->query_pose(query_ns, q, p)) {
@@ -422,13 +431,23 @@ private:
 
     if (output_tum_stream_.is_open()) {
       const double stamp_s = static_cast<double>(query_ns) * 1.0e-9;
-      char line[256];
-      std::snprintf(
-        line, sizeof(line),
-        "%.9f %.6f %.6f %.6f %.6f %.6f %.6f %.6f",
-        stamp_s, p.x(), p.y(), p.z(), q.x(), q.y(), q.z(), q.w());
-      output_tum_stream_ << line << std::endl;
-      ++tum_lines_written_;
+      const double position_bound = 1.0e6;
+      if (p.allFinite() && q.coeffs().allFinite() &&
+        std::abs(p.x()) < position_bound &&
+        std::abs(p.y()) < position_bound &&
+        std::abs(p.z()) < position_bound)
+      {
+        std::ostringstream line;
+        line.setf(std::ios::fixed);
+        line.precision(9);
+        line << stamp_s;
+        line.precision(6);
+        line << ' ' << p.x() << ' ' << p.y() << ' ' << p.z();
+        line << ' ' << q.x() << ' ' << q.y() << ' ' << q.z() << ' ' << q.w();
+        output_tum_stream_ << line.str() << '\n';
+        output_tum_stream_.flush();
+        ++tum_lines_written_;
+      }
     }
   }
 
@@ -483,6 +502,7 @@ private:
   double step_period_seconds_{0.10};
   int64_t step_period_ns_{0};
   int64_t knot_interval_ns_{50000000};
+  int64_t last_published_query_ns_{0};
 };
 
 }  // namespace gaussian_lic_tracking

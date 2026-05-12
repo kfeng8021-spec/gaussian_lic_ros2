@@ -219,9 +219,29 @@ Current ROS2 implementation status:
   stride-200 subsampling — the first end-to-end demonstration that the
   ported stack ingests real IMU + LiDAR streams without crashing and
   emits the TUM trajectory artifact `trajectory_compare.py` expects.
-- Remaining work: port the SO(3) rotation-knot Jacobian (upstream
-  `So3SplineView::JacobianStruct`); replace the configurable single-plane
-  prior with per-frame plane / edge feature extraction so LiDAR factors
-  carry real-scene geometry; publish reference-trajectory parity reports
-  comparing the continuous-time tracker against upstream Coco-LIC on the
-  existing 12/12 strict matrix.
+- The IMU and LiDAR factors inside `TrajectoryEstimator` now use Ceres
+  AutoDiff: `quaternion_log_t`, `quaternion_exp_t`, `adjoint_t`,
+  `lie_bracket_t`, `evaluate_lie_so3_t`, and `evaluate_rd_t` are all
+  templated on the scalar type. Ceres substitutes `Jet<double, N>` for the
+  exact analytic Jacobians via dual numbers, removing the previous
+  NumericDiff finite-difference path. The bag smoke records 1490
+  odometry messages over the FAST-LIVO2 CBD_Building_01 15 s slice
+  (vs 484 originally).
+- `LidarPlaneExtractor` replaces the single-plane prior with per-frame
+  voxel-grid plane fitting via covariance eigendecomposition. Configurable
+  voxel size, minimum support, planarity ratio, and inlier-distance gates.
+  `lidar_plane_extractor_probe` confirms ground-plane recovery, two-plane
+  recovery, and rejection of pseudo-random noise.
+- `scripts/continuous_time_native_reference_parity.sh` and
+  `scripts/odom_to_tum.py` run the continuous-time stack against a real
+  frontend_raw rosbag2, capture odometry as a TUM file via an external
+  Python subscriber (robust against pose divergence), and invoke
+  `scripts/trajectory_compare.py` against the archived Coco-LIC native
+  reference. The 2026-05-12 local run on FAST-LIVO2 CBD_Building_01
+  short slice produced a JSON report with 16 matched poses, 1.3% coverage,
+  and translation RMSE 289 km — the producer chain works end-to-end but
+  the estimator lacks proper IMU bias / gravity calibration to follow a
+  real building-exterior trajectory. Tuning that initialization is the
+  remaining work before a 13th strict matrix entry passes paper-grade
+  thresholds; the math, factor surface, and toolchain are now all in
+  place.
