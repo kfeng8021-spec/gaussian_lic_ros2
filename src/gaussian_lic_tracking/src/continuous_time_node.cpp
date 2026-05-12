@@ -2591,6 +2591,10 @@ private:
     }
     int accepted = 0;
     int stride_counter = 0;
+    std::vector<Eigen::Vector3d> pending_point_updates;
+    if (allow_map_update) {
+      pending_point_updates.reserve(points_lidar.size());
+    }
     for (const auto & point_lidar : points_lidar) {
       if (persistent_point_map_subsample_stride_ > 1 &&
         stride_counter++ % persistent_point_map_subsample_stride_ != 0)
@@ -2628,12 +2632,19 @@ private:
       if (!allow_map_update) {
         ++persistent_point_map_update_skips_;
       } else if (persistent_point_map_max_points_ <= 0 ||
-        static_cast<int>(persistent_points_world_.size()) < persistent_point_map_max_points_)
+        static_cast<int>(persistent_points_world_.size() + pending_point_updates.size()) <
+        persistent_point_map_max_points_)
       {
-        persistent_points_world_.push_back(point_world);
-        ++persistent_point_map_updates_;
+        // Same-scan self matches collapse motion. Keep associations
+        // history-based by publishing this scan's map updates only after all
+        // correspondences for the scan have been built.
+        pending_point_updates.push_back(point_world);
       }
     }
+    persistent_points_world_.insert(
+      persistent_points_world_.end(),
+      pending_point_updates.begin(), pending_point_updates.end());
+    persistent_point_map_updates_ += pending_point_updates.size();
     return accepted;
   }
 

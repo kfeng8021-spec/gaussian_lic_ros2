@@ -132,6 +132,14 @@ independent axis-aligned plane residuals. This is required for future
 Gaussian-map/global-anchor BA, but it is still a default-off parity path until
 the next long-window CBD run proves RMSE improvement.
 
+The same update batches persistent point-map insertions until the end of each
+scan, so correspondences are built only against historical map points and not
+against earlier points from the same scan. CBD 12 s validation confirms the new
+3D residual is active (`~12.5k` LiDAR point factors), but path scale remains too
+short (`0.47 m` current vs `0.92 m` reference, RMSE `0.144 m`), so Gaussian-map
+point anchors still need covariance/visibility filtering before they can become
+parity defaults.
+
 ## Dataset Profiles
 
 `gaussian_lic_bringup/config` includes ROS2 mapping profiles derived from the upstream Gaussian-LIC YAML files:
