@@ -151,6 +151,19 @@ evidence still does not improve ATE (`0.143944-0.145313 m` RMSE and shortened
 path scale), so the open strict-parity blocker remains global trajectory-shape
 and visual/Gaussian-map coupling rather than point-map update timing.
 
+2026-05-13 scan-to-scan relative pose follow-up: `TrajectoryEstimator` now
+supports two-timestamp relative position and SO(3) priors, and
+`ContinuousTimeSlidingWindow` promotes them with the same signed-nanosecond
+window semantics as other factors. `continuous_time_node` can route
+consecutive-scan ICP targets into those residuals through
+`lidar_scan_to_scan_use_relative_pose_factor`, with the flag forwarded by the
+native reference parity script. The implementation is covered by both batch and
+streaming probes, but remains default-off: CBD 12 s relative pose runs consumed
+the expected Ceres factors while shortening the optimized path to
+`0.0355-0.0548 m` against a `0.9159 m` reference and leaving RMSE near
+`0.144 m`. The missing piece is now target quality/global coupling, not the
+relative-pose residual surface itself.
+
 ## Dataset Profiles
 
 `gaussian_lic_bringup/config` includes ROS2 mapping profiles derived from the upstream Gaussian-LIC YAML files:
@@ -212,6 +225,11 @@ can damp ICP translation scale without forking the node. A CBD 12 s gain `0.15`
 probe reduced cumulative scan-target path to `1.24 m` but still produced a
 `5.97 m` optimized path and RMSE `0.185 m`, so the blocker is the coupled
 optimization surface rather than only raw ICP translation magnitude.
+The newer `lidar_scan_to_scan_use_relative_pose_factor` branch feeds the same
+ICP target into two-timestamp relative position/SO(3) factors instead of
+velocity/angular-velocity priors. CTest proves the math is active, but CBD 12 s
+evidence freezes path scale, so it is an ablation hook rather than a production
+default.
 
 It currently provides:
 

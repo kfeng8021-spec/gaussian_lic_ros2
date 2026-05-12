@@ -263,6 +263,20 @@ public:
     double weight = 1.0,
     double huber_delta_radps = -1.0);
 
+  void add_relative_position_prior(
+    int64_t start_stamp_ns,
+    int64_t end_stamp_ns,
+    const Eigen::Vector3d & target_p_body0,
+    double weight = 1.0,
+    double huber_delta_m = -1.0);
+
+  void add_relative_orientation_prior(
+    int64_t start_stamp_ns,
+    int64_t end_stamp_ns,
+    const Eigen::Quaterniond & target_q_body0_body1,
+    double weight = 1.0,
+    double huber_delta_rad = -1.0);
+
   // Adds a timestamped SO(3) orientation prior with the same buffering
   // semantics as the position prior.
   void add_orientation_prior(

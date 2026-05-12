@@ -157,6 +157,44 @@ Eigen::Quaterniond truth_orientation_at(const TruthSpline & truth, double t_s)
   return view.rotation();
 }
 
+Eigen::Vector3d position_at(
+  const std::vector<Eigen::Quaterniond> & rotation_knots,
+  const std::vector<Eigen::Vector3d> & position_knots,
+  double dt_s,
+  double t_s)
+{
+  const double inv_dt = 1.0 / dt_s;
+  const int idx = static_cast<int>(std::floor(t_s / dt_s));
+  const double u = (t_s - idx * dt_s) / dt_s;
+  std::array<Eigen::Quaterniond, 4> rot_knots;
+  std::array<Eigen::Vector3d, 4> pos_knots;
+  for (int i = 0; i < 4; ++i) {
+    rot_knots[i] = rotation_knots[idx - 1 + i];
+    pos_knots[i] = position_knots[idx - 1 + i];
+  }
+  SplitSplineView<4> view(rot_knots, pos_knots, u, inv_dt);
+  return view.position_world();
+}
+
+Eigen::Quaterniond orientation_at(
+  const std::vector<Eigen::Quaterniond> & rotation_knots,
+  const std::vector<Eigen::Vector3d> & position_knots,
+  double dt_s,
+  double t_s)
+{
+  const double inv_dt = 1.0 / dt_s;
+  const int idx = static_cast<int>(std::floor(t_s / dt_s));
+  const double u = (t_s - idx * dt_s) / dt_s;
+  std::array<Eigen::Quaterniond, 4> rot_knots;
+  std::array<Eigen::Vector3d, 4> pos_knots;
+  for (int i = 0; i < 4; ++i) {
+    rot_knots[i] = rotation_knots[idx - 1 + i];
+    pos_knots[i] = position_knots[idx - 1 + i];
+  }
+  SplitSplineView<4> view(rot_knots, pos_knots, u, inv_dt);
+  return view.rotation();
+}
+
 void check_zero_residual_when_seeded_with_truth()
 {
   const double dt = 0.05;
@@ -693,6 +731,69 @@ void check_direct_knot_priors_anchor_control_point()
   }
 }
 
+void check_relative_pose_priors_constrain_motion_without_global_anchor()
+{
+  const double dt = 0.05;
+  const auto truth = build_truth(dt, 8);
+  TrajectoryEstimator estimator(dt);
+
+  auto perturbed_positions = truth.position_knots;
+  auto perturbed_rotations = truth.rotation_knots;
+  perturbed_positions[4] += Eigen::Vector3d(0.10, -0.02, 0.03);
+  perturbed_rotations[4] =
+    (Eigen::Quaterniond(Eigen::AngleAxisd(0.12, Eigen::Vector3d::UnitZ())) *
+    perturbed_rotations[4]).normalized();
+  estimator.set_knots(perturbed_rotations, perturbed_positions);
+
+  const double t0 = 0.15;
+  const double t1 = 0.25;
+  const Eigen::Quaterniond q0_truth = truth_orientation_at(truth, t0);
+  const Eigen::Quaterniond q1_truth = truth_orientation_at(truth, t1);
+  const Eigen::Vector3d p0_truth = truth_position_at(truth, t0);
+  const Eigen::Vector3d p1_truth = truth_position_at(truth, t1);
+  const Eigen::Vector3d target_relative_p =
+    q0_truth.inverse() * (p1_truth - p0_truth);
+  const Eigen::Quaterniond target_relative_q =
+    (q0_truth.inverse() * q1_truth).normalized();
+
+  if (!estimator.add_relative_position_prior_factor(t0, t1, target_relative_p, 20.0, 0.0) ||
+    !estimator.add_relative_orientation_prior_factor(t0, t1, target_relative_q, 20.0, 0.0))
+  {
+    std::fprintf(stderr, "relative pose priors were not added\n");
+    std::exit(1);
+  }
+
+  TrajectoryEstimatorOptions options;
+  options.max_num_iterations = 80;
+  options.hold_gyro_bias_constant = true;
+  options.hold_accel_bias_constant = true;
+  options.hold_gravity_constant = true;
+  const auto summary = estimator.solve(options);
+
+  const auto solved_positions = estimator.position_knots();
+  const auto solved_rotations = estimator.rotation_knots();
+  const Eigen::Quaterniond q0 = orientation_at(solved_rotations, solved_positions, dt, t0);
+  const Eigen::Quaterniond q1 = orientation_at(solved_rotations, solved_positions, dt, t1);
+  const Eigen::Vector3d p0 = position_at(solved_rotations, solved_positions, dt, t0);
+  const Eigen::Vector3d p1 = position_at(solved_rotations, solved_positions, dt, t1);
+  const Eigen::Vector3d relative_p = q0.inverse() * (p1 - p0);
+  const Eigen::Quaterniond relative_q = (q0.inverse() * q1).normalized();
+  const double position_error = (relative_p - target_relative_p).norm();
+  const double rotation_error = relative_q.angularDistance(target_relative_q);
+  if (position_error > 1.0e-8 || rotation_error > 1.0e-8 ||
+    summary.final_position_prior_cost > 1.0e-10 ||
+    summary.final_orientation_prior_cost > 1.0e-10)
+  {
+    std::fprintf(stderr,
+      "relative pose prior failed: p_err=%.9g r_err=%.9g pos_cost=%.9g rot_cost=%.9g (%s)\n",
+      position_error, rotation_error,
+      summary.final_position_prior_cost,
+      summary.final_orientation_prior_cost,
+      summary.brief_report.c_str());
+    std::exit(1);
+  }
+}
+
 }  // namespace
 
 int main()
@@ -710,6 +811,7 @@ int main()
     check_lidar_huber_loss_suppresses_plane_outlier();
     check_fixed_control_point_prefix_stays_constant();
     check_direct_knot_priors_anchor_control_point();
+    check_relative_pose_priors_constrain_motion_without_global_anchor();
   } catch (const std::exception & exception) {
     std::fprintf(stderr, "trajectory_estimator_probe exception: %s\n", exception.what());
     return 1;

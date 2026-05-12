@@ -76,6 +76,24 @@ struct BufferedAngularVelocityPrior
   double huber_delta_radps{0.0};
 };
 
+struct BufferedRelativePositionPrior
+{
+  int64_t start_stamp_ns{0};
+  int64_t end_stamp_ns{0};
+  Eigen::Vector3d target_p_body0{Eigen::Vector3d::Zero()};
+  double weight{1.0};
+  double huber_delta_m{0.0};
+};
+
+struct BufferedRelativeOrientationPrior
+{
+  int64_t start_stamp_ns{0};
+  int64_t end_stamp_ns{0};
+  Eigen::Quaterniond target_q_body0_body1{Eigen::Quaterniond::Identity()};
+  double weight{1.0};
+  double huber_delta_rad{0.0};
+};
+
 struct BufferedOrientationPrior
 {
   int64_t stamp_ns{0};
@@ -113,6 +131,8 @@ struct ContinuousTimeSlidingWindowEstimator::Impl
   std::deque<BufferedPositionPrior> active_position_priors;
   std::deque<BufferedVelocityPrior> active_velocity_priors;
   std::deque<BufferedAngularVelocityPrior> active_angular_velocity_priors;
+  std::deque<BufferedRelativePositionPrior> active_relative_position_priors;
+  std::deque<BufferedRelativeOrientationPrior> active_relative_orientation_priors;
   std::deque<BufferedOrientationPrior> active_orientation_priors;
 
   // Brand-new samples waiting for their first solve.
@@ -123,6 +143,8 @@ struct ContinuousTimeSlidingWindowEstimator::Impl
   std::deque<BufferedPositionPrior> pending_position_priors;
   std::deque<BufferedVelocityPrior> pending_velocity_priors;
   std::deque<BufferedAngularVelocityPrior> pending_angular_velocity_priors;
+  std::deque<BufferedRelativePositionPrior> pending_relative_position_priors;
+  std::deque<BufferedRelativeOrientationPrior> pending_relative_orientation_priors;
   std::deque<BufferedOrientationPrior> pending_orientation_priors;
 
   ContinuousTimeSlidingWindowDiagnostics diagnostics;
@@ -294,6 +316,32 @@ void ContinuousTimeSlidingWindowEstimator::add_angular_velocity_prior(
     {stamp_ns, angular_velocity_body, weight, effective_huber});
 }
 
+void ContinuousTimeSlidingWindowEstimator::add_relative_position_prior(
+  int64_t start_stamp_ns,
+  int64_t end_stamp_ns,
+  const Eigen::Vector3d & target_p_body0,
+  double weight,
+  double huber_delta_m)
+{
+  const double effective_huber =
+    huber_delta_m >= 0.0 ? huber_delta_m : impl_->options.lidar_huber_delta_m;
+  impl_->pending_relative_position_priors.push_back(
+    {start_stamp_ns, end_stamp_ns, target_p_body0, weight, effective_huber});
+}
+
+void ContinuousTimeSlidingWindowEstimator::add_relative_orientation_prior(
+  int64_t start_stamp_ns,
+  int64_t end_stamp_ns,
+  const Eigen::Quaterniond & target_q_body0_body1,
+  double weight,
+  double huber_delta_rad)
+{
+  const double effective_huber =
+    huber_delta_rad >= 0.0 ? huber_delta_rad : impl_->options.lidar_huber_delta_m;
+  impl_->pending_relative_orientation_priors.push_back(
+    {start_stamp_ns, end_stamp_ns, target_q_body0_body1.normalized(), weight, effective_huber});
+}
+
 void ContinuousTimeSlidingWindowEstimator::add_orientation_prior(
   int64_t stamp_ns,
   const Eigen::Quaterniond & q_world_body,
@@ -460,6 +508,26 @@ bool ContinuousTimeSlidingWindowEstimator::step()
   }
   impl_->pending_angular_velocity_priors = angular_velocity_prior_still_pending;
 
+  std::deque<BufferedRelativePositionPrior> relative_position_prior_still_pending;
+  for (const auto & p : impl_->pending_relative_position_priors) {
+    if (p.end_stamp_ns < interior_end_ns()) {
+      impl_->active_relative_position_priors.push_back(p);
+    } else {
+      relative_position_prior_still_pending.push_back(p);
+    }
+  }
+  impl_->pending_relative_position_priors = relative_position_prior_still_pending;
+
+  std::deque<BufferedRelativeOrientationPrior> relative_orientation_prior_still_pending;
+  for (const auto & p : impl_->pending_relative_orientation_priors) {
+    if (p.end_stamp_ns < interior_end_ns()) {
+      impl_->active_relative_orientation_priors.push_back(p);
+    } else {
+      relative_orientation_prior_still_pending.push_back(p);
+    }
+  }
+  impl_->pending_relative_orientation_priors = relative_orientation_prior_still_pending;
+
   std::deque<BufferedOrientationPrior> orientation_prior_still_pending;
   for (const auto & p : impl_->pending_orientation_priors) {
     if (p.stamp_ns < interior_end_ns()) {
@@ -523,6 +591,18 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     impl_->active_angular_velocity_priors.pop_front();
   }
   while (
+    !impl_->active_relative_position_priors.empty() &&
+    impl_->active_relative_position_priors.front().start_stamp_ns < interior_start_ns)
+  {
+    impl_->active_relative_position_priors.pop_front();
+  }
+  while (
+    !impl_->active_relative_orientation_priors.empty() &&
+    impl_->active_relative_orientation_priors.front().start_stamp_ns < interior_start_ns)
+  {
+    impl_->active_relative_orientation_priors.pop_front();
+  }
+  while (
     !impl_->active_orientation_priors.empty() &&
     impl_->active_orientation_priors.front().stamp_ns < interior_start_ns)
   {
@@ -534,6 +614,8 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     impl_->active_lidar_normals.empty() &&
     impl_->active_position_priors.empty() && impl_->active_velocity_priors.empty() &&
     impl_->active_angular_velocity_priors.empty() &&
+    impl_->active_relative_position_priors.empty() &&
+    impl_->active_relative_orientation_priors.empty() &&
     impl_->active_orientation_priors.empty())
   {
     return false;
@@ -640,6 +722,25 @@ bool ContinuousTimeSlidingWindowEstimator::step()
         t_s, active.angular_velocity_body, active.weight, active.huber_delta_radps))
     {
       ++impl_->diagnostics.total_angular_velocity_prior_factors;
+    }
+  }
+  for (const auto & active : impl_->active_relative_position_priors) {
+    const double t0_s = (active.start_stamp_ns - window_start) * 1.0e-9;
+    const double t1_s = (active.end_stamp_ns - window_start) * 1.0e-9;
+    if (estimator.add_relative_position_prior_factor(
+        t0_s, t1_s, active.target_p_body0, active.weight, active.huber_delta_m))
+    {
+      ++impl_->diagnostics.total_position_prior_factors;
+    }
+  }
+  for (const auto & active : impl_->active_relative_orientation_priors) {
+    const double t0_s = (active.start_stamp_ns - window_start) * 1.0e-9;
+    const double t1_s = (active.end_stamp_ns - window_start) * 1.0e-9;
+    if (estimator.add_relative_orientation_prior_factor(
+        t0_s, t1_s, active.target_q_body0_body1, active.weight,
+        active.huber_delta_rad))
+    {
+      ++impl_->diagnostics.total_orientation_prior_factors;
     }
   }
   for (const auto & active : impl_->active_orientation_priors) {

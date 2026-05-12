@@ -820,6 +820,8 @@ public:
       declare_parameter<bool>("lidar_scan_to_scan_use_odometry_prediction", false);
     lidar_scan_to_scan_use_point_to_plane_correction_ =
       declare_parameter<bool>("lidar_scan_to_scan_use_point_to_plane_correction", false);
+    lidar_scan_to_scan_use_relative_pose_factor_ =
+      declare_parameter<bool>("lidar_scan_to_scan_use_relative_pose_factor", false);
     lidar_scan_to_scan_dead_reckon_on_reject_ =
       declare_parameter<bool>("lidar_scan_to_scan_dead_reckon_on_reject", false);
     lidar_scan_to_scan_apply_pose_seed_ =
@@ -3029,15 +3031,29 @@ private:
     }
 
     if (lidar_scan_to_scan_position_weight_ > 0.0) {
-      estimator_->add_position_prior(
-        stamp_ns, target_p, lidar_scan_to_scan_position_weight_,
-        lidar_scan_to_scan_position_huber_delta_m_);
+      if (lidar_scan_to_scan_use_relative_pose_factor_) {
+        estimator_->add_relative_position_prior(
+          last_lidar_scan_to_scan_pose_.stamp_ns, stamp_ns, target_relative_p,
+          lidar_scan_to_scan_position_weight_,
+          lidar_scan_to_scan_position_huber_delta_m_);
+      } else {
+        estimator_->add_position_prior(
+          stamp_ns, target_p, lidar_scan_to_scan_position_weight_,
+          lidar_scan_to_scan_position_huber_delta_m_);
+      }
       ++lidar_scan_to_scan_position_priors_;
     }
     if (lidar_scan_to_scan_orientation_weight_ > 0.0) {
-      estimator_->add_orientation_prior(
-        stamp_ns, target_q, lidar_scan_to_scan_orientation_weight_,
-        lidar_scan_to_scan_orientation_huber_delta_rad_);
+      if (lidar_scan_to_scan_use_relative_pose_factor_) {
+        estimator_->add_relative_orientation_prior(
+          last_lidar_scan_to_scan_pose_.stamp_ns, stamp_ns, target_relative_q,
+          lidar_scan_to_scan_orientation_weight_,
+          lidar_scan_to_scan_orientation_huber_delta_rad_);
+      } else {
+        estimator_->add_orientation_prior(
+          stamp_ns, target_q, lidar_scan_to_scan_orientation_weight_,
+          lidar_scan_to_scan_orientation_huber_delta_rad_);
+      }
       ++lidar_scan_to_scan_orientation_priors_;
     }
     if (lidar_scan_to_scan_velocity_weight_ > 0.0) {
@@ -3441,6 +3457,7 @@ private:
   double lidar_scan_to_scan_relative_translation_gain_{1.0};
   bool lidar_scan_to_scan_use_odometry_prediction_{false};
   bool lidar_scan_to_scan_use_point_to_plane_correction_{false};
+  bool lidar_scan_to_scan_use_relative_pose_factor_{false};
   bool lidar_scan_to_scan_dead_reckon_on_reject_{false};
   bool lidar_scan_to_scan_apply_pose_seed_{false};
   bool lidar_scan_to_scan_store_corrected_pose_{true};

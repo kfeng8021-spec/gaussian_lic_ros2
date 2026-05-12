@@ -452,6 +452,81 @@ void check_point_to_point_map_factor_pulls_streaming_window()
   }
 }
 
+void check_relative_pose_priors_pull_streaming_window_motion()
+{
+  const double dt_s = 0.05;
+  const Eigen::Vector3d gravity(0.0, 0.0, -9.81);
+  const auto truth = build_truth(dt_s, 12);
+
+  ContinuousTimeSlidingWindowOptions options;
+  options.dt_s = dt_s;
+  options.window_knot_count = 12;
+  options.marginalize_oldest_count = 0;
+  options.gravity_world = gravity;
+  options.hold_gravity_constant = true;
+  options.hold_accel_bias_constant = true;
+  options.hold_gyro_bias_constant = true;
+  options.max_iterations_per_step = 80;
+  options.max_position_update_m = 0.0;
+  options.max_rotation_update_rad = 0.0;
+
+  ContinuousTimeSlidingWindowEstimator estimator(options);
+  auto initial_rot = truth.rotation_knots;
+  auto initial_pos = truth.position_knots;
+  initial_pos[4] += Eigen::Vector3d(0.12, -0.03, 0.02);
+  initial_rot[4] =
+    (Eigen::Quaterniond(Eigen::AngleAxisd(0.10, Eigen::Vector3d::UnitZ())) *
+    initial_rot[4]).normalized();
+  estimator.initialize(0, initial_rot, initial_pos);
+
+  const int64_t t0 = 3 * truth.dt_ns;
+  const int64_t t1 = 5 * truth.dt_ns;
+  Eigen::Quaterniond q0_truth;
+  Eigen::Quaterniond q1_truth;
+  Eigen::Vector3d p0_truth;
+  Eigen::Vector3d p1_truth;
+  truth_pose_at(truth, t0, q0_truth, p0_truth);
+  truth_pose_at(truth, t1, q1_truth, p1_truth);
+  const Eigen::Vector3d target_p_body0 =
+    q0_truth.inverse() * (p1_truth - p0_truth);
+  const Eigen::Quaterniond target_q_body0_body1 =
+    (q0_truth.inverse() * q1_truth).normalized();
+
+  estimator.add_relative_position_prior(t0, t1, target_p_body0, 20.0, 0.0);
+  estimator.add_relative_orientation_prior(t0, t1, target_q_body0_body1, 20.0, 0.0);
+  if (!estimator.step()) {
+    std::fprintf(stderr, "relative pose prior solve refused to run\n");
+    std::exit(1);
+  }
+  const auto & diag = estimator.diagnostics();
+  if (diag.last_step_position_prior_factors == 0 || diag.last_step_orientation_prior_factors == 0) {
+    std::fprintf(stderr,
+      "relative pose priors were not consumed: pos=%zu rot=%zu\n",
+      diag.last_step_position_prior_factors,
+      diag.last_step_orientation_prior_factors);
+    std::exit(1);
+  }
+  Eigen::Quaterniond q0;
+  Eigen::Quaterniond q1;
+  Eigen::Vector3d p0;
+  Eigen::Vector3d p1;
+  if (!estimator.query_pose(t0, q0, p0) || !estimator.query_pose(t1, q1, p1)) {
+    std::fprintf(stderr, "relative pose prior result was not queryable\n");
+    std::exit(1);
+  }
+  const Eigen::Vector3d relative_p = q0.inverse() * (p1 - p0);
+  const Eigen::Quaterniond relative_q = (q0.inverse() * q1).normalized();
+  const double position_error = (relative_p - target_p_body0).norm();
+  const double rotation_error = relative_q.angularDistance(target_q_body0_body1);
+  if (position_error > 1.0e-8 || rotation_error > 1.0e-8) {
+    std::fprintf(stderr,
+      "relative pose priors failed: p_err=%.9g r_err=%.9g\n",
+      position_error,
+      rotation_error);
+    std::exit(1);
+  }
+}
+
 void check_sliding_window_recovers_streamed_trajectory()
 {
   // Streaming mode: the seed only spans the first window; the estimator
@@ -592,6 +667,7 @@ int main()
     check_limited_position_update_clamps_without_rejecting();
     check_limited_update_carries_auxiliary_state();
     check_point_to_point_map_factor_pulls_streaming_window();
+    check_relative_pose_priors_pull_streaming_window_motion();
     check_sliding_window_recovers_streamed_trajectory();
     check_marginalization_keeps_window_bounded();
   } catch (const std::exception & exception) {

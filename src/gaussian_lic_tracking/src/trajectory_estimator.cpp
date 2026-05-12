@@ -361,6 +361,90 @@ struct OrientationPriorAutoDiffFunctor
   }
 };
 
+struct RelativePositionPriorAutoDiffFunctor
+{
+  double u0_normalized{0.0};
+  double u1_normalized{0.0};
+  double inv_dt_s{1.0};
+  std::array<int, N> r0_blocks{};
+  std::array<int, N> p0_blocks{};
+  std::array<int, N> p1_blocks{};
+  Eigen::Vector3d target_p_body0{Eigen::Vector3d::Zero()};
+  double weight{1.0};
+
+  template <typename T>
+  bool operator()(T const * const * parameters, T * residuals) const
+  {
+    std::array<Eigen::Quaternion<T>, N> rot0;
+    std::array<Eigen::Matrix<T, 3, 1>, N> pos0;
+    std::array<Eigen::Matrix<T, 3, 1>, N> pos1;
+    for (int i = 0; i < N; ++i) {
+      rot0[i] = quaternion_from_coeffs_t<T>(parameters[r0_blocks[i]]);
+      pos0[i] = Eigen::Map<const Eigen::Matrix<T, 3, 1>>(parameters[p0_blocks[i]]);
+      pos1[i] = Eigen::Map<const Eigen::Matrix<T, 3, 1>>(parameters[p1_blocks[i]]);
+    }
+
+    Eigen::Quaternion<T> q0_w_b;
+    CeresSplineHelper<4>::template evaluate_lie_so3_t<T>(
+      rot0, T(u0_normalized), T(inv_dt_s),
+      &q0_w_b, nullptr, nullptr);
+    const Eigen::Matrix<T, 3, 1> p0_w_b =
+      CeresSplineHelper<4>::template evaluate_rd_t<3, 0, T>(
+      pos0, T(u0_normalized), T(inv_dt_s));
+    const Eigen::Matrix<T, 3, 1> p1_w_b =
+      CeresSplineHelper<4>::template evaluate_rd_t<3, 0, T>(
+      pos1, T(u1_normalized), T(inv_dt_s));
+    const Eigen::Matrix<T, 3, 1> relative_body0 =
+      q0_w_b.conjugate() * (p1_w_b - p0_w_b);
+    const Eigen::Matrix<T, 3, 1> target = target_p_body0.cast<T>();
+
+    Eigen::Map<Eigen::Matrix<T, 3, 1>> r(residuals);
+    r = T(weight) * (relative_body0 - target);
+    return true;
+  }
+};
+
+struct RelativeOrientationPriorAutoDiffFunctor
+{
+  double u0_normalized{0.0};
+  double u1_normalized{0.0};
+  double inv_dt_s{1.0};
+  std::array<int, N> r0_blocks{};
+  std::array<int, N> r1_blocks{};
+  Eigen::Quaterniond target_q_body0_body1{Eigen::Quaterniond::Identity()};
+  double weight{1.0};
+
+  template <typename T>
+  bool operator()(T const * const * parameters, T * residuals) const
+  {
+    std::array<Eigen::Quaternion<T>, N> rot0;
+    std::array<Eigen::Quaternion<T>, N> rot1;
+    for (int i = 0; i < N; ++i) {
+      rot0[i] = quaternion_from_coeffs_t<T>(parameters[r0_blocks[i]]);
+      rot1[i] = quaternion_from_coeffs_t<T>(parameters[r1_blocks[i]]);
+    }
+
+    Eigen::Quaternion<T> q0_w_b;
+    Eigen::Quaternion<T> q1_w_b;
+    CeresSplineHelper<4>::template evaluate_lie_so3_t<T>(
+      rot0, T(u0_normalized), T(inv_dt_s),
+      &q0_w_b, nullptr, nullptr);
+    CeresSplineHelper<4>::template evaluate_lie_so3_t<T>(
+      rot1, T(u1_normalized), T(inv_dt_s),
+      &q1_w_b, nullptr, nullptr);
+    const Eigen::Quaternion<T> relative =
+      (q0_w_b.conjugate() * q1_w_b).normalized();
+    const Eigen::Quaternion<T> target =
+      target_q_body0_body1.cast<T>().normalized();
+    const Eigen::Quaternion<T> error =
+      (target.conjugate() * relative).normalized();
+
+    Eigen::Map<Eigen::Matrix<T, 3, 1>> r(residuals);
+    r = T(weight) * quaternion_log_t<T>(error);
+    return true;
+  }
+};
+
 struct AngularVelocityPriorAutoDiffFunctor
 {
   double u_normalized{0.0};
@@ -922,6 +1006,149 @@ bool TrajectoryEstimator::add_angular_velocity_prior_factor(
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->orientation_prior_residual_blocks.push_back(block);
   ++angular_velocity_prior_factor_count_;
+  return true;
+}
+
+bool TrajectoryEstimator::add_relative_position_prior_factor(
+  double t0_s,
+  double t1_s,
+  const Eigen::Vector3d & target_p_body0,
+  double weight,
+  double huber_delta_m)
+{
+  if (!target_p_body0.allFinite() ||
+    !std::isfinite(weight) || weight <= 0.0 ||
+    !std::isfinite(huber_delta_m) || huber_delta_m < 0.0)
+  {
+    return false;
+  }
+  int segment0 = 0;
+  int segment1 = 0;
+  double u0 = 0.0;
+  double u1 = 0.0;
+  if (!find_segment(t0_s, segment0, u0) || !find_segment(t1_s, segment1, u1)) {
+    return false;
+  }
+  if (t1_s <= t0_s) {
+    return false;
+  }
+
+  if (impl_->rotation_storage.empty()) {
+    rebuild_problem();
+  }
+
+  auto * functor = new RelativePositionPriorAutoDiffFunctor();
+  functor->u0_normalized = u0;
+  functor->u1_normalized = u1;
+  functor->inv_dt_s = 1.0 / dt_s_;
+  functor->target_p_body0 = target_p_body0;
+  functor->weight = weight;
+
+  std::vector<double *> parameter_blocks;
+  std::vector<int> parameter_sizes;
+  auto add_block = [&parameter_blocks, &parameter_sizes](double * data, int size) {
+      const auto existing = std::find(parameter_blocks.begin(), parameter_blocks.end(), data);
+      if (existing != parameter_blocks.end()) {
+        return static_cast<int>(std::distance(parameter_blocks.begin(), existing));
+      }
+      parameter_blocks.push_back(data);
+      parameter_sizes.push_back(size);
+      return static_cast<int>(parameter_blocks.size() - 1U);
+    };
+
+  const int base0 = segment0 - 1;
+  const int base1 = segment1 - 1;
+  for (int i = 0; i < N; ++i) {
+    functor->r0_blocks[i] =
+      add_block(impl_->rotation_storage[base0 + i].data(), 4);
+    functor->p0_blocks[i] =
+      add_block(impl_->position_storage[base0 + i].data(), 3);
+    functor->p1_blocks[i] =
+      add_block(impl_->position_storage[base1 + i].data(), 3);
+  }
+
+  auto * cost =
+    new ceres::DynamicAutoDiffCostFunction<RelativePositionPriorAutoDiffFunctor>(functor);
+  for (const int size : parameter_sizes) {
+    cost->AddParameterBlock(size);
+  }
+  cost->SetNumResiduals(3);
+
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_m, weight);
+  const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
+  impl_->position_prior_residual_blocks.push_back(block);
+  ++position_prior_factor_count_;
+  return true;
+}
+
+bool TrajectoryEstimator::add_relative_orientation_prior_factor(
+  double t0_s,
+  double t1_s,
+  const Eigen::Quaterniond & target_q_body0_body1,
+  double weight,
+  double huber_delta_rad)
+{
+  if (!target_q_body0_body1.coeffs().allFinite() ||
+    target_q_body0_body1.norm() <= 1.0e-9 ||
+    !std::isfinite(weight) || weight <= 0.0 ||
+    !std::isfinite(huber_delta_rad) || huber_delta_rad < 0.0)
+  {
+    return false;
+  }
+  int segment0 = 0;
+  int segment1 = 0;
+  double u0 = 0.0;
+  double u1 = 0.0;
+  if (!find_segment(t0_s, segment0, u0) || !find_segment(t1_s, segment1, u1)) {
+    return false;
+  }
+  if (t1_s <= t0_s) {
+    return false;
+  }
+
+  if (impl_->rotation_storage.empty()) {
+    rebuild_problem();
+  }
+
+  auto * functor = new RelativeOrientationPriorAutoDiffFunctor();
+  functor->u0_normalized = u0;
+  functor->u1_normalized = u1;
+  functor->inv_dt_s = 1.0 / dt_s_;
+  functor->target_q_body0_body1 = target_q_body0_body1.normalized();
+  functor->weight = weight;
+
+  std::vector<double *> parameter_blocks;
+  std::vector<int> parameter_sizes;
+  auto add_block = [&parameter_blocks, &parameter_sizes](double * data, int size) {
+      const auto existing = std::find(parameter_blocks.begin(), parameter_blocks.end(), data);
+      if (existing != parameter_blocks.end()) {
+        return static_cast<int>(std::distance(parameter_blocks.begin(), existing));
+      }
+      parameter_blocks.push_back(data);
+      parameter_sizes.push_back(size);
+      return static_cast<int>(parameter_blocks.size() - 1U);
+    };
+
+  const int base0 = segment0 - 1;
+  const int base1 = segment1 - 1;
+  for (int i = 0; i < N; ++i) {
+    functor->r0_blocks[i] =
+      add_block(impl_->rotation_storage[base0 + i].data(), 4);
+    functor->r1_blocks[i] =
+      add_block(impl_->rotation_storage[base1 + i].data(), 4);
+  }
+
+  auto * cost =
+    new ceres::DynamicAutoDiffCostFunction<RelativeOrientationPriorAutoDiffFunctor>(functor);
+  for (const int size : parameter_sizes) {
+    cost->AddParameterBlock(size);
+  }
+  cost->SetNumResiduals(3);
+
+  ceres::LossFunction * loss = make_weighted_huber_loss(huber_delta_rad, weight);
+  const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
+  impl_->orientation_prior_residual_blocks.push_back(block);
+  ++orientation_prior_factor_count_;
   return true;
 }
 

@@ -170,6 +170,27 @@ public:
     double weight = 1.0,
     double huber_delta_radps = 0.0);
 
+  // Add a relative translation prior between two continuous-time body poses.
+  // The target is expressed in the body frame at t0:
+  //   target = q(t0)^-1 * (p(t1) - p(t0)).
+  // This preserves scan-to-scan motion information without anchoring the
+  // global position of either pose.
+  bool add_relative_position_prior_factor(
+    double t0_s,
+    double t1_s,
+    const Eigen::Vector3d & target_p_body0,
+    double weight = 1.0,
+    double huber_delta_m = 0.0);
+
+  // Add a relative SO(3) prior between two continuous-time body poses:
+  //   target = q(t0)^-1 * q(t1).
+  bool add_relative_orientation_prior_factor(
+    double t0_s,
+    double t1_s,
+    const Eigen::Quaterniond & target_q_body0_body1,
+    double weight = 1.0,
+    double huber_delta_rad = 0.0);
+
   // Add an orientation-only prior on the continuous-time body trajectory.
   // The residual is the SO(3) log-map between target and spline orientation.
   bool add_orientation_prior_factor(
