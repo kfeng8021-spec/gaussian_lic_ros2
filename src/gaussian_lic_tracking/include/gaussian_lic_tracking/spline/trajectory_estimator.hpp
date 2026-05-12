@@ -41,6 +41,10 @@ struct TrajectoryEstimatorOptions
   bool hold_gyro_bias_constant{false};
   bool hold_accel_bias_constant{false};
   bool hold_gravity_constant{true};
+  // Coco-LIC fixes all control points up to index 3 in each local solve. This
+  // anchors the gauge freedom while newly-added knots absorb the current scan.
+  // Leave negative to optimize every knot, which is useful for batch probes.
+  int fixed_control_point_index{-1};
 };
 
 struct TrajectoryEstimatorSummary

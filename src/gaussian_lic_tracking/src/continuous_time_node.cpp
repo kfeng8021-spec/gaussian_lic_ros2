@@ -489,6 +489,11 @@ public:
       declare_parameter<bool>("hold_accel_bias_constant", false);
     options.hold_gyro_bias_constant =
       declare_parameter<bool>("hold_gyro_bias_constant", false);
+    options.fixed_control_point_index =
+      declare_parameter<int>("fixed_control_point_index", -1);
+    if (options.fixed_control_point_index < -1) {
+      throw std::runtime_error("fixed_control_point_index must be >= -1");
+    }
     options.max_position_update_m =
       declare_parameter<double>("max_position_update_m", 2.0);
     options.max_rotation_update_rad =
@@ -2781,16 +2786,48 @@ private:
       lidar_scan_to_scan_orientation_weight_ > 0.0 ||
       (lidar_scan_to_scan_apply_pose_seed_ &&
       lidar_scan_to_scan_pose_seed_rotation_gain_ > 0.0);
-    const Eigen::Quaterniond target_relative_q = use_scan_matched_rotation
+    Eigen::Quaterniond target_relative_q = use_scan_matched_rotation
       ? matched_relative_q
       : predicted_relative.q_w_i;
-    const Eigen::Vector3d target_relative_p =
+    Eigen::Vector3d target_relative_p =
       predicted_relative.p_w_i + correction.delta_p_w;
+    Eigen::Vector3d target_relative_velocity = target_relative_p / dt_s;
+    Eigen::Vector3d target_angular_velocity =
+      spline::quaternion_log(target_relative_q) / dt_s;
+    if (lidar_scan_to_scan_yaw_only_angular_velocity_) {
+      target_angular_velocity.x() = 0.0;
+      target_angular_velocity.y() = 0.0;
+    }
+    if (target_relative_velocity.allFinite() && lidar_scan_to_scan_max_velocity_mps_ > 0.0) {
+      const double speed = target_relative_velocity.norm();
+      if (speed > lidar_scan_to_scan_max_velocity_mps_ && speed > 1.0e-12) {
+        target_relative_velocity *= lidar_scan_to_scan_max_velocity_mps_ / speed;
+        target_relative_p = target_relative_velocity * dt_s;
+        ++lidar_scan_to_scan_velocity_clamped_;
+      }
+    }
+    if (
+      target_angular_velocity.allFinite() &&
+      lidar_scan_to_scan_max_angular_velocity_radps_ > 0.0)
+    {
+      const double angular_speed = target_angular_velocity.norm();
+      if (
+        angular_speed > lidar_scan_to_scan_max_angular_velocity_radps_ &&
+        angular_speed > 1.0e-12)
+      {
+        target_angular_velocity *= lidar_scan_to_scan_max_angular_velocity_radps_ / angular_speed;
+        target_relative_q =
+          spline::quaternion_exp(target_angular_velocity * dt_s).normalized();
+        ++lidar_scan_to_scan_angular_velocity_clamped_;
+      }
+    }
     const Eigen::Quaterniond target_q =
       (last_lidar_scan_to_scan_pose_.q_w_i * target_relative_q).normalized();
     const Eigen::Vector3d target_p =
       last_lidar_scan_to_scan_pose_.p_w_i +
       last_lidar_scan_to_scan_pose_.q_w_i * target_relative_p;
+    const Eigen::Vector3d target_velocity =
+      (target_p - last_lidar_scan_to_scan_pose_.p_w_i) / dt_s;
 
     if (lidar_scan_to_scan_apply_pose_seed_) {
       const bool pose_seed_applied = estimator_->apply_pose_hint(
@@ -2815,34 +2852,6 @@ private:
         stamp_ns, target_q, lidar_scan_to_scan_orientation_weight_,
         lidar_scan_to_scan_orientation_huber_delta_rad_);
       ++lidar_scan_to_scan_orientation_priors_;
-    }
-    Eigen::Vector3d target_velocity =
-      (target_p - last_lidar_scan_to_scan_pose_.p_w_i) / dt_s;
-    Eigen::Vector3d target_angular_velocity =
-      spline::quaternion_log(target_relative_q) / dt_s;
-    if (lidar_scan_to_scan_yaw_only_angular_velocity_) {
-      target_angular_velocity.x() = 0.0;
-      target_angular_velocity.y() = 0.0;
-    }
-    if (target_velocity.allFinite() && lidar_scan_to_scan_max_velocity_mps_ > 0.0) {
-      const double speed = target_velocity.norm();
-      if (speed > lidar_scan_to_scan_max_velocity_mps_ && speed > 1.0e-12) {
-        target_velocity *= lidar_scan_to_scan_max_velocity_mps_ / speed;
-        ++lidar_scan_to_scan_velocity_clamped_;
-      }
-    }
-    if (
-      target_angular_velocity.allFinite() &&
-      lidar_scan_to_scan_max_angular_velocity_radps_ > 0.0)
-    {
-      const double angular_speed = target_angular_velocity.norm();
-      if (
-        angular_speed > lidar_scan_to_scan_max_angular_velocity_radps_ &&
-        angular_speed > 1.0e-12)
-      {
-        target_angular_velocity *= lidar_scan_to_scan_max_angular_velocity_radps_ / angular_speed;
-        ++lidar_scan_to_scan_angular_velocity_clamped_;
-      }
     }
     if (lidar_scan_to_scan_velocity_weight_ > 0.0) {
       if (target_velocity.allFinite()) {

@@ -125,6 +125,9 @@ ContinuousTimeSlidingWindowEstimator::ContinuousTimeSlidingWindowEstimator(
   if (options.update_gate_edge_knot_margin < 0) {
     throw std::runtime_error("update_gate_edge_knot_margin must be non-negative");
   }
+  if (options.fixed_control_point_index < -1) {
+    throw std::runtime_error("fixed_control_point_index must be >= -1");
+  }
   if (!std::isfinite(options.rotation_smoothness_weight) ||
     options.rotation_smoothness_weight < 0.0 ||
     !std::isfinite(options.rotation_smoothness_huber_delta_rad) ||
@@ -626,6 +629,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
   solve_options.hold_gyro_bias_constant = impl_->options.hold_gyro_bias_constant;
   solve_options.hold_accel_bias_constant = impl_->options.hold_accel_bias_constant;
   solve_options.hold_gravity_constant = impl_->options.hold_gravity_constant;
+  solve_options.fixed_control_point_index = impl_->options.fixed_control_point_index;
   const auto summary = estimator.solve(solve_options);
   impl_->diagnostics.last_step_initial_cost = summary.initial_cost;
   impl_->diagnostics.last_step_final_cost = summary.final_cost;
@@ -711,6 +715,12 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     ++impl_->diagnostics.accepted_solver_steps;
     impl_->diagnostics.last_step_update_accepted = true;
   };
+  const auto apply_auxiliary_state_update = [&](double scale) {
+    const double update_scale = std::clamp(std::isfinite(scale) ? scale : 0.0, 0.0, 1.0);
+    impl_->gyro_bias += update_scale * (estimator.gyro_bias() - impl_->gyro_bias);
+    impl_->accel_bias += update_scale * (estimator.accel_bias() - impl_->accel_bias);
+    impl_->gravity_world += update_scale * (estimator.gravity_world() - impl_->gravity_world);
+  };
   if (invalid_update) {
     ++impl_->diagnostics.rejected_solver_steps;
     impl_->diagnostics.last_step_update_rejected = true;
@@ -762,6 +772,9 @@ bool ContinuousTimeSlidingWindowEstimator::step()
         impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
         impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
       }
+      const double auxiliary_scale = (rotation_update_too_large && !can_limit_rotation) ?
+        0.0 : std::min(position_scale, rotation_scale);
+      apply_auxiliary_state_update(auxiliary_scale);
       mark_applied_update();
       return true;
     }
@@ -793,6 +806,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
       impl_->diagnostics.last_step_rotation_limited = true;
       impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
       impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
+      apply_auxiliary_state_update(rotation_scale);
       mark_applied_update();
       return true;
     }
@@ -819,9 +833,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     impl_->rotation_knots[i] = rotation_out[i];
     impl_->position_knots[i] = position_out[i];
   }
-  impl_->gyro_bias = estimator.gyro_bias();
-  impl_->accel_bias = estimator.accel_bias();
-  impl_->gravity_world = estimator.gravity_world();
+  apply_auxiliary_state_update(1.0);
   mark_applied_update();
   return true;
 }

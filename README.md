@@ -40,6 +40,7 @@ Available now:
 Still pending:
 
 - RMSE-gated continuous-time native tracker parity on the full long-window datasets; the data and reference-trajectory archive gate itself is now complete.
+- Latest 2026-05-13 Coco-LIC2 tracker work: LiDAR residuals now carry Coco-LIC-style feature scale through both residuals and weighted Huber gates, limited sliding-window updates feed accepted IMU bias/gravity state instead of freezing it, scan-to-scan velocity/angle clamps now bound the stored target pose as well as the prior, and a Coco-LIC `fixed_control_point_index` gauge-anchor mode is implemented as an ablation parameter. The best current 60s CBD native run still sits around 1.8 m RMSE, so this is progress toward tracker parity, not strict 100%.
 - Continuous-time tracker quality hardening: the producer chain is now cross-profile and matrix-gated, persistent world-frame plane constraints plus online solve-step rejection are in tree, but the newest continuous-time entries are still liveness-gated while RMSE/paper-grade parity remains the next numerical target.
 - Continued production hardening of the native tracker under faster-than-strict replay; strict reference parity still uses controlled rosbag2 replay to preserve ROS1-style sequential timing semantics.
 

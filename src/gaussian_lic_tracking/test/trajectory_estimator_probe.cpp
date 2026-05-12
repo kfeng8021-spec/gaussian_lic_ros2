@@ -559,6 +559,36 @@ void check_lidar_huber_loss_suppresses_plane_outlier()
   }
 }
 
+void check_fixed_control_point_prefix_stays_constant()
+{
+  const double dt = 0.05;
+  const auto truth = build_truth(dt, 8);
+  TrajectoryEstimator estimator(dt);
+  estimator.set_knots(truth.rotation_knots, truth.position_knots);
+  estimator.add_position_prior_factor(0.08, Eigen::Vector3d(1.0, -0.5, 0.25), 10.0, 0.0);
+
+  TrajectoryEstimatorOptions options;
+  options.max_num_iterations = 40;
+  options.hold_gyro_bias_constant = true;
+  options.hold_accel_bias_constant = true;
+  options.hold_gravity_constant = true;
+  options.fixed_control_point_index = 3;
+  estimator.solve(options);
+
+  const auto positions = estimator.position_knots();
+  const auto rotations = estimator.rotation_knots();
+  for (int i = 0; i <= options.fixed_control_point_index; ++i) {
+    if ((positions[static_cast<std::size_t>(i)] - truth.position_knots[static_cast<std::size_t>(i)]).norm() >
+      1.0e-12 ||
+      rotations[static_cast<std::size_t>(i)].angularDistance(
+        truth.rotation_knots[static_cast<std::size_t>(i)]) > 1.0e-12)
+    {
+      std::fprintf(stderr, "fixed control point %d moved during solve\n", i);
+      std::exit(1);
+    }
+  }
+}
+
 }  // namespace
 
 int main()
@@ -573,6 +603,7 @@ int main()
     check_rotation_smoothness_regularizes_orientation_shape();
     check_lidar_plane_factor_pulls_position();
     check_lidar_huber_loss_suppresses_plane_outlier();
+    check_fixed_control_point_prefix_stays_constant();
   } catch (const std::exception & exception) {
     std::fprintf(stderr, "trajectory_estimator_probe exception: %s\n", exception.what());
     return 1;

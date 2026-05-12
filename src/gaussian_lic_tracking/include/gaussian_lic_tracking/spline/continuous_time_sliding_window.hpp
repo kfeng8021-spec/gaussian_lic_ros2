@@ -74,6 +74,11 @@ struct ContinuousTimeSlidingWindowOptions
   bool hold_gyro_bias_constant{false};
   bool hold_accel_bias_constant{false};
   bool hold_gravity_constant{true};
+  // Optional Coco-LIC TrajectoryEstimator::SetFixedIndex-style gauge anchor.
+  // Full upstream mode uses 3 together with marginalization priors; keep the
+  // standalone sliding-window default disabled to avoid over-constraining the
+  // current simplified online prior.
+  int fixed_control_point_index{-1};
   // Reject a Ceres update instead of publishing / carrying it forward when
   // the online solve proposes an implausibly large single-step knot change.
   // This is a production guard for real rosbag replay: bad initialization or

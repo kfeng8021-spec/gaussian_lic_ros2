@@ -307,6 +307,65 @@ void check_limited_position_update_clamps_without_rejecting()
   }
 }
 
+void check_limited_update_carries_auxiliary_state()
+{
+  const double dt_s = 0.05;
+  const Eigen::Vector3d gravity(0.0, 0.0, -9.81);
+  const auto truth = build_truth(dt_s, 12);
+
+  ContinuousTimeSlidingWindowOptions options;
+  options.dt_s = dt_s;
+  options.window_knot_count = 12;
+  options.marginalize_oldest_count = 0;
+  options.gravity_world = gravity;
+  options.initial_gyro_bias = Eigen::Vector3d(0.05, -0.03, 0.02);
+  options.initial_accel_bias = Eigen::Vector3d(0.20, -0.10, 0.05);
+  options.hold_gravity_constant = true;
+  options.hold_accel_bias_constant = false;
+  options.hold_gyro_bias_constant = false;
+  options.max_iterations_per_step = 120;
+  options.max_position_update_m = 0.01;
+  options.max_rotation_update_rad = 0.0;
+  options.apply_limited_position_update = true;
+
+  ContinuousTimeSlidingWindowEstimator estimator(options);
+  auto initial_rot = truth.rotation_knots;
+  auto initial_pos = truth.position_knots;
+  initial_pos[5].z() += 0.03;
+  estimator.initialize(0, initial_rot, initial_pos);
+
+  const Eigen::Vector3d gyro_before = estimator.gyro_bias();
+  const Eigen::Vector3d accel_before = estimator.accel_bias();
+  const int64_t imu_period_ns = static_cast<int64_t>(std::llround(dt_s * 1.0e9 / 10.0));
+  const int64_t last_interior_ns =
+    static_cast<int64_t>(truth.rotation_knots.size() - 3) * truth.dt_ns;
+  for (int64_t t = truth.dt_ns; t < last_interior_ns; t += imu_period_ns) {
+    estimator.add_imu_sample(t, synthesize_imu(truth, t, gravity));
+  }
+  if (!estimator.step()) {
+    std::fprintf(stderr, "limited auxiliary-state solve refused to run\n");
+    std::exit(1);
+  }
+
+  const auto & diag = estimator.diagnostics();
+  if (diag.position_limited_solver_steps != 1 || diag.accepted_solver_steps != 1) {
+    std::fprintf(stderr,
+      "limited auxiliary-state update did not take limited branch: limited=%zu accepted=%zu\n",
+      diag.position_limited_solver_steps,
+      diag.accepted_solver_steps);
+    std::exit(1);
+  }
+  const double gyro_change = (estimator.gyro_bias() - gyro_before).norm();
+  const double accel_change = (estimator.accel_bias() - accel_before).norm();
+  if (gyro_change <= 1.0e-6 && accel_change <= 1.0e-6) {
+    std::fprintf(stderr,
+      "limited auxiliary-state update left IMU biases frozen: gyro=%.9g accel=%.9g\n",
+      gyro_change,
+      accel_change);
+    std::exit(1);
+  }
+}
+
 void check_sliding_window_recovers_streamed_trajectory()
 {
   // Streaming mode: the seed only spans the first window; the estimator
@@ -433,6 +492,7 @@ int main()
     check_single_step_solves_within_seeded_window();
     check_solver_step_rejection_keeps_window_finite();
     check_limited_position_update_clamps_without_rejecting();
+    check_limited_update_carries_auxiliary_state();
     check_sliding_window_recovers_streamed_trajectory();
     check_marginalization_keeps_window_bounded();
   } catch (const std::exception & exception) {

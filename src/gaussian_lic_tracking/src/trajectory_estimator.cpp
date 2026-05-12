@@ -7,6 +7,7 @@
 
 #include <gaussian_lic_tracking/spline/so3_ops.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -1021,6 +1022,15 @@ TrajectoryEstimatorSummary TrajectoryEstimator::solve(
   }
   if (options.hold_gravity_constant) {
     impl_->problem->SetParameterBlockConstant(impl_->gravity_storage.data());
+  }
+  if (options.fixed_control_point_index >= 0) {
+    const std::size_t fixed_last = std::min(
+      static_cast<std::size_t>(options.fixed_control_point_index),
+      impl_->rotation_storage.empty() ? 0U : impl_->rotation_storage.size() - 1U);
+    for (std::size_t i = 0; i <= fixed_last; ++i) {
+      impl_->problem->SetParameterBlockConstant(impl_->rotation_storage[i].data());
+      impl_->problem->SetParameterBlockConstant(impl_->position_storage[i].data());
+    }
   }
 
   auto evaluate_cost = [this](const std::vector<ceres::ResidualBlockId> & blocks) {
