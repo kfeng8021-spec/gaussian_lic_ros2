@@ -221,6 +221,85 @@ void check_solver_step_rejection_keeps_window_finite()
   }
 }
 
+void check_limited_position_update_clamps_without_rejecting()
+{
+  const double dt_s = 0.05;
+  const Eigen::Vector3d gravity(0.0, 0.0, -9.81);
+  const auto truth = build_truth(dt_s, 12);
+
+  ContinuousTimeSlidingWindowOptions options;
+  options.dt_s = dt_s;
+  options.window_knot_count = 12;
+  options.marginalize_oldest_count = 0;
+  options.gravity_world = gravity;
+  options.hold_gravity_constant = true;
+  options.hold_accel_bias_constant = true;
+  options.hold_gyro_bias_constant = true;
+  options.max_iterations_per_step = 80;
+  options.max_position_update_m = 0.01;
+  options.max_rotation_update_rad = 0.0;
+  options.apply_limited_position_update = true;
+
+  ContinuousTimeSlidingWindowEstimator estimator(options);
+  auto initial_rot = truth.rotation_knots;
+  auto initial_pos = truth.position_knots;
+  initial_pos[5].z() += 0.03;
+  estimator.initialize(0, initial_rot, initial_pos);
+
+  Eigen::Quaterniond q_before;
+  Eigen::Vector3d p_before;
+  if (!estimator.query_pose(5 * truth.dt_ns, q_before, p_before)) {
+    std::fprintf(stderr, "limited-position test could not query initial pose\n");
+    std::exit(1);
+  }
+
+  const int64_t imu_period_ns = static_cast<int64_t>(std::llround(dt_s * 1.0e9 / 10.0));
+  const int64_t last_interior_ns =
+    static_cast<int64_t>(truth.rotation_knots.size() - 3) * truth.dt_ns;
+  for (int64_t t = truth.dt_ns; t < last_interior_ns; t += imu_period_ns) {
+    estimator.add_imu_sample(t, synthesize_imu(truth, t, gravity));
+  }
+  if (!estimator.step()) {
+    std::fprintf(stderr, "limited-position solve refused to run\n");
+    std::exit(1);
+  }
+
+  const auto & diag = estimator.diagnostics();
+  if (diag.rejected_solver_steps != 0 || diag.position_update_rejections != 0) {
+    std::fprintf(stderr,
+      "limited-position update was rejected: rejected=%zu position_rejections=%zu\n",
+      diag.rejected_solver_steps, diag.position_update_rejections);
+    std::exit(1);
+  }
+  if (diag.position_limited_solver_steps != 1 || !diag.last_step_position_limited) {
+    std::fprintf(stderr,
+      "limited-position counters not set: steps=%zu last=%d\n",
+      diag.position_limited_solver_steps,
+      static_cast<int>(diag.last_step_position_limited));
+    std::exit(1);
+  }
+  if (!(diag.last_position_limited_position_update_m > options.max_position_update_m)) {
+    std::fprintf(stderr,
+      "limited-position magnitude was not recorded: %.9f\n",
+      diag.last_position_limited_position_update_m);
+    std::exit(1);
+  }
+
+  Eigen::Quaterniond q_after;
+  Eigen::Vector3d p_after;
+  if (!estimator.query_pose(5 * truth.dt_ns, q_after, p_after)) {
+    std::fprintf(stderr, "limited-position test could not query final pose\n");
+    std::exit(1);
+  }
+  const double applied_query_step = (p_after - p_before).norm();
+  if (applied_query_step <= 1.0e-6 || applied_query_step > 0.012) {
+    std::fprintf(stderr,
+      "limited-position query step outside trust region: %.9f\n",
+      applied_query_step);
+    std::exit(1);
+  }
+}
+
 void check_sliding_window_recovers_streamed_trajectory()
 {
   // Streaming mode: the seed only spans the first window; the estimator
@@ -346,6 +425,7 @@ int main()
   try {
     check_single_step_solves_within_seeded_window();
     check_solver_step_rejection_keeps_window_finite();
+    check_limited_position_update_clamps_without_rejecting();
     check_sliding_window_recovers_streamed_trajectory();
     check_marginalization_keeps_window_bounded();
   } catch (const std::exception & exception) {

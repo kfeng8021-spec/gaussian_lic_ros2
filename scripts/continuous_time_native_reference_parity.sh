@@ -128,6 +128,7 @@ ACCEL_BIAS_PRIOR_WEIGHT="${ACCEL_BIAS_PRIOR_WEIGHT:-0.0}"
 ACCEL_BIAS_PRIOR_HUBER_DELTA_MPS2="${ACCEL_BIAS_PRIOR_HUBER_DELTA_MPS2:-0.0}"
 APPLY_POSITION_UPDATE_ON_ROTATION_REJECT="${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT:-false}"
 APPLY_LIMITED_ROTATION_UPDATE="${APPLY_LIMITED_ROTATION_UPDATE:-false}"
+APPLY_LIMITED_POSITION_UPDATE="${APPLY_LIMITED_POSITION_UPDATE:-false}"
 SCALE_POSITION_WITH_LIMITED_ROTATION="${SCALE_POSITION_WITH_LIMITED_ROTATION:-true}"
 ENABLE_VOXEL_PLANE_EXTRACTION="${ENABLE_VOXEL_PLANE_EXTRACTION:-true}"
 ENABLE_PERSISTENT_PLANE_MAP="${ENABLE_PERSISTENT_PLANE_MAP:-true}"
@@ -286,6 +287,7 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p position_extrapolation_damping:="${POSITION_EXTRAPOLATION_DAMPING}" \
   -p apply_position_update_on_rotation_reject:="${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT}" \
   -p apply_limited_rotation_update:="${APPLY_LIMITED_ROTATION_UPDATE}" \
+  -p apply_limited_position_update:="${APPLY_LIMITED_POSITION_UPDATE}" \
   -p scale_position_with_limited_rotation:="${SCALE_POSITION_WITH_LIMITED_ROTATION}" \
   -p enable_external_odometry_prior:="$([ -n "${PRIOR_TUM}" ] && echo true || echo false)" \
   -p enable_external_odometry_position_factors:="${ENABLE_EXTERNAL_ODOMETRY_POSITION_FACTORS}" \
@@ -558,12 +560,15 @@ native = {
     "visual_se3_max_translation_step_m": float("${VISUAL_SE3_MAX_TRANSLATION_STEP_M}"),
     "visual_se3_max_rotation_step_rad": float("${VISUAL_SE3_MAX_ROTATION_STEP_RAD}"),
     "visual_se3_delta_sign": float("${VISUAL_SE3_DELTA_SIGN}"),
+    "max_position_update_m": float("${MAX_POSITION_UPDATE_M}"),
+    "max_rotation_update_rad": float("${MAX_ROTATION_UPDATE_RAD}"),
     "update_gate_edge_knot_margin": int("${UPDATE_GATE_EDGE_KNOT_MARGIN}"),
     "position_extrapolation_damping": float("${POSITION_EXTRAPOLATION_DAMPING}"),
     "step_period_seconds": float("${STEP_PERIOD_SECONDS}"),
     "pose_output_period_seconds": float("${POSE_OUTPUT_PERIOD_SECONDS}"),
     "apply_position_update_on_rotation_reject": "${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT}" == "true",
     "apply_limited_rotation_update": "${APPLY_LIMITED_ROTATION_UPDATE}" == "true",
+    "apply_limited_position_update": "${APPLY_LIMITED_POSITION_UPDATE}" == "true",
     "scale_position_with_limited_rotation": "${SCALE_POSITION_WITH_LIMITED_ROTATION}" == "true",
     "persistent_map_update_requires_accepted_solve": "${PERSISTENT_MAP_UPDATE_REQUIRES_ACCEPTED_SOLVE}" == "true",
     "enable_external_odometry_position_factors": "${ENABLE_EXTERNAL_ODOMETRY_POSITION_FACTORS}" == "true",

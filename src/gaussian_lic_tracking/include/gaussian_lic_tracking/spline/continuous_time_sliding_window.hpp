@@ -99,6 +99,11 @@ struct ContinuousTimeSlidingWindowOptions
   // log-map scaled version of the rotation delta instead of rejecting the
   // rotation entirely. This is an online trust-region guard for real bags.
   bool apply_limited_rotation_update{false};
+  // When the translation proposal exceeds `max_position_update_m`, apply the
+  // largest safe fraction of the position delta instead of discarding the
+  // whole step. Keep this default-off until a bag-specific strict parity run
+  // proves it improves long-window accuracy.
+  bool apply_limited_position_update{false};
   // When limited rotation is active, scale the accompanying position knot
   // delta by the same trust-region ratio. This keeps a rejected SE(3)
   // proposal from applying full translation with only partial rotation.
@@ -135,6 +140,7 @@ struct ContinuousTimeSlidingWindowDiagnostics
   bool last_step_update_accepted{false};
   bool last_step_update_rejected{false};
   bool last_step_rotation_limited{false};
+  bool last_step_position_limited{false};
   double last_step_initial_cost{0.0};
   double last_step_final_cost{0.0};
   double last_step_initial_imu_cost{0.0};
@@ -156,12 +162,15 @@ struct ContinuousTimeSlidingWindowDiagnostics
   std::size_t position_update_rejections{0};
   std::size_t rotation_update_rejections{0};
   std::size_t rotation_limited_solver_steps{0};
+  std::size_t position_limited_solver_steps{0};
   double last_step_max_position_update_m{0.0};
   double last_step_max_rotation_update_rad{0.0};
   double last_rejected_position_update_m{0.0};
   double last_rejected_rotation_update_rad{0.0};
   double last_rotation_limited_position_update_m{0.0};
   double last_rotation_limited_rotation_update_rad{0.0};
+  double last_position_limited_position_update_m{0.0};
+  double last_position_limited_rotation_update_rad{0.0};
 };
 
 class ContinuousTimeSlidingWindowEstimator

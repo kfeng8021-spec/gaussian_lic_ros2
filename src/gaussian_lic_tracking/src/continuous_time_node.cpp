@@ -320,6 +320,8 @@ public:
       declare_parameter<bool>("apply_position_update_on_rotation_reject", false);
     options.apply_limited_rotation_update =
       declare_parameter<bool>("apply_limited_rotation_update", false);
+    options.apply_limited_position_update =
+      declare_parameter<bool>("apply_limited_position_update", false);
     options.scale_position_with_limited_rotation =
       declare_parameter<bool>("scale_position_with_limited_rotation", true);
     enable_startup_bias_autocal_ =
@@ -1727,6 +1729,19 @@ private:
         diagnostics.last_rotation_limited_position_update_m,
         diagnostics.last_rotation_limited_rotation_update_rad);
     }
+    if (
+      diagnostics.position_limited_solver_steps >
+      last_logged_position_limited_solver_steps_)
+    {
+      last_logged_position_limited_solver_steps_ =
+        diagnostics.position_limited_solver_steps;
+      RCLCPP_WARN(
+        get_logger(),
+        "continuous-time solve position update limited: total=%zu kept_position=true max_dp=%.3f m max_dtheta=%.3f rad",
+        diagnostics.position_limited_solver_steps,
+        diagnostics.last_position_limited_position_update_m,
+        diagnostics.last_position_limited_rotation_update_rad);
+    }
     log_runtime_diagnostics_if_due(diagnostics);
     publish_latest_pose();
   }
@@ -1803,7 +1818,7 @@ private:
       "prior_rejected=%zu delayed_pc_deferred=%zu delayed_pc_released=%zu "
       "delayed_pc_dropped=%zu delayed_pc_pending=%zu tum_lines=%zu "
       "rejected_steps=%zu invalid_rejections=%zu position_rejections=%zu "
-      "rotation_rejections=%zu rotation_limited_steps=%zu",
+      "rotation_rejections=%zu rotation_limited_steps=%zu position_limited_steps=%zu",
       diagnostics.steps_run,
       diagnostics.total_imu_factors,
       diagnostics.total_lidar_factors,
@@ -1914,7 +1929,8 @@ private:
       diagnostics.invalid_update_rejections,
       diagnostics.position_update_rejections,
       diagnostics.rotation_update_rejections,
-      diagnostics.rotation_limited_solver_steps);
+      diagnostics.rotation_limited_solver_steps,
+      diagnostics.position_limited_solver_steps);
   }
 
   bool find_nearest_persistent_point(
@@ -2630,6 +2646,7 @@ private:
   int64_t last_published_query_ns_{0};
   std::size_t last_logged_rejected_solver_steps_{0};
   std::size_t last_logged_rotation_limited_solver_steps_{0};
+  std::size_t last_logged_position_limited_solver_steps_{0};
   std::size_t last_logged_diagnostic_step_{0};
 };
 

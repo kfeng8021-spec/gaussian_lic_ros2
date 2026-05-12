@@ -610,6 +610,7 @@ bool ContinuousTimeSlidingWindowEstimator::step()
   impl_->diagnostics.last_step_update_accepted = false;
   impl_->diagnostics.last_step_update_rejected = false;
   impl_->diagnostics.last_step_rotation_limited = false;
+  impl_->diagnostics.last_step_position_limited = false;
   ++impl_->diagnostics.steps_run;
 
   // Pull optimized knots back only when the solve produced a physically
@@ -662,15 +663,62 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     max_rotation_update > impl_->options.max_rotation_update_rad;
   impl_->diagnostics.last_step_max_position_update_m = max_position_update;
   impl_->diagnostics.last_step_max_rotation_update_rad = max_rotation_update;
-  if (invalid_update || position_update_too_large) {
+  if (invalid_update) {
     ++impl_->diagnostics.rejected_solver_steps;
     impl_->diagnostics.last_step_update_rejected = true;
-    if (invalid_update) {
-      ++impl_->diagnostics.invalid_update_rejections;
+    ++impl_->diagnostics.invalid_update_rejections;
+    impl_->diagnostics.last_rejected_position_update_m = max_position_update;
+    impl_->diagnostics.last_rejected_rotation_update_rad = max_rotation_update;
+    return true;
+  }
+  if (position_update_too_large) {
+    const bool can_limit_position =
+      impl_->options.apply_limited_position_update &&
+      impl_->options.max_position_update_m > 0.0 &&
+      max_position_update > 1.0e-12;
+    const bool can_limit_rotation =
+      rotation_update_too_large &&
+      impl_->options.apply_limited_rotation_update &&
+      impl_->options.max_rotation_update_rad > 0.0 &&
+      max_rotation_update > 1.0e-12;
+    const bool can_apply_without_rotation =
+      rotation_update_too_large && impl_->options.apply_position_update_on_rotation_reject;
+    if (can_limit_position &&
+      (!rotation_update_too_large || can_limit_rotation || can_apply_without_rotation))
+    {
+      const double position_scale =
+        std::clamp(impl_->options.max_position_update_m / max_position_update, 0.0, 1.0);
+      const double rotation_scale = can_limit_rotation ?
+        std::clamp(impl_->options.max_rotation_update_rad / max_rotation_update, 0.0, 1.0) :
+        1.0;
+      for (std::size_t i = 0; i < rotation_out.size(); ++i) {
+        const Eigen::Vector3d position_delta = position_out[i] - impl_->position_knots[i];
+        impl_->position_knots[i] += position_scale * position_delta;
+        if (!rotation_update_too_large) {
+          impl_->rotation_knots[i] = rotation_out[i];
+        } else if (can_limit_rotation) {
+          const Eigen::Quaterniond delta =
+            impl_->rotation_knots[i].inverse() * rotation_out[i];
+          impl_->rotation_knots[i] =
+            (impl_->rotation_knots[i] *
+            quaternion_exp(quaternion_log(delta) * rotation_scale)).normalized();
+        }
+      }
+      ++impl_->diagnostics.position_limited_solver_steps;
+      impl_->diagnostics.last_step_position_limited = true;
+      impl_->diagnostics.last_position_limited_position_update_m = max_position_update;
+      impl_->diagnostics.last_position_limited_rotation_update_rad = max_rotation_update;
+      if (can_limit_rotation) {
+        ++impl_->diagnostics.rotation_limited_solver_steps;
+        impl_->diagnostics.last_step_rotation_limited = true;
+        impl_->diagnostics.last_rotation_limited_position_update_m = max_position_update;
+        impl_->diagnostics.last_rotation_limited_rotation_update_rad = max_rotation_update;
+      }
+      return true;
     }
-    if (position_update_too_large) {
-      ++impl_->diagnostics.position_update_rejections;
-    }
+    ++impl_->diagnostics.rejected_solver_steps;
+    impl_->diagnostics.last_step_update_rejected = true;
+    ++impl_->diagnostics.position_update_rejections;
     impl_->diagnostics.last_rejected_position_update_m = max_position_update;
     impl_->diagnostics.last_rejected_rotation_update_rad = max_rotation_update;
     return true;
