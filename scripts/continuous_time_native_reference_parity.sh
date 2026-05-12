@@ -43,6 +43,12 @@ IMU_LINEAR_ACCELERATION_SCALE="${IMU_LINEAR_ACCELERATION_SCALE:-9.80665}"
 POINTCLOUD_ENABLE="${POINTCLOUD_ENABLE:-true}"
 POINTCLOUD_FACTOR_WEIGHT="${POINTCLOUD_FACTOR_WEIGHT:-0.1}"
 POINTCLOUD_WAIT_QUEUE_MAX_SIZE="${POINTCLOUD_WAIT_QUEUE_MAX_SIZE:-100}"
+ENABLE_LIDAR_POSE_PRIOR_FACTOR="${ENABLE_LIDAR_POSE_PRIOR_FACTOR:-false}"
+LIDAR_POSE_PRIOR_POSITION_WEIGHT="${LIDAR_POSE_PRIOR_POSITION_WEIGHT:-1.0}"
+LIDAR_POSE_PRIOR_ORIENTATION_WEIGHT="${LIDAR_POSE_PRIOR_ORIENTATION_WEIGHT:-1.0}"
+LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA_M="${LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA_M:-0.25}"
+LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD="${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD:-0.25}"
+LIDAR_POSE_FACTOR_KEYFRAME_STRIDE="${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE:-5}"
 ENABLE_LIDAR_PLANE_NORMAL_FACTOR="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR:-false}"
 LIDAR_PLANE_NORMAL_FACTOR_WEIGHT="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT:-0.1}"
 LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD:-0.10}"
@@ -110,6 +116,12 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p pointcloud_enable:="${POINTCLOUD_ENABLE}" \
   -p pointcloud_factor_weight:="${POINTCLOUD_FACTOR_WEIGHT}" \
   -p pointcloud_wait_queue_max_size:="${POINTCLOUD_WAIT_QUEUE_MAX_SIZE}" \
+  -p enable_lidar_pose_prior_factor:="${ENABLE_LIDAR_POSE_PRIOR_FACTOR}" \
+  -p lidar_pose_prior_position_weight:="${LIDAR_POSE_PRIOR_POSITION_WEIGHT}" \
+  -p lidar_pose_prior_orientation_weight:="${LIDAR_POSE_PRIOR_ORIENTATION_WEIGHT}" \
+  -p lidar_pose_prior_position_huber_delta_m:="${LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA_M}" \
+  -p lidar_pose_prior_orientation_huber_delta_rad:="${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD}" \
+  -p lidar_pose_factor_keyframe_stride:="${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE}" \
   -p enable_lidar_plane_normal_factor:="${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" \
   -p lidar_plane_normal_factor_weight:="${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}" \
   -p lidar_plane_normal_huber_delta_rad:="${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}" \
@@ -329,6 +341,12 @@ native = {
     "position_smoothness_weight": float("${POSITION_SMOOTHNESS_WEIGHT}"),
     "position_smoothness_huber_delta_m": float("${POSITION_SMOOTHNESS_HUBER_DELTA_M}"),
     "pointcloud_wait_queue_max_size": int("${POINTCLOUD_WAIT_QUEUE_MAX_SIZE}"),
+    "enable_lidar_pose_prior_factor": "${ENABLE_LIDAR_POSE_PRIOR_FACTOR}" == "true",
+    "lidar_pose_prior_position_weight": float("${LIDAR_POSE_PRIOR_POSITION_WEIGHT}"),
+    "lidar_pose_prior_orientation_weight": float("${LIDAR_POSE_PRIOR_ORIENTATION_WEIGHT}"),
+    "lidar_pose_prior_position_huber_delta_m": float("${LIDAR_POSE_PRIOR_POSITION_HUBER_DELTA_M}"),
+    "lidar_pose_prior_orientation_huber_delta_rad": float("${LIDAR_POSE_PRIOR_ORIENTATION_HUBER_DELTA_RAD}"),
+    "lidar_pose_factor_keyframe_stride": int("${LIDAR_POSE_FACTOR_KEYFRAME_STRIDE}"),
     "enable_lidar_plane_normal_factor": "${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" == "true",
     "lidar_plane_normal_factor_weight": float("${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}"),
     "lidar_plane_normal_huber_delta_rad": float("${LIDAR_PLANE_NORMAL_HUBER_DELTA_RAD}"),

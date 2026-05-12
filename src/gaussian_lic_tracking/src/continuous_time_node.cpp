@@ -31,6 +31,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
+#include <gaussian_lic_tracking/lidar_factor.hpp>
 #include <gaussian_lic_tracking/spline/continuous_time_sliding_window.hpp>
 #include <gaussian_lic_tracking/spline/lidar_plane_extractor.hpp>
 
@@ -242,6 +243,57 @@ public:
       declare_parameter<double>("pointcloud_max_range_m", 30.0);
     pointcloud_factor_weight_ =
       declare_parameter<double>("pointcloud_factor_weight", 0.1);
+    enable_lidar_pose_prior_factor_ =
+      declare_parameter<bool>("enable_lidar_pose_prior_factor", false);
+    lidar_pose_prior_position_weight_ =
+      declare_parameter<double>("lidar_pose_prior_position_weight", 1.0);
+    lidar_pose_prior_orientation_weight_ =
+      declare_parameter<double>("lidar_pose_prior_orientation_weight", 1.0);
+    lidar_pose_prior_position_huber_delta_m_ =
+      declare_parameter<double>("lidar_pose_prior_position_huber_delta_m", 0.25);
+    lidar_pose_prior_orientation_huber_delta_rad_ =
+      declare_parameter<double>("lidar_pose_prior_orientation_huber_delta_rad", 0.25);
+    lidar_pose_factor_keyframe_stride_ =
+      static_cast<int>(declare_parameter<int>("lidar_pose_factor_keyframe_stride", 5));
+    if (!std::isfinite(lidar_pose_prior_position_weight_) ||
+      lidar_pose_prior_position_weight_ <= 0.0 ||
+      !std::isfinite(lidar_pose_prior_orientation_weight_) ||
+      lidar_pose_prior_orientation_weight_ <= 0.0 ||
+      !std::isfinite(lidar_pose_prior_position_huber_delta_m_) ||
+      lidar_pose_prior_position_huber_delta_m_ < 0.0 ||
+      !std::isfinite(lidar_pose_prior_orientation_huber_delta_rad_) ||
+      lidar_pose_prior_orientation_huber_delta_rad_ < 0.0 ||
+      lidar_pose_factor_keyframe_stride_ <= 0)
+    {
+      throw std::runtime_error("LiDAR pose-prior factor parameters are invalid");
+    }
+    const int lidar_pose_min_points =
+      declare_parameter<int>("lidar_pose_factor_min_points", 32);
+    const int lidar_pose_max_frame_points =
+      declare_parameter<int>("lidar_pose_factor_max_frame_points", 2000);
+    const int lidar_pose_max_map_points =
+      declare_parameter<int>("lidar_pose_factor_max_map_points", 20000);
+    if (lidar_pose_min_points <= 0 ||
+      lidar_pose_max_frame_points < 0 ||
+      lidar_pose_max_map_points < 0)
+    {
+      throw std::runtime_error("LiDAR pose-prior map sizes are invalid");
+    }
+    LidarFactorConfig lidar_pose_config;
+    lidar_pose_config.min_points = static_cast<size_t>(lidar_pose_min_points);
+    lidar_pose_config.max_frame_points = static_cast<size_t>(lidar_pose_max_frame_points);
+    lidar_pose_config.max_map_points = static_cast<size_t>(lidar_pose_max_map_points);
+    lidar_pose_config.nearest_distance_m =
+      declare_parameter<double>("lidar_pose_factor_nearest_distance_m", 0.35);
+    lidar_pose_config.correction_gain =
+      declare_parameter<double>("lidar_pose_factor_correction_gain", 0.7);
+    lidar_pose_config.max_correction_m =
+      declare_parameter<double>("lidar_pose_factor_max_correction_m", 0.25);
+    lidar_pose_config.max_rotation_rad =
+      declare_parameter<double>("lidar_pose_factor_max_rotation_rad", 0.08);
+    lidar_pose_config.robust_kernel_m =
+      declare_parameter<double>("lidar_pose_factor_robust_kernel_m", 0.15);
+    lidar_pose_factor_.set_config(lidar_pose_config);
     enable_lidar_plane_normal_factor_ =
       declare_parameter<bool>("enable_lidar_plane_normal_factor", false);
     lidar_plane_normal_factor_weight_ =
@@ -509,8 +561,9 @@ private:
 
   bool pointcloud_needs_pose_delay() const
   {
-    return enable_voxel_plane_extraction_ &&
-           (enable_persistent_plane_map_ || enable_persistent_point_map_);
+    return enable_lidar_pose_prior_factor_ ||
+           (enable_voxel_plane_extraction_ &&
+           (enable_persistent_plane_map_ || enable_persistent_point_map_));
   }
 
   bool pointcloud_pose_ready_locked(int64_t stamp_ns) const
@@ -605,6 +658,8 @@ private:
         diagnostics.last_step_update_accepted;
 
       int accepted = 0;
+      maybe_add_lidar_pose_prior_locked(
+        stamp_ns, points, q_b_w_at_scan, p_b_w_at_scan, extrinsics, have_scan_pose);
       if (enable_persistent_point_map_ && have_scan_pose) {
         accepted += add_persistent_point_map_correspondences(
           stamp_ns, points, R_w_l, p_w_l, extrinsics,
@@ -678,6 +733,10 @@ private:
 
     int accepted = 0;
     int stride_counter = 0;
+    std::vector<Eigen::Vector3d> points;
+    if (enable_lidar_pose_prior_factor_) {
+      points.reserve(static_cast<std::size_t>(msg->width) * msg->height / 4);
+    }
     sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
     sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
     sensor_msgs::PointCloud2ConstIterator<float> iter_z(*msg, "z");
@@ -698,6 +757,9 @@ private:
       if (range < pointcloud_min_range_m_ || range > pointcloud_max_range_m_) {
         continue;
       }
+      if (enable_lidar_pose_prior_factor_) {
+        points.emplace_back(rx, ry, rz);
+      }
       pc.point_lidar = Eigen::Vector3d(rx, ry, rz);
       estimator_->add_lidar_correspondence(
         stamp_ns, pc, extrinsics, pointcloud_factor_weight_,
@@ -708,6 +770,12 @@ private:
       {
         break;
       }
+    }
+    if (enable_lidar_pose_prior_factor_) {
+      Eigen::Quaterniond q;
+      Eigen::Vector3d p;
+      const bool have_scan_pose = estimator_->query_pose(stamp_ns, q, p);
+      maybe_add_lidar_pose_prior_locked(stamp_ns, points, q, p, extrinsics, have_scan_pose);
     }
     accepted_pointcloud_correspondences_ += static_cast<std::size_t>(accepted);
     ++pointcloud_messages_;
@@ -816,6 +884,8 @@ private:
       "pointcloud_corr=%zu plane_matches=%zu plane_updates=%zu point_matches=%zu "
       "plane_update_skips=%zu point_updates=%zu point_update_skips=%zu "
       "plane_normal_factors=%zu "
+      "lidar_pose_priors=%zu lidar_pose_matches=%zu lidar_pose_keyframes=%zu "
+      "lidar_pose_rejected=%zu lidar_pose_last_residual=%.9g "
       "prior_seed=%zu prior_position_factors=%zu "
       "prior_orientation_factors=%zu "
       "prior_rejected=%zu delayed_pc_deferred=%zu delayed_pc_released=%zu "
@@ -860,6 +930,11 @@ private:
       persistent_point_map_updates_,
       persistent_point_map_update_skips_,
       persistent_plane_normal_factors_,
+      lidar_pose_prior_factors_,
+      lidar_pose_prior_matches_,
+      lidar_pose_factor_keyframes_,
+      lidar_pose_prior_rejected_,
+      lidar_pose_prior_last_mean_residual_m_,
       accepted_prior_count_,
       accepted_prior_position_factor_messages_,
       accepted_prior_orientation_factor_messages_,
@@ -957,6 +1032,77 @@ private:
       }
     }
     return accepted * 3;
+  }
+
+  void maybe_add_lidar_pose_prior_locked(
+    int64_t stamp_ns,
+    const std::vector<Eigen::Vector3d> & points_lidar,
+    const Eigen::Quaterniond & q_w_i,
+    const Eigen::Vector3d & p_w_i,
+    const spline::LidarExtrinsics & extrinsics,
+    bool have_scan_pose)
+  {
+    if (!enable_lidar_pose_prior_factor_ || !have_scan_pose ||
+      !q_w_i.coeffs().allFinite() || !p_w_i.allFinite())
+    {
+      return;
+    }
+    std::vector<Eigen::Vector3d> points_imu;
+    points_imu.reserve(points_lidar.size());
+    for (const auto & point_lidar : points_lidar) {
+      const double range = point_lidar.norm();
+      if (!point_lidar.allFinite() || !std::isfinite(range) ||
+        range < pointcloud_min_range_m_ || range > pointcloud_max_range_m_)
+      {
+        continue;
+      }
+      points_imu.push_back(extrinsics.q_lidar_to_imu * point_lidar + extrinsics.p_lidar_in_imu);
+    }
+    if (points_imu.empty()) {
+      return;
+    }
+
+    TrajectoryPose predicted_pose;
+    predicted_pose.stamp_ns = stamp_ns;
+    predicted_pose.q_w_i = q_w_i.normalized();
+    predicted_pose.p_w_i = p_w_i;
+    if (!lidar_pose_factor_has_keyframe_) {
+      lidar_pose_factor_.insert_keyframe(points_imu, predicted_pose);
+      lidar_pose_factor_has_keyframe_ = true;
+      ++lidar_pose_factor_keyframes_;
+      return;
+    }
+
+    const auto correction = lidar_pose_factor_.compute_pose_correction(points_imu, predicted_pose);
+    if (!correction.applied) {
+      ++lidar_pose_prior_rejected_;
+      return;
+    }
+
+    const Eigen::Vector3d target_position = predicted_pose.p_w_i + correction.delta_p_w;
+    const Eigen::Quaterniond target_orientation =
+      (correction.delta_q * predicted_pose.q_w_i).normalized();
+    estimator_->add_position_prior(
+      stamp_ns, target_position, lidar_pose_prior_position_weight_,
+      lidar_pose_prior_position_huber_delta_m_);
+    estimator_->add_orientation_prior(
+      stamp_ns, target_orientation, lidar_pose_prior_orientation_weight_,
+      lidar_pose_prior_orientation_huber_delta_rad_);
+    ++lidar_pose_prior_factors_;
+    lidar_pose_prior_matches_ += correction.matched_points;
+    lidar_pose_prior_last_mean_residual_m_ = correction.mean_residual_m;
+
+    ++lidar_pose_factor_seen_frames_;
+    if (
+      lidar_pose_factor_seen_frames_ %
+        static_cast<std::size_t>(lidar_pose_factor_keyframe_stride_) == 0U)
+    {
+      TrajectoryPose corrected_pose = predicted_pose;
+      corrected_pose.p_w_i = target_position;
+      corrected_pose.q_w_i = target_orientation;
+      lidar_pose_factor_.insert_keyframe(points_imu, corrected_pose);
+      ++lidar_pose_factor_keyframes_;
+    }
   }
 
   void seed_window_from_buffer()
@@ -1164,6 +1310,20 @@ private:
   double pointcloud_max_range_m_{30.0};
   double pointcloud_factor_weight_{0.1};
   double lidar_huber_delta_m_{0.10};
+  bool enable_lidar_pose_prior_factor_{false};
+  double lidar_pose_prior_position_weight_{1.0};
+  double lidar_pose_prior_orientation_weight_{1.0};
+  double lidar_pose_prior_position_huber_delta_m_{0.25};
+  double lidar_pose_prior_orientation_huber_delta_rad_{0.25};
+  int lidar_pose_factor_keyframe_stride_{5};
+  LidarFactor lidar_pose_factor_;
+  bool lidar_pose_factor_has_keyframe_{false};
+  std::size_t lidar_pose_factor_seen_frames_{0};
+  std::size_t lidar_pose_factor_keyframes_{0};
+  std::size_t lidar_pose_prior_factors_{0};
+  std::size_t lidar_pose_prior_matches_{0};
+  std::size_t lidar_pose_prior_rejected_{0};
+  double lidar_pose_prior_last_mean_residual_m_{0.0};
   bool enable_lidar_plane_normal_factor_{false};
   double lidar_plane_normal_factor_weight_{0.1};
   double lidar_plane_normal_huber_delta_rad_{0.10};

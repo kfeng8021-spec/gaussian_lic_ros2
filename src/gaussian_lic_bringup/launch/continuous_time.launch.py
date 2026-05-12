@@ -73,6 +73,22 @@ def generate_launch_description() -> LaunchDescription:
     pointcloud_min_range_m = LaunchConfiguration("pointcloud_min_range_m")
     pointcloud_max_range_m = LaunchConfiguration("pointcloud_max_range_m")
     pointcloud_factor_weight = LaunchConfiguration("pointcloud_factor_weight")
+    enable_lidar_pose_prior_factor = LaunchConfiguration("enable_lidar_pose_prior_factor")
+    lidar_pose_prior_position_weight = LaunchConfiguration(
+        "lidar_pose_prior_position_weight"
+    )
+    lidar_pose_prior_orientation_weight = LaunchConfiguration(
+        "lidar_pose_prior_orientation_weight"
+    )
+    lidar_pose_prior_position_huber_delta_m = LaunchConfiguration(
+        "lidar_pose_prior_position_huber_delta_m"
+    )
+    lidar_pose_prior_orientation_huber_delta_rad = LaunchConfiguration(
+        "lidar_pose_prior_orientation_huber_delta_rad"
+    )
+    lidar_pose_factor_keyframe_stride = LaunchConfiguration(
+        "lidar_pose_factor_keyframe_stride"
+    )
     body_frame_id = LaunchConfiguration("body_frame_id")
     world_frame_id = LaunchConfiguration("world_frame_id")
 
@@ -130,6 +146,20 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("pointcloud_min_range_m", default_value="0.3"),
         DeclareLaunchArgument("pointcloud_max_range_m", default_value="30.0"),
         DeclareLaunchArgument("pointcloud_factor_weight", default_value="0.1"),
+        DeclareLaunchArgument("enable_lidar_pose_prior_factor", default_value="false"),
+        DeclareLaunchArgument("lidar_pose_prior_position_weight", default_value="1.0"),
+        DeclareLaunchArgument("lidar_pose_prior_orientation_weight", default_value="1.0"),
+        DeclareLaunchArgument("lidar_pose_prior_position_huber_delta_m", default_value="0.25"),
+        DeclareLaunchArgument("lidar_pose_prior_orientation_huber_delta_rad", default_value="0.25"),
+        DeclareLaunchArgument("lidar_pose_factor_keyframe_stride", default_value="5"),
+        DeclareLaunchArgument("lidar_pose_factor_min_points", default_value="32"),
+        DeclareLaunchArgument("lidar_pose_factor_max_frame_points", default_value="2000"),
+        DeclareLaunchArgument("lidar_pose_factor_max_map_points", default_value="20000"),
+        DeclareLaunchArgument("lidar_pose_factor_nearest_distance_m", default_value="0.35"),
+        DeclareLaunchArgument("lidar_pose_factor_correction_gain", default_value="0.7"),
+        DeclareLaunchArgument("lidar_pose_factor_max_correction_m", default_value="0.25"),
+        DeclareLaunchArgument("lidar_pose_factor_max_rotation_rad", default_value="0.08"),
+        DeclareLaunchArgument("lidar_pose_factor_robust_kernel_m", default_value="0.15"),
         DeclareLaunchArgument("enable_lidar_plane_normal_factor", default_value="false"),
         DeclareLaunchArgument("lidar_plane_normal_factor_weight", default_value="0.1"),
         DeclareLaunchArgument("lidar_plane_normal_huber_delta_rad", default_value="0.10"),
@@ -207,6 +237,20 @@ def generate_launch_description() -> LaunchDescription:
                 "pointcloud_min_range_m": pointcloud_min_range_m,
                 "pointcloud_max_range_m": pointcloud_max_range_m,
                 "pointcloud_factor_weight": pointcloud_factor_weight,
+                "enable_lidar_pose_prior_factor": enable_lidar_pose_prior_factor,
+                "lidar_pose_prior_position_weight": lidar_pose_prior_position_weight,
+                "lidar_pose_prior_orientation_weight": lidar_pose_prior_orientation_weight,
+                "lidar_pose_prior_position_huber_delta_m": lidar_pose_prior_position_huber_delta_m,
+                "lidar_pose_prior_orientation_huber_delta_rad": lidar_pose_prior_orientation_huber_delta_rad,
+                "lidar_pose_factor_keyframe_stride": lidar_pose_factor_keyframe_stride,
+                "lidar_pose_factor_min_points": LaunchConfiguration("lidar_pose_factor_min_points"),
+                "lidar_pose_factor_max_frame_points": LaunchConfiguration("lidar_pose_factor_max_frame_points"),
+                "lidar_pose_factor_max_map_points": LaunchConfiguration("lidar_pose_factor_max_map_points"),
+                "lidar_pose_factor_nearest_distance_m": LaunchConfiguration("lidar_pose_factor_nearest_distance_m"),
+                "lidar_pose_factor_correction_gain": LaunchConfiguration("lidar_pose_factor_correction_gain"),
+                "lidar_pose_factor_max_correction_m": LaunchConfiguration("lidar_pose_factor_max_correction_m"),
+                "lidar_pose_factor_max_rotation_rad": LaunchConfiguration("lidar_pose_factor_max_rotation_rad"),
+                "lidar_pose_factor_robust_kernel_m": LaunchConfiguration("lidar_pose_factor_robust_kernel_m"),
                 "enable_lidar_plane_normal_factor": LaunchConfiguration("enable_lidar_plane_normal_factor"),
                 "lidar_plane_normal_factor_weight": LaunchConfiguration("lidar_plane_normal_factor_weight"),
                 "lidar_plane_normal_huber_delta_rad": LaunchConfiguration("lidar_plane_normal_huber_delta_rad"),
