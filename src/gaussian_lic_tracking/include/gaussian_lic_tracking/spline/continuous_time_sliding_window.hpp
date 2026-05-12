@@ -59,6 +59,8 @@ struct ContinuousTimeSlidingWindowOptions
   // use Ceres defaults.
   double ceres_initial_trust_region_radius{0.0};
   double ceres_max_trust_region_radius{0.0};
+  double position_smoothness_weight{0.0};
+  double position_smoothness_huber_delta_m{0.0};
   double lidar_huber_delta_m{0.10};
   bool hold_gyro_bias_constant{false};
   bool hold_accel_bias_constant{false};
@@ -94,6 +96,7 @@ struct ContinuousTimeSlidingWindowDiagnostics
   std::size_t total_lidar_normal_factors{0};
   std::size_t total_position_prior_factors{0};
   std::size_t total_orientation_prior_factors{0};
+  std::size_t total_position_smoothness_factors{0};
   std::size_t total_marginalized_knots{0};
   std::size_t accepted_solver_steps{0};
   std::size_t last_step_imu_factors{0};
@@ -101,6 +104,7 @@ struct ContinuousTimeSlidingWindowDiagnostics
   std::size_t last_step_lidar_normal_factors{0};
   std::size_t last_step_position_prior_factors{0};
   std::size_t last_step_orientation_prior_factors{0};
+  std::size_t last_step_position_smoothness_factors{0};
   bool last_step_update_accepted{false};
   bool last_step_update_rejected{false};
   bool last_step_rotation_limited{false};

@@ -389,11 +389,22 @@ bool ContinuousTimeSlidingWindowEstimator::step()
       ++impl_->diagnostics.total_orientation_prior_factors;
     }
   }
+  if (impl_->options.position_smoothness_weight > 0.0) {
+    for (std::size_t i = 0; i + 2 < estimator.knot_count(); ++i) {
+      if (estimator.add_position_smoothness_factor(
+          i, impl_->options.position_smoothness_weight,
+          impl_->options.position_smoothness_huber_delta_m))
+      {
+        ++impl_->diagnostics.total_position_smoothness_factors;
+      }
+    }
+  }
 
   if (estimator.imu_factor_count() == 0 && estimator.lidar_factor_count() == 0 &&
     estimator.lidar_normal_factor_count() == 0 &&
     estimator.position_prior_factor_count() == 0 &&
-    estimator.orientation_prior_factor_count() == 0)
+    estimator.orientation_prior_factor_count() == 0 &&
+    estimator.position_smoothness_factor_count() == 0)
   {
     return false;
   }
@@ -405,6 +416,8 @@ bool ContinuousTimeSlidingWindowEstimator::step()
     estimator.position_prior_factor_count();
   impl_->diagnostics.last_step_orientation_prior_factors =
     estimator.orientation_prior_factor_count();
+  impl_->diagnostics.last_step_position_smoothness_factors =
+    estimator.position_smoothness_factor_count();
 
   TrajectoryEstimatorOptions solve_options;
   solve_options.max_num_iterations = impl_->options.max_iterations_per_step;

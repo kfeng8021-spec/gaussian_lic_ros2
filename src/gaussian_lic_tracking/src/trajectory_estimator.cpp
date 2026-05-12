@@ -255,6 +255,22 @@ struct OrientationPriorAutoDiffFunctor
   }
 };
 
+struct PositionSmoothnessAutoDiffFunctor
+{
+  double weight{1.0};
+
+  template <typename T>
+  bool operator()(const T * p0, const T * p1, const T * p2, T * residuals) const
+  {
+    const Eigen::Map<const Eigen::Matrix<T, 3, 1>> x0(p0);
+    const Eigen::Map<const Eigen::Matrix<T, 3, 1>> x1(p1);
+    const Eigen::Map<const Eigen::Matrix<T, 3, 1>> x2(p2);
+    Eigen::Map<Eigen::Matrix<T, 3, 1>> r(residuals);
+    r = T(weight) * (x2 - T(2.0) * x1 + x0);
+    return true;
+  }
+};
+
 }  // namespace
 
 struct TrajectoryEstimator::Impl
@@ -607,6 +623,40 @@ bool TrajectoryEstimator::add_orientation_prior_factor(
   const auto block = impl_->problem->AddResidualBlock(cost, loss, parameter_blocks);
   impl_->orientation_prior_residual_blocks.push_back(block);
   ++orientation_prior_factor_count_;
+  return true;
+}
+
+bool TrajectoryEstimator::add_position_smoothness_factor(
+  std::size_t first_knot_index,
+  double weight,
+  double huber_delta_m)
+{
+  if (first_knot_index + 2 >= position_knots_.size() ||
+    !std::isfinite(weight) || weight <= 0.0 ||
+    !std::isfinite(huber_delta_m) || huber_delta_m < 0.0)
+  {
+    return false;
+  }
+  if (impl_->rotation_storage.empty()) {
+    rebuild_problem();
+  }
+
+  PositionSmoothnessAutoDiffFunctor functor;
+  functor.weight = weight;
+  auto * cost = new ceres::AutoDiffCostFunction<
+    PositionSmoothnessAutoDiffFunctor, 3,
+    3, 3, 3>(new PositionSmoothnessAutoDiffFunctor(functor));
+
+  ceres::LossFunction * loss = nullptr;
+  if (huber_delta_m > 0.0) {
+    loss = new ceres::HuberLoss(huber_delta_m);
+  }
+  impl_->problem->AddResidualBlock(
+    cost, loss,
+    impl_->position_storage[first_knot_index].data(),
+    impl_->position_storage[first_knot_index + 1].data(),
+    impl_->position_storage[first_knot_index + 2].data());
+  ++position_smoothness_factor_count_;
   return true;
 }
 

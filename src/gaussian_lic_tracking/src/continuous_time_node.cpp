@@ -144,6 +144,17 @@ public:
     {
       throw std::runtime_error("Ceres trust-region radii must be finite and non-negative");
     }
+    options.position_smoothness_weight =
+      declare_parameter<double>("position_smoothness_weight", 0.0);
+    options.position_smoothness_huber_delta_m =
+      declare_parameter<double>("position_smoothness_huber_delta_m", 0.0);
+    if (!std::isfinite(options.position_smoothness_weight) ||
+      options.position_smoothness_weight < 0.0 ||
+      !std::isfinite(options.position_smoothness_huber_delta_m) ||
+      options.position_smoothness_huber_delta_m < 0.0)
+    {
+      throw std::runtime_error("position smoothness parameters must be finite and non-negative");
+    }
     options.lidar_huber_delta_m =
       declare_parameter<double>("lidar_huber_delta_m", 0.10);
     lidar_huber_delta_m_ = options.lidar_huber_delta_m;
@@ -790,8 +801,10 @@ private:
       get_logger(),
       "continuous-time diagnostics: steps=%zu imu_factors=%zu lidar_factors=%zu "
       "lidar_normal_factors=%zu "
+      "position_smoothness_factors=%zu "
       "accepted_steps=%zu "
       "last_imu_factors=%zu last_lidar_factors=%zu last_lidar_normal_factors=%zu "
+      "last_position_smoothness_factors=%zu "
       "last_position_prior_factors=%zu last_orientation_prior_factors=%zu "
       "initial_cost=%.9g final_cost=%.9g initial_imu_cost=%.9g "
       "final_imu_cost=%.9g initial_lidar_cost=%.9g final_lidar_cost=%.9g "
@@ -813,10 +826,12 @@ private:
       diagnostics.total_imu_factors,
       diagnostics.total_lidar_factors,
       diagnostics.total_lidar_normal_factors,
+      diagnostics.total_position_smoothness_factors,
       diagnostics.accepted_solver_steps,
       diagnostics.last_step_imu_factors,
       diagnostics.last_step_lidar_factors,
       diagnostics.last_step_lidar_normal_factors,
+      diagnostics.last_step_position_smoothness_factors,
       diagnostics.last_step_position_prior_factors,
       diagnostics.last_step_orientation_prior_factors,
       diagnostics.last_step_initial_cost,

@@ -46,6 +46,10 @@ def generate_launch_description() -> LaunchDescription:
         "ceres_initial_trust_region_radius"
     )
     ceres_max_trust_region_radius = LaunchConfiguration("ceres_max_trust_region_radius")
+    position_smoothness_weight = LaunchConfiguration("position_smoothness_weight")
+    position_smoothness_huber_delta_m = LaunchConfiguration(
+        "position_smoothness_huber_delta_m"
+    )
     lidar_huber_delta_m = LaunchConfiguration("lidar_huber_delta_m")
     step_period_seconds = LaunchConfiguration("step_period_seconds")
     diagnostic_log_period_steps = LaunchConfiguration("diagnostic_log_period_steps")
@@ -101,6 +105,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("imu_info_accel", default_value="1.0"),
         DeclareLaunchArgument("ceres_initial_trust_region_radius", default_value="0.0"),
         DeclareLaunchArgument("ceres_max_trust_region_radius", default_value="0.0"),
+        DeclareLaunchArgument("position_smoothness_weight", default_value="0.0"),
+        DeclareLaunchArgument("position_smoothness_huber_delta_m", default_value="0.0"),
         DeclareLaunchArgument("lidar_huber_delta_m", default_value="0.10"),
         DeclareLaunchArgument("step_period_seconds", default_value="0.10"),
         DeclareLaunchArgument("diagnostic_log_period_steps", default_value="50"),
@@ -178,6 +184,8 @@ def generate_launch_description() -> LaunchDescription:
                 "imu_info_accel": imu_info_accel,
                 "ceres_initial_trust_region_radius": ceres_initial_trust_region_radius,
                 "ceres_max_trust_region_radius": ceres_max_trust_region_radius,
+                "position_smoothness_weight": position_smoothness_weight,
+                "position_smoothness_huber_delta_m": position_smoothness_huber_delta_m,
                 "lidar_huber_delta_m": lidar_huber_delta_m,
                 "step_period_seconds": step_period_seconds,
                 "diagnostic_log_period_steps": diagnostic_log_period_steps,

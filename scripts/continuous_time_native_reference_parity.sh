@@ -51,6 +51,8 @@ IMU_INFO_GYRO="${IMU_INFO_GYRO:-10.0}"
 IMU_INFO_ACCEL="${IMU_INFO_ACCEL:-1.0}"
 CERES_INITIAL_TRUST_REGION_RADIUS="${CERES_INITIAL_TRUST_REGION_RADIUS:-0.0}"
 CERES_MAX_TRUST_REGION_RADIUS="${CERES_MAX_TRUST_REGION_RADIUS:-0.0}"
+POSITION_SMOOTHNESS_WEIGHT="${POSITION_SMOOTHNESS_WEIGHT:-0.0}"
+POSITION_SMOOTHNESS_HUBER_DELTA_M="${POSITION_SMOOTHNESS_HUBER_DELTA_M:-0.0}"
 APPLY_POSITION_UPDATE_ON_ROTATION_REJECT="${APPLY_POSITION_UPDATE_ON_ROTATION_REJECT:-false}"
 APPLY_LIMITED_ROTATION_UPDATE="${APPLY_LIMITED_ROTATION_UPDATE:-false}"
 ENABLE_VOXEL_PLANE_EXTRACTION="${ENABLE_VOXEL_PLANE_EXTRACTION:-true}"
@@ -98,6 +100,8 @@ setsid ros2 run gaussian_lic_tracking continuous_time_node \
   -p imu_info_accel:="${IMU_INFO_ACCEL}" \
   -p ceres_initial_trust_region_radius:="${CERES_INITIAL_TRUST_REGION_RADIUS}" \
   -p ceres_max_trust_region_radius:="${CERES_MAX_TRUST_REGION_RADIUS}" \
+  -p position_smoothness_weight:="${POSITION_SMOOTHNESS_WEIGHT}" \
+  -p position_smoothness_huber_delta_m:="${POSITION_SMOOTHNESS_HUBER_DELTA_M}" \
   -p seed_min_imu_count:=30 \
   -p enable_startup_bias_autocal:="${ENABLE_STARTUP_BIAS_AUTOCAL}" \
   -p imu_linear_acceleration_scale:="${IMU_LINEAR_ACCELERATION_SCALE}" \
@@ -322,6 +326,8 @@ native = {
     "imu_info_accel": float("${IMU_INFO_ACCEL}"),
     "ceres_initial_trust_region_radius": float("${CERES_INITIAL_TRUST_REGION_RADIUS}"),
     "ceres_max_trust_region_radius": float("${CERES_MAX_TRUST_REGION_RADIUS}"),
+    "position_smoothness_weight": float("${POSITION_SMOOTHNESS_WEIGHT}"),
+    "position_smoothness_huber_delta_m": float("${POSITION_SMOOTHNESS_HUBER_DELTA_M}"),
     "pointcloud_wait_queue_max_size": int("${POINTCLOUD_WAIT_QUEUE_MAX_SIZE}"),
     "enable_lidar_plane_normal_factor": "${ENABLE_LIDAR_PLANE_NORMAL_FACTOR}" == "true",
     "lidar_plane_normal_factor_weight": float("${LIDAR_PLANE_NORMAL_FACTOR_WEIGHT}"),
