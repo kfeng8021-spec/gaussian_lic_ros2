@@ -270,6 +270,9 @@ public:
     lidar_robust_kernel_m_ = finite_nonnegative_parameter(
       "lidar_robust_kernel_m",
       declare_parameter<double>("lidar_robust_kernel_m", 0.15));
+    lidar_pose_factor_iterations_ = integer_parameter_at_least(
+      "lidar_pose_factor_iterations",
+      declare_parameter<int>("lidar_pose_factor_iterations", 1), 1);
     lidar_plane_min_neighbors_ = integer_parameter_at_least(
       "lidar_plane_min_neighbors",
       declare_parameter<int>("lidar_plane_min_neighbors", 5), 3);
@@ -479,6 +482,7 @@ public:
     lidar_config.max_correction_m = lidar_max_correction_m_;
     lidar_config.max_rotation_rad = lidar_max_rotation_rad_;
     lidar_config.robust_kernel_m = lidar_robust_kernel_m_;
+    lidar_config.pose_iterations = static_cast<size_t>(lidar_pose_factor_iterations_);
     lidar_config.plane_min_neighbors = static_cast<size_t>(lidar_plane_min_neighbors_);
     lidar_config.plane_max_condition = lidar_plane_max_condition_;
     lidar_factor_.set_config(lidar_config);
@@ -3731,6 +3735,7 @@ private:
   double lidar_max_correction_m_{0.25};
   double lidar_max_rotation_rad_{0.08};
   double lidar_robust_kernel_m_{0.15};
+  int lidar_pose_factor_iterations_{1};
   int lidar_plane_min_neighbors_{5};
   double lidar_plane_max_condition_{0.2};
   double lidar_keyframe_translation_m_{0.25};

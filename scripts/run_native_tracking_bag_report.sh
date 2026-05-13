@@ -22,6 +22,7 @@ LIDAR_CORRECTION_GAIN=0.7
 LIDAR_MAX_CORRECTION_M=0.25
 LIDAR_MAX_ROTATION_RAD=0.08
 LIDAR_ROBUST_KERNEL_M=0.15
+LIDAR_POSE_FACTOR_ITERATIONS=1
 LIDAR_KEYFRAME_TRANSLATION_M=0.0
 MAX_LIDAR_INVALID_FRAMES=0
 LIDAR_TIME_MODE=auto
@@ -166,6 +167,8 @@ Options:
   --lidar-max-correction-m M    Max LiDAR translation correction per frame. Default: 0.25.
   --lidar-max-rotation-rad R    Max LiDAR rotation correction per frame. Default: 0.08.
   --lidar-robust-kernel-m M     LiDAR robust kernel delta. Default: 0.15.
+  --lidar-pose-factor-iterations N
+                               LiDAR point-to-plane pose correction iterations. Default: 1.
   --lidar-keyframe-translation-m M
                                Keyframe insertion threshold. Default: 0.0 for strict replay sweeps.
   --max-lidar-invalid-frames N  Maximum invalid LiDAR frames tolerated by report gate. Default: 0.
@@ -399,6 +402,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --lidar-robust-kernel-m)
       LIDAR_ROBUST_KERNEL_M="$2"
+      shift 2
+      ;;
+    --lidar-pose-factor-iterations)
+      LIDAR_POSE_FACTOR_ITERATIONS="$2"
       shift 2
       ;;
     --lidar-keyframe-translation-m)
@@ -981,6 +988,7 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   lidar_max_correction_m:="${LIDAR_MAX_CORRECTION_M}" \
   lidar_max_rotation_rad:="${LIDAR_MAX_ROTATION_RAD}" \
   lidar_robust_kernel_m:="${LIDAR_ROBUST_KERNEL_M}" \
+  lidar_pose_factor_iterations:="${LIDAR_POSE_FACTOR_ITERATIONS}" \
   lidar_max_frame_points:="${LIDAR_MAX_FRAME_POINTS}" \
   lidar_max_map_points:="${LIDAR_MAX_MAP_POINTS}" \
   sliding_window_optimize_every_n_frames:="${SLIDING_WINDOW_OPTIMIZE_EVERY_N_FRAMES}" \
@@ -1115,6 +1123,7 @@ MAPPER_FEEDBACK_OPTIMIZATION_EVERY_REPORT="${MAPPER_FEEDBACK_TORCH_OPTIMIZATION_
 GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR_REPORT="${ENABLE_GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR}" \
 GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR_WEIGHT_REPORT="${GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR_WEIGHT}" \
 GAUSSIAN_SNAPSHOT_LIDAR_PLANE_MIN_ANISOTROPY_REPORT="${GAUSSIAN_SNAPSHOT_LIDAR_PLANE_MIN_ANISOTROPY}" \
+LIDAR_POSE_FACTOR_ITERATIONS_REPORT="${LIDAR_POSE_FACTOR_ITERATIONS}" \
 python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${MIN_POSES}" "${MIN_STATUS_SAMPLES}" "${MIN_POINT_FRAMES}" "${REQUIRE_BA_FEEDBACK}" \
   "${REQUIRE_REFERENCE_TRAJECTORY}" "${MIN_REFERENCE_POSES}" "${REQUIRE_NONDEGENERATE_BA}" \
@@ -1214,6 +1223,7 @@ gaussian_snapshot_lidar_plane_factor_weight = float(
 gaussian_snapshot_lidar_plane_min_anisotropy = float(
     os.environ["GAUSSIAN_SNAPSHOT_LIDAR_PLANE_MIN_ANISOTROPY_REPORT"]
 )
+lidar_pose_factor_iterations = int(os.environ["LIDAR_POSE_FACTOR_ITERATIONS_REPORT"])
 tracking_max_pose_step_m = float(sys.argv[44])
 tracking_step_guard_velocity_scale = float(sys.argv[45])
 tracking_step_guard_acceleration_mps2 = float(sys.argv[46])
@@ -1481,6 +1491,7 @@ report = {
         "playback_rate": playback_rate,
         "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
         "max_lidar_invalid_frames": max_lidar_invalid_frames,
+        "lidar_pose_factor_iterations": lidar_pose_factor_iterations,
         "enable_gaussian_map_feedback": enable_gaussian_map_feedback,
         "require_gaussian_snapshot": require_gaussian_snapshot,
         "gaussian_snapshot_lidar_plane_factor_enabled": (
