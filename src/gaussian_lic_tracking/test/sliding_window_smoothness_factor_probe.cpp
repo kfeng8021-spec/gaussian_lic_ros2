@@ -157,6 +157,57 @@ int main()
               << max_rotation_jacobian_error << "\n";
     return 1;
   }
+  auto consistency_previous = jacobian_previous;
+  consistency_previous.p_w_i = Eigen::Vector3d{-0.2, 0.4, 0.1};
+  consistency_previous.v_w_i = Eigen::Vector3d{0.1, 0.0, -0.2};
+  auto consistency_current = jacobian_current;
+  consistency_current.p_w_i = Eigen::Vector3d{0.7, -0.3, 0.5};
+  consistency_current.v_w_i = Eigen::Vector3d{0.4, -0.6, 0.2};
+  auto consistency_next = jacobian_next;
+  consistency_next.p_w_i = Eigen::Vector3d{1.6, -0.8, 0.9};
+  consistency_next.v_w_i = Eigen::Vector3d{0.8, -0.1, 0.3};
+  gaussian_lic_tracking::SlidingWindowTrajectorySmoothnessFactor consistency_factor;
+  consistency_factor.previous_stamp_ns = consistency_previous.stamp_ns;
+  consistency_factor.current_stamp_ns = consistency_current.stamp_ns;
+  consistency_factor.next_stamp_ns = consistency_next.stamp_ns;
+  consistency_factor.rotation_rate_weight = 0.0;
+  consistency_factor.position_rate_weight = 0.0;
+  consistency_factor.velocity_acceleration_weight = 0.0;
+  consistency_factor.position_velocity_consistency_weight = 11.0;
+  consistency_factor.gyro_bias_rate_weight = 0.0;
+  consistency_factor.accel_bias_rate_weight = 0.0;
+  gaussian_lic_tracking::SlidingWindowOptimizer consistency_optimizer(config);
+  consistency_optimizer.add_or_update_state(consistency_previous);
+  consistency_optimizer.add_or_update_state(consistency_current);
+  consistency_optimizer.add_or_update_state(consistency_next);
+  consistency_optimizer.add_trajectory_smoothness_factor(consistency_factor);
+  const auto consistency_normal = consistency_optimizer.build_normal_equation(0.0);
+  Eigen::MatrixXd expected_consistency_jacobian = Eigen::MatrixXd::Zero(3, 45);
+  const double consistency_dt_s =
+    static_cast<double>(consistency_next.stamp_ns - consistency_current.stamp_ns) / 1.0e9;
+  const double consistency_scale =
+    std::sqrt(consistency_factor.position_velocity_consistency_weight);
+  expected_consistency_jacobian.block<3, 3>(0, 15 + 6) =
+    -consistency_scale / consistency_dt_s * Eigen::Matrix3d::Identity();
+  expected_consistency_jacobian.block<3, 3>(0, 15 + 3) =
+    -0.5 * consistency_scale * Eigen::Matrix3d::Identity();
+  expected_consistency_jacobian.block<3, 3>(0, 30 + 6) =
+    consistency_scale / consistency_dt_s * Eigen::Matrix3d::Identity();
+  expected_consistency_jacobian.block<3, 3>(0, 30 + 3) =
+    -0.5 * consistency_scale * Eigen::Matrix3d::Identity();
+  const double max_consistency_jacobian_error =
+    (consistency_normal.jacobian.block(15, 0, 3, 45) - expected_consistency_jacobian)
+    .cwiseAbs()
+    .maxCoeff();
+  if (!consistency_normal.valid || consistency_normal.jacobian.rows() != 18 ||
+    consistency_normal.jacobian.cols() != 45 ||
+    max_consistency_jacobian_error > 1.0e-12 ||
+    consistency_normal.numeric_jacobian_block_count != 0U)
+  {
+    std::cerr << "smoothness position-velocity consistency Jacobian mismatch: "
+              << max_consistency_jacobian_error << "\n";
+    return 1;
+  }
 
   gaussian_lic_tracking::SlidingWindowState previous;
   previous.stamp_ns = 0;
