@@ -165,6 +165,8 @@ class NativeTrackingRecorder(Node):
         self.status_bin_count = int(self.declare_parameter("status_bin_count", 8).value)
         self.status_history_max_samples = int(
             self.declare_parameter("status_history_max_samples", 5000).value)
+        self.write_status_history = bool(
+            self.declare_parameter("write_status_history", False).value)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         qos = QoSProfile(
@@ -292,8 +294,13 @@ class NativeTrackingRecorder(Node):
         trajectory_path = self.output_dir / "trajectory.tum"
         reference_trajectory_path = self.output_dir / "reference_trajectory.tum"
         metrics_path = self.output_dir / "metrics.json"
+        status_history_path = self.output_dir / "tracking_status_history.jsonl"
         self.write_tum(trajectory_path, self.poses)
         self.write_tum(reference_trajectory_path, self.reference_poses)
+        if final and self.write_status_history:
+            with status_history_path.open("w", encoding="utf-8") as stream:
+                for record in self.status_records:
+                    stream.write(json.dumps(record, sort_keys=True) + "\n")
 
         duration_sec = 0.0
         if self.first_stamp_ns is not None and self.last_stamp_ns is not None:
@@ -332,6 +339,8 @@ class NativeTrackingRecorder(Node):
             "outputs": {
                 "trajectory_tum": str(trajectory_path),
                 "reference_trajectory_tum": str(reference_trajectory_path),
+                "tracking_status_history_jsonl": (
+                    str(status_history_path) if final and self.write_status_history else ""),
             },
         }
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")

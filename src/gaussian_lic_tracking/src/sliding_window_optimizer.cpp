@@ -587,7 +587,6 @@ void SlidingWindowOptimizer::add_or_update_state(const SlidingWindowState & stat
         return lhs.stamp_ns < rhs.stamp_ns;
       });
   }
-  enforce_window_size();
 }
 
 bool SlidingWindowOptimizer::get_state(const int64_t stamp_ns, SlidingWindowState & state) const
@@ -646,7 +645,6 @@ void SlidingWindowOptimizer::add_imu_factor(const SlidingWindowImuFactor & facto
     *existing = factor;
     ++imu_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_pose_prior(const SlidingWindowPosePrior & prior)
@@ -671,7 +669,6 @@ void SlidingWindowOptimizer::add_pose_prior(const SlidingWindowPosePrior & prior
   } else {
     *existing = normalized;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_state_prior(const SlidingWindowStatePrior & prior)
@@ -703,7 +700,6 @@ void SlidingWindowOptimizer::add_state_prior(const SlidingWindowStatePrior & pri
   } else {
     *existing = normalized;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_dense_prior(const SlidingWindowDensePrior & prior)
@@ -735,7 +731,6 @@ void SlidingWindowOptimizer::add_dense_prior(const SlidingWindowDensePrior & pri
     state.q_w_i.normalize();
   }
   dense_priors_.push_back(std::move(normalized));
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_point_to_point_factor(const SlidingWindowPointToPointFactor & factor)
@@ -777,7 +772,6 @@ void SlidingWindowOptimizer::add_point_to_point_factor(const SlidingWindowPointT
     *existing = factor;
     ++point_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_point_to_plane_factor(const SlidingWindowPointToPlaneFactor & factor)
@@ -826,7 +820,6 @@ void SlidingWindowOptimizer::add_point_to_plane_factor(const SlidingWindowPointT
     *existing = factor;
     ++plane_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_visual_alignment_factor(const SlidingWindowVisualAlignmentFactor & factor)
@@ -854,7 +847,6 @@ void SlidingWindowOptimizer::add_visual_alignment_factor(const SlidingWindowVisu
     *existing = factor;
     ++visual_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3PhotometricFactor & factor)
@@ -885,7 +877,6 @@ void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3Ph
     *existing = normalized;
     ++se3_photometric_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_relative_translation_factor(
@@ -915,7 +906,6 @@ void SlidingWindowOptimizer::add_relative_translation_factor(
     *existing = factor;
     ++relative_translation_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 void SlidingWindowOptimizer::add_trajectory_smoothness_factor(
@@ -961,7 +951,6 @@ void SlidingWindowOptimizer::add_trajectory_smoothness_factor(
     *existing = factor;
     ++smoothness_factor_replacement_count_;
   }
-  enforce_window_size();
 }
 
 SlidingWindowStatePrior SlidingWindowOptimizer::make_state_prior(const SlidingWindowState & state) const

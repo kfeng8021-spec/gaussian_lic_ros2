@@ -23,6 +23,15 @@ int main()
     optimizer.add_or_update_state(state);
   }
 
+  const auto marginalization_summary = optimizer.optimize();
+  if (marginalization_summary.state_count != config.max_states ||
+    marginalization_summary.marginalized_state_count < 2U ||
+    marginalization_summary.fallback_marginalization_prior_count < 2U)
+  {
+    std::cerr << "initial deferred marginalization did not bound the window\n";
+    return 1;
+  }
+
   gaussian_lic_tracking::SlidingWindowState disturbed;
   if (!optimizer.get_state(2, disturbed)) {
     std::cerr << "expected retained anchor state is missing\n";

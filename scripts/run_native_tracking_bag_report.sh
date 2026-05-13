@@ -80,6 +80,8 @@ SLIDING_WINDOW_IMU_ROTATION_WEIGHT=1.0
 SLIDING_WINDOW_IMU_VELOCITY_WEIGHT=1.0
 SLIDING_WINDOW_IMU_POSITION_WEIGHT=1.0
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT=0.0
+SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT=0.0
+SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT=0.0
 SLIDING_WINDOW_BIAS_WEIGHT=1.0
 SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT=2.0
 SLIDING_WINDOW_POSE_ROTATION_WEIGHT=2.0
@@ -135,6 +137,7 @@ GAUSSIAN_SNAPSHOT_LIDAR_POSE_CORRECTION_BIDIRECTIONAL_MAX_DISTANCE_M=0.0
 ENABLE_GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR=false
 GAUSSIAN_SNAPSHOT_LIDAR_PLANE_FACTOR_WEIGHT=1.0
 GAUSSIAN_SNAPSHOT_LIDAR_PLANE_MIN_ANISOTROPY=0.25
+WRITE_STATUS_HISTORY=false
 MAPPER_FEEDBACK_SELECT_EVERY_K_FRAME=8
 MAPPER_FEEDBACK_SELECT_EVERY_K_FRAME_EXPLICIT=false
 MAPPER_FEEDBACK_ENABLE_TORCH_CAMERA_CONVERSION=false
@@ -222,6 +225,7 @@ Options:
   --post-play-settle SEC       Time to drain tracking callbacks after rosbag play exits. Default: 8.
   --min-poses N                Minimum recorded frontend odometry poses. Default: 20.
   --min-status-samples N       Minimum TrackingStatus samples. Default: 1.
+  --write-status-history       Write per-sample TrackingStatus JSONL for drift diagnostics.
   --min-point-frames N         Minimum recorded /points_for_gs frames. Default: 10.
   --lidar-min-points N         Tracking LiDAR frame minimum. Default: 32.
   --lidar-max-frame-points N   Max LiDAR points used per frame factor. Default: 4000.
@@ -345,6 +349,10 @@ Options:
                                IMU position residual weight. Default: 1.0.
   --sliding-window-imu-velocity-prior-weight W
                                Optional state velocity prior toward propagated IMU velocity. Default: 0.0 disabled.
+  --sliding-window-gyro-bias-prior-weight W
+                               Optional insertion-time gyro-bias anchor prior. Default: 0.0 disabled.
+  --sliding-window-accel-bias-prior-weight W
+                               Optional insertion-time accel-bias anchor prior. Default: 0.0 disabled.
   --sliding-window-bias-weight W
                                IMU bias random-walk residual weight. Default: 1.0.
   --sliding-window-pose-translation-weight W
@@ -555,6 +563,10 @@ while [[ $# -gt 0 ]]; do
     --min-status-samples)
       MIN_STATUS_SAMPLES="$2"
       shift 2
+      ;;
+    --write-status-history)
+      WRITE_STATUS_HISTORY=true
+      shift
       ;;
     --min-point-frames)
       MIN_POINT_FRAMES="$2"
@@ -818,6 +830,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sliding-window-imu-velocity-prior-weight)
       SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-gyro-bias-prior-weight)
+      SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-accel-bias-prior-weight)
+      SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT="$2"
       shift 2
       ;;
     --sliding-window-bias-weight)
@@ -1475,6 +1495,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_imu_velocity_weight:="${SLIDING_WINDOW_IMU_VELOCITY_WEIGHT}" \
   sliding_window_imu_position_weight:="${SLIDING_WINDOW_IMU_POSITION_WEIGHT}" \
   sliding_window_imu_velocity_prior_weight:="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
+  sliding_window_gyro_bias_prior_weight:="${SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT}" \
+  sliding_window_accel_bias_prior_weight:="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT}" \
   sliding_window_bias_weight:="${SLIDING_WINDOW_BIAS_WEIGHT}" \
   sliding_window_pose_translation_weight:="${SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT}" \
   sliding_window_pose_rotation_weight:="${SLIDING_WINDOW_POSE_ROTATION_WEIGHT}" \
@@ -1546,6 +1568,7 @@ recorder_args=(
   -p pointcloud_topic:=/points_for_gs
   -p status_topic:=/gaussian_lic/frontend/status
   -p mapping_status_topic:=/gaussian_lic/status
+  -p write_status_history:="${WRITE_STATUS_HISTORY}"
 )
 if [[ -n "${REFERENCE_ODOMETRY_TOPIC}" ]]; then
   recorder_args+=(-p reference_odometry_topic:="${REFERENCE_ODOMETRY_TOPIC}")
@@ -1661,6 +1684,8 @@ PRE_LIO_TRACKING_STEP_GUARD_VELOCITY_SCALE_REPORT="${PRE_LIO_TRACKING_STEP_GUARD
 POST_BA_TRACKING_STEP_GUARD_VELOCITY_SCALE_REPORT="${POST_BA_TRACKING_STEP_GUARD_VELOCITY_SCALE}" \
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
+SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT}" \
+SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT}" \
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
@@ -1891,6 +1916,12 @@ sliding_window_smoothness_position_velocity_weight = float(
 )
 sliding_window_imu_velocity_prior_weight = float(
     os.environ["SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT"]
+)
+sliding_window_gyro_bias_prior_weight = float(
+    os.environ["SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT_REPORT"]
+)
+sliding_window_accel_bias_prior_weight = float(
+    os.environ["SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT"]
 )
 enable_sliding_window_relative_translation_factor = (
     os.environ["ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT"] == "true"
@@ -2339,6 +2370,8 @@ report = {
             sliding_window_smoothness_position_velocity_weight
         ),
         "sliding_window_imu_velocity_prior_weight": sliding_window_imu_velocity_prior_weight,
+        "sliding_window_gyro_bias_prior_weight": sliding_window_gyro_bias_prior_weight,
+        "sliding_window_accel_bias_prior_weight": sliding_window_accel_bias_prior_weight,
         "enable_sliding_window_relative_translation_factor": (
             enable_sliding_window_relative_translation_factor
         ),
