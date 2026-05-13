@@ -175,6 +175,15 @@ def generate_launch_description():
         "sliding_window_smoothness_position_velocity_weight"
     )
     sliding_window_smoothness_bias_weight = LaunchConfiguration("sliding_window_smoothness_bias_weight")
+    enable_sliding_window_relative_translation_factor = LaunchConfiguration(
+        "enable_sliding_window_relative_translation_factor"
+    )
+    sliding_window_relative_translation_weight = LaunchConfiguration(
+        "sliding_window_relative_translation_weight"
+    )
+    sliding_window_relative_translation_huber_delta_m = LaunchConfiguration(
+        "sliding_window_relative_translation_huber_delta_m"
+    )
     imu_history_size = LaunchConfiguration("imu_history_size")
     imu_linear_acceleration_scale = LaunchConfiguration("imu_linear_acceleration_scale")
     enable_gaussian_snapshot_lidar_factor = LaunchConfiguration("enable_gaussian_snapshot_lidar_factor")
@@ -361,6 +370,9 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_smoothness_velocity_weight", default_value="0.1"),
             DeclareLaunchArgument("sliding_window_smoothness_position_velocity_weight", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_smoothness_bias_weight", default_value="0.1"),
+            DeclareLaunchArgument("enable_sliding_window_relative_translation_factor", default_value="false"),
+            DeclareLaunchArgument("sliding_window_relative_translation_weight", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_relative_translation_huber_delta_m", default_value="0.1"),
             DeclareLaunchArgument("imu_history_size", default_value="12000"),
             DeclareLaunchArgument("imu_linear_acceleration_scale", default_value="1.0"),
             DeclareLaunchArgument("enable_gaussian_snapshot_lidar_factor", default_value="true"),
@@ -529,6 +541,15 @@ def generate_launch_description():
                             sliding_window_smoothness_position_velocity_weight
                         ),
                         "sliding_window_smoothness_bias_weight": sliding_window_smoothness_bias_weight,
+                        "enable_sliding_window_relative_translation_factor": (
+                            enable_sliding_window_relative_translation_factor
+                        ),
+                        "sliding_window_relative_translation_weight": (
+                            sliding_window_relative_translation_weight
+                        ),
+                        "sliding_window_relative_translation_huber_delta_m": (
+                            sliding_window_relative_translation_huber_delta_m
+                        ),
                         "imu_history_size": imu_history_size,
                         "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
                         "enable_gaussian_snapshot_lidar_factor": enable_gaussian_snapshot_lidar_factor,

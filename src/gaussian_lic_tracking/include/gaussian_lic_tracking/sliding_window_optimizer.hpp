@@ -128,6 +128,15 @@ struct SlidingWindowSe3PhotometricFactor
   double huber_delta{0.0};
 };
 
+struct SlidingWindowRelativeTranslationFactor
+{
+  int64_t from_stamp_ns{0};
+  int64_t to_stamp_ns{0};
+  Eigen::Vector3d delta_p_w{Eigen::Vector3d::Zero()};
+  double weight{1.0};
+  double huber_delta_m{0.0};
+};
+
 struct SlidingWindowTrajectorySmoothnessFactor
 {
   int64_t previous_stamp_ns{0};
@@ -159,6 +168,7 @@ struct SlidingWindowCostBreakdown
   double plane_factor_cost{0.0};
   double visual_factor_cost{0.0};
   double se3_photometric_factor_cost{0.0};
+  double relative_translation_factor_cost{0.0};
   double smoothness_factor_cost{0.0};
 };
 
@@ -173,12 +183,14 @@ struct SlidingWindowSummary
   size_t plane_factor_count{0};
   size_t visual_factor_count{0};
   size_t se3_photometric_factor_count{0};
+  size_t relative_translation_factor_count{0};
   size_t smoothness_factor_count{0};
   size_t imu_factor_replacement_count{0};
   size_t point_factor_replacement_count{0};
   size_t plane_factor_replacement_count{0};
   size_t visual_factor_replacement_count{0};
   size_t se3_photometric_factor_replacement_count{0};
+  size_t relative_translation_factor_replacement_count{0};
   size_t smoothness_factor_replacement_count{0};
   size_t orphan_factor_count{0};
   size_t marginalized_state_count{0};
@@ -209,6 +221,7 @@ struct SlidingWindowSummary
   double plane_factor_cost{0.0};
   double visual_factor_cost{0.0};
   double se3_photometric_factor_cost{0.0};
+  double relative_translation_factor_cost{0.0};
   double smoothness_factor_cost{0.0};
   double last_step_norm{0.0};
   double last_step_scale{0.0};
@@ -278,6 +291,7 @@ public:
   void add_point_to_plane_factor(const SlidingWindowPointToPlaneFactor & factor);
   void add_visual_alignment_factor(const SlidingWindowVisualAlignmentFactor & factor);
   void add_se3_photometric_factor(const SlidingWindowSe3PhotometricFactor & factor);
+  void add_relative_translation_factor(const SlidingWindowRelativeTranslationFactor & factor);
   void add_trajectory_smoothness_factor(const SlidingWindowTrajectorySmoothnessFactor & factor);
 
   SlidingWindowNormalEquation build_normal_equation(double damping = 0.0) const;
@@ -340,12 +354,14 @@ private:
   std::vector<SlidingWindowPointToPlaneFactor> plane_factors_;
   std::vector<SlidingWindowVisualAlignmentFactor> visual_factors_;
   std::vector<SlidingWindowSe3PhotometricFactor> se3_photometric_factors_;
+  std::vector<SlidingWindowRelativeTranslationFactor> relative_translation_factors_;
   std::vector<SlidingWindowTrajectorySmoothnessFactor> smoothness_factors_;
   size_t imu_factor_replacement_count_{0};
   size_t point_factor_replacement_count_{0};
   size_t plane_factor_replacement_count_{0};
   size_t visual_factor_replacement_count_{0};
   size_t se3_photometric_factor_replacement_count_{0};
+  size_t relative_translation_factor_replacement_count_{0};
   size_t smoothness_factor_replacement_count_{0};
   size_t marginalized_state_count_{0};
   size_t schur_marginalization_count_{0};

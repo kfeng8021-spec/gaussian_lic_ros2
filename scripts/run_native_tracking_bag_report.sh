@@ -79,6 +79,9 @@ SLIDING_WINDOW_SMOOTHNESS_POSITION_WEIGHT=0.1
 SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT=0.1
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT=0.0
 SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT=0.1
+ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR=false
+SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT=0.0
+SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M=0.1
 REQUIRE_BA_FEEDBACK=false
 REQUIRE_NONDEGENERATE_BA=false
 REQUIRE_DESKEW=false
@@ -295,6 +298,12 @@ Options:
                                Position-rate to state-velocity consistency weight. Default: 0.0 disabled.
   --sliding-window-smoothness-bias-weight W
                                Bias smoothness weight. Default: 0.1.
+  --enable-sliding-window-relative-translation-factor
+                               Add an internal adjacent-pose relative translation prior from raw IMU/pre-LIO propagation. Default: disabled.
+  --sliding-window-relative-translation-weight W
+                               Relative translation prior weight. Default: 0.0 disabled.
+  --sliding-window-relative-translation-huber-delta-m M
+                               Relative translation prior Huber delta. Default: 0.1.
   --require-ba-feedback        Require accepted sliding-window feedback.
   --require-nondegenerate-ba   Require the last reported BA normal equation and state cadence to be non-degenerate.
   --enable-visual-factors      Require mapper-rendered-image visual factors to be present externally.
@@ -706,6 +715,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sliding-window-smoothness-bias-weight)
       SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT="$2"
+      shift 2
+      ;;
+    --enable-sliding-window-relative-translation-factor)
+      ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR=true
+      shift
+      ;;
+    --sliding-window-relative-translation-weight)
+      SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-relative-translation-huber-delta-m)
+      SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M="$2"
       shift 2
       ;;
     --require-ba-feedback)
@@ -1201,6 +1222,9 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_smoothness_velocity_weight:="${SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT}" \
   sliding_window_smoothness_position_velocity_weight:="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
   sliding_window_smoothness_bias_weight:="${SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT}" \
+  enable_sliding_window_relative_translation_factor:="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
+  sliding_window_relative_translation_weight:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
+  sliding_window_relative_translation_huber_delta_m:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
   >"${launch_log}" 2>&1 &
 launch_pid=$!
 
@@ -1351,6 +1375,9 @@ POST_BA_STEP_GUARD_MIN_VISUAL_COVERAGE_TILES_REPORT="${POST_BA_STEP_GUARD_MIN_VI
 POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M_REPORT="${POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M}" \
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
+ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
+SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
+SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
 REFERENCE_ERROR_BIN_COUNT_REPORT="${REFERENCE_ERROR_BIN_COUNT}" \
 REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MIN}" \
 REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MAX}" \
@@ -1508,6 +1535,15 @@ sliding_window_smoothness_position_velocity_weight = float(
 )
 sliding_window_imu_velocity_prior_weight = float(
     os.environ["SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT"]
+)
+enable_sliding_window_relative_translation_factor = (
+    os.environ["ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT"] == "true"
+)
+sliding_window_relative_translation_weight = float(
+    os.environ["SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT"]
+)
+sliding_window_relative_translation_huber_delta_m = float(
+    os.environ["SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT"]
 )
 tracking_max_pose_step_m = float(sys.argv[44])
 tracking_step_guard_velocity_scale = float(sys.argv[45])
@@ -1857,6 +1893,15 @@ report = {
             sliding_window_smoothness_position_velocity_weight
         ),
         "sliding_window_imu_velocity_prior_weight": sliding_window_imu_velocity_prior_weight,
+        "enable_sliding_window_relative_translation_factor": (
+            enable_sliding_window_relative_translation_factor
+        ),
+        "sliding_window_relative_translation_weight": (
+            sliding_window_relative_translation_weight
+        ),
+        "sliding_window_relative_translation_huber_delta_m": (
+            sliding_window_relative_translation_huber_delta_m
+        ),
         "tracking_max_pose_step_m": tracking_max_pose_step_m,
         "enable_pre_lio_tracking_step_guard": enable_pre_lio_tracking_step_guard,
         "enable_post_ba_tracking_step_guard": enable_post_ba_tracking_step_guard,

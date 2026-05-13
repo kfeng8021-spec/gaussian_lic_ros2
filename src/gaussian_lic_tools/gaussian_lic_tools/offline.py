@@ -66,6 +66,7 @@ TRACKING_STATUS_FIELDS = (
     "sliding_window_plane_factor_cost",
     "sliding_window_visual_factor_cost",
     "sliding_window_se3_photometric_factor_cost",
+    "sliding_window_relative_translation_factor_cost",
     "sliding_window_smoothness_factor_cost",
     "sliding_window_normal_equation_rank",
     "sliding_window_normal_equation_rank_ratio",

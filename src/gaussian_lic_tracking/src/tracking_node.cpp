@@ -495,6 +495,14 @@ public:
     sliding_window_smoothness_bias_weight_ = finite_nonnegative_parameter(
       "sliding_window_smoothness_bias_weight",
       declare_parameter<double>("sliding_window_smoothness_bias_weight", 0.1));
+    enable_sliding_window_relative_translation_factor_ =
+      declare_parameter<bool>("enable_sliding_window_relative_translation_factor", false);
+    sliding_window_relative_translation_weight_ = finite_nonnegative_parameter(
+      "sliding_window_relative_translation_weight",
+      declare_parameter<double>("sliding_window_relative_translation_weight", 0.0));
+    sliding_window_relative_translation_huber_delta_m_ = finite_nonnegative_parameter(
+      "sliding_window_relative_translation_huber_delta_m",
+      declare_parameter<double>("sliding_window_relative_translation_huber_delta_m", 0.1));
     enable_imu_gravity_autocalibration_ =
       declare_parameter<bool>("enable_imu_gravity_autocalibration", true);
     imu_gravity_autocalibration_samples_ = integer_parameter_at_least(
@@ -1488,6 +1496,25 @@ private:
       tracking_pose.q_w_i = state.q_w_i;
       tracking_pose.v_w_i = state.v_w_i;
     }
+    std::vector<gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor>
+      relative_translation_factors;
+    if (enable_sliding_window_relative_translation_factor_ &&
+      sliding_window_relative_translation_weight_ > 0.0 &&
+      last_output_tracking_pose_.has_value() &&
+      tracking_pose.stamp_ns > last_output_tracking_pose_->stamp_ns)
+    {
+      const auto & previous_pose = last_output_tracking_pose_.value();
+      const Eigen::Vector3d raw_delta_p_w = tracking_pose.p_w_i - previous_pose.p_w_i;
+      if (raw_delta_p_w.allFinite()) {
+        gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor factor;
+        factor.from_stamp_ns = previous_pose.stamp_ns;
+        factor.to_stamp_ns = tracking_pose.stamp_ns;
+        factor.delta_p_w = raw_delta_p_w;
+        factor.weight = sliding_window_relative_translation_weight_;
+        factor.huber_delta_m = sliding_window_relative_translation_huber_delta_m_;
+        relative_translation_factors.push_back(factor);
+      }
+    }
     if (enable_pre_lio_tracking_step_guard_) {
       apply_tracking_step_guard(tracking_pose, true, StepGuardStage::kPreLio);
     }
@@ -1712,7 +1739,8 @@ private:
         window_point_factors,
         window_plane_factors,
         visual_window_factors,
-        se3_photometric_factors);
+        se3_photometric_factors,
+        relative_translation_factors);
     }
     if (enable_post_ba_tracking_step_guard_) {
       apply_tracking_step_guard(
@@ -1768,7 +1796,9 @@ private:
     const std::vector<gaussian_lic_tracking::SlidingWindowPointToPointFactor> & point_factors,
     const std::vector<gaussian_lic_tracking::SlidingWindowPointToPlaneFactor> & plane_factors,
     const std::vector<gaussian_lic_tracking::SlidingWindowVisualAlignmentFactor> & visual_factors,
-    const std::vector<gaussian_lic_tracking::SlidingWindowSe3PhotometricFactor> & se3_photometric_factors)
+    const std::vector<gaussian_lic_tracking::SlidingWindowSe3PhotometricFactor> & se3_photometric_factors,
+    const std::vector<gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor> &
+      relative_translation_factors)
   {
     gaussian_lic_tracking::TrajectoryPose output_pose = input_pose;
     gaussian_lic_tracking::ImuState imu_state;
@@ -1886,6 +1916,16 @@ private:
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "sliding window SE3 photometric factor skipped: %s", ex.what());
+      }
+    }
+    for (const auto & relative_factor : relative_translation_factors) {
+      try {
+        sliding_window_optimizer_.add_relative_translation_factor(relative_factor);
+        window_factor_added = true;
+      } catch (const std::exception & ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "sliding window relative translation factor skipped: %s", ex.what());
       }
     }
     if (enable_sliding_window_smoothness_factor_ &&
@@ -3522,6 +3562,8 @@ private:
     status.sliding_window_visual_factors = static_cast<uint64_t>(summary.visual_factor_count);
     status.sliding_window_se3_photometric_factors =
       static_cast<uint64_t>(summary.se3_photometric_factor_count);
+    status.sliding_window_relative_translation_factors =
+      static_cast<uint64_t>(summary.relative_translation_factor_count);
     status.sliding_window_smoothness_factors =
       static_cast<uint64_t>(summary.smoothness_factor_count);
     status.sliding_window_imu_factor_replacement_count =
@@ -3534,6 +3576,8 @@ private:
       static_cast<uint64_t>(summary.visual_factor_replacement_count);
     status.sliding_window_se3_photometric_factor_replacement_count =
       static_cast<uint64_t>(summary.se3_photometric_factor_replacement_count);
+    status.sliding_window_relative_translation_factor_replacement_count =
+      static_cast<uint64_t>(summary.relative_translation_factor_replacement_count);
     status.sliding_window_smoothness_factor_replacement_count =
       static_cast<uint64_t>(summary.smoothness_factor_replacement_count);
     status.sliding_window_orphan_factors = static_cast<uint64_t>(summary.orphan_factor_count);
@@ -3622,6 +3666,8 @@ private:
     status.sliding_window_visual_factor_cost = summary.visual_factor_cost;
     status.sliding_window_se3_photometric_factor_cost =
       summary.se3_photometric_factor_cost;
+    status.sliding_window_relative_translation_factor_cost =
+      summary.relative_translation_factor_cost;
     status.sliding_window_smoothness_factor_cost = summary.smoothness_factor_cost;
     status.sliding_window_last_step_norm = summary.last_step_norm;
     status.sliding_window_last_step_scale = summary.last_step_scale;
@@ -3946,6 +3992,9 @@ private:
   double sliding_window_smoothness_velocity_weight_{0.1};
   double sliding_window_smoothness_position_velocity_weight_{0.0};
   double sliding_window_smoothness_bias_weight_{0.1};
+  bool enable_sliding_window_relative_translation_factor_{false};
+  double sliding_window_relative_translation_weight_{0.0};
+  double sliding_window_relative_translation_huber_delta_m_{0.1};
   int lidar_min_points_{32};
   int lidar_max_frame_points_{2000};
   int lidar_max_map_points_{20000};

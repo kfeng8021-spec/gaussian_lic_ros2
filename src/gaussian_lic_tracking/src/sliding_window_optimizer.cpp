@@ -542,12 +542,14 @@ void SlidingWindowOptimizer::clear()
   plane_factors_.clear();
   visual_factors_.clear();
   se3_photometric_factors_.clear();
+  relative_translation_factors_.clear();
   smoothness_factors_.clear();
   imu_factor_replacement_count_ = 0U;
   point_factor_replacement_count_ = 0U;
   plane_factor_replacement_count_ = 0U;
   visual_factor_replacement_count_ = 0U;
   se3_photometric_factor_replacement_count_ = 0U;
+  relative_translation_factor_replacement_count_ = 0U;
   smoothness_factor_replacement_count_ = 0U;
   marginalized_state_count_ = 0U;
   schur_marginalization_count_ = 0U;
@@ -886,6 +888,36 @@ void SlidingWindowOptimizer::add_se3_photometric_factor(const SlidingWindowSe3Ph
   enforce_window_size();
 }
 
+void SlidingWindowOptimizer::add_relative_translation_factor(
+  const SlidingWindowRelativeTranslationFactor & factor)
+{
+  if (factor.from_stamp_ns >= factor.to_stamp_ns) {
+    throw std::runtime_error("relative translation factor timestamps must be strictly increasing");
+  }
+  if (!std::isfinite(factor.weight) || !std::isfinite(factor.huber_delta_m) ||
+    factor.weight <= 0.0 || factor.huber_delta_m < 0.0)
+  {
+    throw std::runtime_error(
+      "relative translation factor weight must be positive and Huber delta must be non-negative");
+  }
+  if (!factor.delta_p_w.allFinite()) {
+    throw std::runtime_error("relative translation factor delta must be finite");
+  }
+  const auto existing = std::find_if(
+    relative_translation_factors_.begin(), relative_translation_factors_.end(),
+    [&factor](const SlidingWindowRelativeTranslationFactor & candidate) {
+      return candidate.from_stamp_ns == factor.from_stamp_ns &&
+             candidate.to_stamp_ns == factor.to_stamp_ns;
+    });
+  if (existing == relative_translation_factors_.end()) {
+    relative_translation_factors_.push_back(factor);
+  } else {
+    *existing = factor;
+    ++relative_translation_factor_replacement_count_;
+  }
+  enforce_window_size();
+}
+
 void SlidingWindowOptimizer::add_trajectory_smoothness_factor(
   const SlidingWindowTrajectorySmoothnessFactor & factor)
 {
@@ -1029,6 +1061,13 @@ size_t SlidingWindowOptimizer::enforce_window_size()
           return factor.stamp_ns == stamp_ns;
         }),
       se3_photometric_factors_.end());
+    relative_translation_factors_.erase(
+      std::remove_if(
+        relative_translation_factors_.begin(), relative_translation_factors_.end(),
+        [stamp_ns](const SlidingWindowRelativeTranslationFactor & factor) {
+          return factor.from_stamp_ns == stamp_ns || factor.to_stamp_ns == stamp_ns;
+        }),
+      relative_translation_factors_.end());
     smoothness_factors_.erase(
       std::remove_if(
         smoothness_factors_.begin(), smoothness_factors_.end(),
@@ -1062,7 +1101,8 @@ size_t SlidingWindowOptimizer::prune_marginalized_factor_references()
     const size_t removed =
       imu_factors_.size() + pose_priors_.size() + state_priors_.size() + dense_priors_.size() +
       point_factors_.size() + plane_factors_.size() + visual_factors_.size() +
-      se3_photometric_factors_.size() + smoothness_factors_.size();
+      se3_photometric_factors_.size() + relative_translation_factors_.size() +
+      smoothness_factors_.size();
     imu_factors_.clear();
     pose_priors_.clear();
     state_priors_.clear();
@@ -1071,6 +1111,7 @@ size_t SlidingWindowOptimizer::prune_marginalized_factor_references()
     plane_factors_.clear();
     visual_factors_.clear();
     se3_photometric_factors_.clear();
+    relative_translation_factors_.clear();
     smoothness_factors_.clear();
     return removed;
   }
@@ -1125,6 +1166,12 @@ size_t SlidingWindowOptimizer::prune_marginalized_factor_references()
     se3_photometric_factors_,
     [before_active_window](const SlidingWindowSe3PhotometricFactor & factor) {
       return before_active_window(factor.stamp_ns);
+    });
+  removed += erase_and_count(
+    relative_translation_factors_,
+    [before_active_window](const SlidingWindowRelativeTranslationFactor & factor) {
+      return before_active_window(factor.from_stamp_ns) ||
+             before_active_window(factor.to_stamp_ns);
     });
   removed += erase_and_count(
     smoothness_factors_,
@@ -1189,6 +1236,7 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     imu_factors_.size() * 15U + pose_priors_.size() * 6U + state_priors_.size() * 15U +
     dense_priors_.size() * 30U + point_factors_.size() * 300U + plane_factors_.size() * 100U +
     visual_factors_.size() * 2U + se3_photometric_factors_.size() * 6U +
+    relative_translation_factors_.size() * 3U +
     smoothness_factors_.size() * kSmoothnessResidualDof);
 
   auto append = [&values, breakdown](
@@ -1372,6 +1420,22 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     append(
       std::sqrt(factor.weight * robust_weight) * whitened_residual,
       &SlidingWindowCostBreakdown::se3_photometric_factor_cost);
+  }
+
+  for (const auto & factor : relative_translation_factors_) {
+    const int from = find_local(factor.from_stamp_ns);
+    const int to = find_local(factor.to_stamp_ns);
+    if (from < 0 || to < 0) {
+      continue;
+    }
+    const Eigen::Vector3d residual =
+      states[static_cast<size_t>(to)].p_w_i -
+      states[static_cast<size_t>(from)].p_w_i -
+      factor.delta_p_w;
+    const double robust_weight = huber_weight(residual.norm(), factor.huber_delta_m);
+    append(
+      std::sqrt(factor.weight * robust_weight) * residual,
+      &SlidingWindowCostBreakdown::relative_translation_factor_cost);
   }
 
   for (const auto & factor : smoothness_factors_) {
@@ -1701,6 +1765,34 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
     row += 6;
   }
 
+  for (const auto & factor : relative_translation_factors_) {
+    const int from = find_local(factor.from_stamp_ns);
+    const int to = find_local(factor.to_stamp_ns);
+    if (from < 0 || to < 0) {
+      continue;
+    }
+    if (!rows_available(row, 3)) {
+      return fallback_to_numeric();
+    }
+    const Eigen::Vector3d residual =
+      states[static_cast<size_t>(to)].p_w_i -
+      states[static_cast<size_t>(from)].p_w_i -
+      factor.delta_p_w;
+    const double scale = std::sqrt(
+      factor.weight * huber_weight(residual.norm(), factor.huber_delta_m));
+    const Eigen::Index from_offset = variable_offsets[static_cast<size_t>(from)];
+    const Eigen::Index to_offset = variable_offsets[static_cast<size_t>(to)];
+    if (from_offset >= 0) {
+      jacobian.template block<3, 3>(row, from_offset + 6) =
+        -scale * Eigen::Matrix3d::Identity();
+    }
+    if (to_offset >= 0) {
+      jacobian.template block<3, 3>(row, to_offset + 6) =
+        scale * Eigen::Matrix3d::Identity();
+    }
+    row += 3;
+  }
+
   for (const auto & factor : smoothness_factors_) {
     const int previous = find_local(factor.previous_stamp_ns);
     const int current = find_local(factor.current_stamp_ns);
@@ -1931,6 +2023,11 @@ size_t SlidingWindowOptimizer::count_orphan_factors() const
       ++count;
     }
   }
+  for (const auto & factor : relative_translation_factors_) {
+    if (missing_state(factor.from_stamp_ns) || missing_state(factor.to_stamp_ns)) {
+      ++count;
+    }
+  }
   for (const auto & factor : smoothness_factors_) {
     if (missing_state(factor.previous_stamp_ns) || missing_state(factor.current_stamp_ns) ||
       missing_state(factor.next_stamp_ns))
@@ -2059,12 +2156,15 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
   summary.plane_factor_count = plane_factors_.size();
   summary.visual_factor_count = visual_factors_.size();
   summary.se3_photometric_factor_count = se3_photometric_factors_.size();
+  summary.relative_translation_factor_count = relative_translation_factors_.size();
   summary.smoothness_factor_count = smoothness_factors_.size();
   summary.imu_factor_replacement_count = imu_factor_replacement_count_;
   summary.point_factor_replacement_count = point_factor_replacement_count_;
   summary.plane_factor_replacement_count = plane_factor_replacement_count_;
   summary.visual_factor_replacement_count = visual_factor_replacement_count_;
   summary.se3_photometric_factor_replacement_count = se3_photometric_factor_replacement_count_;
+  summary.relative_translation_factor_replacement_count =
+    relative_translation_factor_replacement_count_;
   summary.smoothness_factor_replacement_count = smoothness_factor_replacement_count_;
   summary.orphan_factor_count = count_orphan_factors();
   if (states_.size() >= 2U) {
@@ -2221,6 +2321,7 @@ SlidingWindowSummary SlidingWindowOptimizer::optimize()
       summary.plane_factor_cost = breakdown.plane_factor_cost;
       summary.visual_factor_cost = breakdown.visual_factor_cost;
       summary.se3_photometric_factor_cost = breakdown.se3_photometric_factor_cost;
+      summary.relative_translation_factor_cost = breakdown.relative_translation_factor_cost;
       summary.smoothness_factor_cost = breakdown.smoothness_factor_cost;
     };
   refresh_dense_prior_summary();

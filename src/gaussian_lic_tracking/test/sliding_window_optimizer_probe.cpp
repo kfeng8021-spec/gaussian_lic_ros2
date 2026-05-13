@@ -92,6 +92,39 @@ int main()
     std::cerr << "sliding window optimizer did not gate an over-conditioned normal equation\n";
     return 1;
   }
+
+  gaussian_lic_tracking::SlidingWindowOptimizer relative_optimizer;
+  gaussian_lic_tracking::SlidingWindowState relative_start;
+  relative_start.stamp_ns = 0;
+  relative_start.fixed = true;
+  relative_optimizer.add_or_update_state(relative_start);
+  gaussian_lic_tracking::SlidingWindowState relative_end;
+  relative_end.stamp_ns = dt_ns;
+  relative_end.p_w_i = Eigen::Vector3d{0.1, -0.2, 0.05};
+  relative_optimizer.add_or_update_state(relative_end);
+  gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor relative_factor;
+  relative_factor.from_stamp_ns = relative_start.stamp_ns;
+  relative_factor.to_stamp_ns = relative_end.stamp_ns;
+  relative_factor.delta_p_w = Eigen::Vector3d{0.4, -0.1, 0.2};
+  relative_factor.weight = 25.0;
+  relative_factor.huber_delta_m = 0.0;
+  relative_optimizer.add_relative_translation_factor(relative_factor);
+  const auto relative_summary = relative_optimizer.optimize();
+  gaussian_lic_tracking::SlidingWindowState relative_optimized;
+  if (!relative_optimizer.get_state(relative_end.stamp_ns, relative_optimized)) {
+    std::cerr << "relative translation endpoint is missing\n";
+    return 1;
+  }
+  const double relative_error =
+    (relative_optimized.p_w_i - relative_factor.delta_p_w).norm();
+  if (!relative_summary.converged ||
+    relative_summary.relative_translation_factor_count != 1U ||
+    relative_summary.relative_translation_factor_cost >= relative_summary.initial_cost ||
+    relative_error > 1.0e-8)
+  {
+    std::cerr << "relative translation BA factor failed, error=" << relative_error << "\n";
+    return 1;
+  }
   std::cout << "sliding_window_optimizer_probe OK\n";
   return 0;
 }
