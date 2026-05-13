@@ -1428,10 +1428,13 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
     if (from < 0 || to < 0) {
       continue;
     }
+    const Eigen::Vector3d predicted_delta_p =
+      factor.translation_in_from_frame ?
+      states[static_cast<size_t>(from)].q_w_i.conjugate() *
+      (states[static_cast<size_t>(to)].p_w_i - states[static_cast<size_t>(from)].p_w_i) :
+      states[static_cast<size_t>(to)].p_w_i - states[static_cast<size_t>(from)].p_w_i;
     const Eigen::Vector3d residual =
-      states[static_cast<size_t>(to)].p_w_i -
-      states[static_cast<size_t>(from)].p_w_i -
-      factor.delta_p_w;
+      predicted_delta_p - factor.delta_p_w;
     const double robust_weight = huber_weight(residual.norm(), factor.huber_delta_m);
     append(
       std::sqrt(factor.weight * robust_weight) * residual,
@@ -1786,21 +1789,32 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
     if (!rows_available(row, 3)) {
       return fallback_to_numeric();
     }
-    const Eigen::Vector3d residual =
-      states[static_cast<size_t>(to)].p_w_i -
-      states[static_cast<size_t>(from)].p_w_i -
-      factor.delta_p_w;
+    const Eigen::Vector3d predicted_delta_p =
+      factor.translation_in_from_frame ?
+      states[static_cast<size_t>(from)].q_w_i.conjugate() *
+      (states[static_cast<size_t>(to)].p_w_i - states[static_cast<size_t>(from)].p_w_i) :
+      states[static_cast<size_t>(to)].p_w_i - states[static_cast<size_t>(from)].p_w_i;
+    const Eigen::Vector3d residual = predicted_delta_p - factor.delta_p_w;
     const double scale = std::sqrt(
       factor.weight * huber_weight(residual.norm(), factor.huber_delta_m));
     const Eigen::Index from_offset = variable_offsets[static_cast<size_t>(from)];
     const Eigen::Index to_offset = variable_offsets[static_cast<size_t>(to)];
-    if (from_offset >= 0) {
-      jacobian.template block<3, 3>(row, from_offset + 6) =
-        -scale * Eigen::Matrix3d::Identity();
-    }
-    if (to_offset >= 0) {
-      jacobian.template block<3, 3>(row, to_offset + 6) =
-        scale * Eigen::Matrix3d::Identity();
+    if (factor.translation_in_from_frame) {
+      if (from_offset >= 0) {
+        mark_numeric(row, 3, from_offset, 9);
+      }
+      if (to_offset >= 0) {
+        mark_numeric(row, 3, to_offset + 6, 3);
+      }
+    } else {
+      if (from_offset >= 0) {
+        jacobian.template block<3, 3>(row, from_offset + 6) =
+          -scale * Eigen::Matrix3d::Identity();
+      }
+      if (to_offset >= 0) {
+        jacobian.template block<3, 3>(row, to_offset + 6) =
+          scale * Eigen::Matrix3d::Identity();
+      }
     }
     row += 3;
     if (factor.rotation_weight > 0.0) {

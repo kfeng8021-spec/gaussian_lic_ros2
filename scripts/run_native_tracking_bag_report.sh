@@ -93,11 +93,13 @@ SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT=0.1
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR=false
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT=0.0
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M=0.1
+SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME=false
 SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT=0.0
 SLIDING_WINDOW_RELATIVE_ROTATION_HUBER_DELTA_RAD=0.05
 ENABLE_SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_FACTOR=false
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_WEIGHT=0.0
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M=0.15
+SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME=false
 SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT=0.0
 SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD=0.08
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S=0.45
@@ -253,6 +255,10 @@ Options:
                                Weight for the multi-hop relative translation factor. Default: 0.0.
   --sliding-window-multihop-relative-translation-huber-delta-m M
                                Huber delta for the multi-hop relative translation factor. Default: 0.15.
+  --sliding-window-relative-translation-in-from-frame
+                               Compare adjacent relative translation in the source IMU frame instead of the world frame. Default: disabled.
+  --sliding-window-multihop-relative-translation-in-from-frame
+                               Compare multi-hop relative translation in the source IMU frame instead of the world frame. Default: disabled.
   --sliding-window-relative-rotation-weight W
                                Optional adjacent relative rotation weight attached to the relative translation factor. Default: 0.0.
   --sliding-window-relative-rotation-huber-delta-rad R
@@ -896,6 +902,10 @@ while [[ $# -gt 0 ]]; do
       SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M="$2"
       shift 2
       ;;
+    --sliding-window-relative-translation-in-from-frame)
+      SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME=true
+      shift
+      ;;
     --sliding-window-relative-rotation-weight)
       SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT="$2"
       shift 2
@@ -915,6 +925,10 @@ while [[ $# -gt 0 ]]; do
     --sliding-window-multihop-relative-translation-huber-delta-m)
       SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M="$2"
       shift 2
+      ;;
+    --sliding-window-multihop-relative-translation-in-from-frame)
+      SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME=true
+      shift
       ;;
     --sliding-window-multihop-relative-rotation-weight)
       SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT="$2"
@@ -1536,11 +1550,13 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   enable_sliding_window_relative_translation_factor:="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
   sliding_window_relative_translation_weight:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
   sliding_window_relative_translation_huber_delta_m:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
+  sliding_window_relative_translation_in_from_frame:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME}" \
   sliding_window_relative_rotation_weight:="${SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT}" \
   sliding_window_relative_rotation_huber_delta_rad:="${SLIDING_WINDOW_RELATIVE_ROTATION_HUBER_DELTA_RAD}" \
   enable_sliding_window_multihop_relative_translation_factor:="${ENABLE_SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_FACTOR}" \
   sliding_window_multihop_relative_translation_weight:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_WEIGHT}" \
   sliding_window_multihop_relative_translation_huber_delta_m:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
+  sliding_window_multihop_relative_translation_in_from_frame:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME}" \
   sliding_window_multihop_relative_rotation_weight:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT}" \
   sliding_window_multihop_relative_rotation_huber_delta_rad:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD}" \
   sliding_window_multihop_relative_translation_min_dt_s:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S}" \
@@ -1721,11 +1737,13 @@ SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
+SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME}" \
 SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT}" \
 SLIDING_WINDOW_RELATIVE_ROTATION_HUBER_DELTA_RAD_REPORT="${SLIDING_WINDOW_RELATIVE_ROTATION_HUBER_DELTA_RAD}" \
 ENABLE_SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_FACTOR}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
+SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S}" \
@@ -1968,6 +1986,9 @@ sliding_window_relative_translation_weight = float(
 sliding_window_relative_translation_huber_delta_m = float(
     os.environ["SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT"]
 )
+sliding_window_relative_translation_in_from_frame = (
+    os.environ["SLIDING_WINDOW_RELATIVE_TRANSLATION_IN_FROM_FRAME_REPORT"].lower() == "true"
+)
 sliding_window_relative_rotation_weight = float(
     os.environ["SLIDING_WINDOW_RELATIVE_ROTATION_WEIGHT_REPORT"]
 )
@@ -1982,6 +2003,12 @@ sliding_window_multihop_relative_translation_weight = float(
 )
 sliding_window_multihop_relative_translation_huber_delta_m = float(
     os.environ["SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT"]
+)
+sliding_window_multihop_relative_translation_in_from_frame = (
+    os.environ[
+        "SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_IN_FROM_FRAME_REPORT"
+    ].lower()
+    == "true"
 )
 sliding_window_multihop_relative_rotation_weight = float(
     os.environ["SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_WEIGHT_REPORT"]
@@ -2429,6 +2456,9 @@ report = {
         "sliding_window_relative_translation_huber_delta_m": (
             sliding_window_relative_translation_huber_delta_m
         ),
+        "sliding_window_relative_translation_in_from_frame": (
+            sliding_window_relative_translation_in_from_frame
+        ),
         "sliding_window_relative_rotation_weight": (
             sliding_window_relative_rotation_weight
         ),
@@ -2443,6 +2473,9 @@ report = {
         ),
         "sliding_window_multihop_relative_translation_huber_delta_m": (
             sliding_window_multihop_relative_translation_huber_delta_m
+        ),
+        "sliding_window_multihop_relative_translation_in_from_frame": (
+            sliding_window_multihop_relative_translation_in_from_frame
         ),
         "sliding_window_multihop_relative_rotation_weight": (
             sliding_window_multihop_relative_rotation_weight

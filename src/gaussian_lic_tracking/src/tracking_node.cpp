@@ -609,6 +609,8 @@ public:
     sliding_window_relative_translation_huber_delta_m_ = finite_nonnegative_parameter(
       "sliding_window_relative_translation_huber_delta_m",
       declare_parameter<double>("sliding_window_relative_translation_huber_delta_m", 0.1));
+    sliding_window_relative_translation_in_from_frame_ =
+      declare_parameter<bool>("sliding_window_relative_translation_in_from_frame", false);
     sliding_window_relative_rotation_weight_ = finite_nonnegative_parameter(
       "sliding_window_relative_rotation_weight",
       declare_parameter<double>("sliding_window_relative_rotation_weight", 0.0));
@@ -623,6 +625,8 @@ public:
     sliding_window_multihop_relative_translation_huber_delta_m_ = finite_nonnegative_parameter(
       "sliding_window_multihop_relative_translation_huber_delta_m",
       declare_parameter<double>("sliding_window_multihop_relative_translation_huber_delta_m", 0.15));
+    sliding_window_multihop_relative_translation_in_from_frame_ =
+      declare_parameter<bool>("sliding_window_multihop_relative_translation_in_from_frame", false);
     sliding_window_multihop_relative_rotation_weight_ = finite_nonnegative_parameter(
       "sliding_window_multihop_relative_rotation_weight",
       declare_parameter<double>("sliding_window_multihop_relative_rotation_weight", 0.0));
@@ -1653,9 +1657,12 @@ private:
         gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor factor;
         factor.from_stamp_ns = previous_pose.stamp_ns;
         factor.to_stamp_ns = tracking_pose.stamp_ns;
-        factor.delta_p_w = raw_delta_p_w;
+        factor.delta_p_w = sliding_window_relative_translation_in_from_frame_
+          ? previous_pose.q_w_i.conjugate() * raw_delta_p_w
+          : raw_delta_p_w;
         factor.delta_q_from_to =
           (previous_pose.q_w_i.conjugate() * tracking_pose.q_w_i).normalized();
+        factor.translation_in_from_frame = sliding_window_relative_translation_in_from_frame_;
         factor.weight = sliding_window_relative_translation_weight_;
         factor.huber_delta_m = sliding_window_relative_translation_huber_delta_m_;
         factor.rotation_weight = sliding_window_relative_rotation_weight_;
@@ -2002,9 +2009,13 @@ private:
       gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor factor;
       factor.from_stamp_ns = history_pose.stamp_ns;
       factor.to_stamp_ns = pre_ba_pose.stamp_ns;
-      factor.delta_p_w = delta_p_w;
+      factor.delta_p_w = sliding_window_multihop_relative_translation_in_from_frame_
+        ? history_pose.q_w_i.conjugate() * delta_p_w
+        : delta_p_w;
       factor.delta_q_from_to =
         (history_pose.q_w_i.conjugate() * pre_ba_pose.q_w_i).normalized();
+      factor.translation_in_from_frame =
+        sliding_window_multihop_relative_translation_in_from_frame_;
       factor.weight = sliding_window_multihop_relative_translation_weight_;
       factor.huber_delta_m = sliding_window_multihop_relative_translation_huber_delta_m_;
       factor.rotation_weight = sliding_window_multihop_relative_rotation_weight_;
@@ -4696,11 +4707,13 @@ private:
   bool enable_sliding_window_relative_translation_factor_{false};
   double sliding_window_relative_translation_weight_{0.0};
   double sliding_window_relative_translation_huber_delta_m_{0.1};
+  bool sliding_window_relative_translation_in_from_frame_{false};
   double sliding_window_relative_rotation_weight_{0.0};
   double sliding_window_relative_rotation_huber_delta_rad_{0.05};
   bool enable_sliding_window_multihop_relative_translation_factor_{false};
   double sliding_window_multihop_relative_translation_weight_{0.0};
   double sliding_window_multihop_relative_translation_huber_delta_m_{0.15};
+  bool sliding_window_multihop_relative_translation_in_from_frame_{false};
   double sliding_window_multihop_relative_rotation_weight_{0.0};
   double sliding_window_multihop_relative_rotation_huber_delta_rad_{0.08};
   double sliding_window_multihop_relative_translation_min_dt_s_{0.45};

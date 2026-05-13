@@ -134,6 +134,7 @@ struct SlidingWindowRelativeTranslationFactor
   int64_t to_stamp_ns{0};
   Eigen::Vector3d delta_p_w{Eigen::Vector3d::Zero()};
   Eigen::Quaterniond delta_q_from_to{Eigen::Quaterniond::Identity()};
+  bool translation_in_from_frame{false};
   double weight{1.0};
   double huber_delta_m{0.0};
   double rotation_weight{0.0};

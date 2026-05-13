@@ -133,6 +133,56 @@ int main()
               << relative_error << " rotation_error=" << relative_rotation_error << "\n";
     return 1;
   }
+
+  gaussian_lic_tracking::SlidingWindowOptimizer local_relative_optimizer;
+  gaussian_lic_tracking::SlidingWindowState local_start;
+  local_start.stamp_ns = 0;
+  local_start.fixed = true;
+  local_start.q_w_i =
+    Eigen::Quaterniond(Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ()));
+  local_start.p_w_i = Eigen::Vector3d{1.0, -2.0, 0.5};
+  local_relative_optimizer.add_or_update_state(local_start);
+  gaussian_lic_tracking::SlidingWindowState local_end;
+  local_end.stamp_ns = dt_ns;
+  local_end.p_w_i = local_start.p_w_i;
+  local_end.q_w_i = local_start.q_w_i;
+  local_relative_optimizer.add_or_update_state(local_end);
+  gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor local_factor;
+  local_factor.from_stamp_ns = local_start.stamp_ns;
+  local_factor.to_stamp_ns = local_end.stamp_ns;
+  local_factor.delta_p_w = Eigen::Vector3d{0.2, -0.05, 0.1};
+  local_factor.delta_q_from_to =
+    Eigen::Quaterniond(Eigen::AngleAxisd(-0.1, Eigen::Vector3d::UnitY()));
+  local_factor.translation_in_from_frame = true;
+  local_factor.weight = 25.0;
+  local_factor.huber_delta_m = 0.0;
+  local_factor.rotation_weight = 25.0;
+  local_factor.rotation_huber_delta_rad = 0.0;
+  local_relative_optimizer.add_relative_translation_factor(local_factor);
+  const auto local_relative_summary = local_relative_optimizer.optimize();
+  gaussian_lic_tracking::SlidingWindowState local_relative_optimized;
+  if (!local_relative_optimizer.get_state(local_end.stamp_ns, local_relative_optimized)) {
+    std::cerr << "local relative endpoint is missing\n";
+    return 1;
+  }
+  const Eigen::Vector3d expected_local_p =
+    local_start.p_w_i + local_start.q_w_i * local_factor.delta_p_w;
+  const Eigen::Quaterniond expected_local_q =
+    (local_start.q_w_i * local_factor.delta_q_from_to).normalized();
+  const double local_relative_error =
+    (local_relative_optimized.p_w_i - expected_local_p).norm();
+  const double local_relative_rotation_error =
+    local_relative_optimized.q_w_i.angularDistance(expected_local_q);
+  if (!local_relative_summary.converged ||
+    local_relative_summary.relative_translation_factor_count != 1U ||
+    local_relative_error > 1.0e-8 ||
+    local_relative_rotation_error > 1.0e-8)
+  {
+    std::cerr << "local-frame relative BA factor failed, translation_error="
+              << local_relative_error << " rotation_error="
+              << local_relative_rotation_error << "\n";
+    return 1;
+  }
   std::cout << "sliding_window_optimizer_probe OK\n";
   return 0;
 }
