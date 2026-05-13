@@ -154,6 +154,7 @@ VISUAL_DEPTH_DILATION_PX=5
 VISUAL_PENDING_FACTOR_QUEUE_SIZE=128
 VISUAL_ALIGNMENT_WINDOW_WEIGHT=1.0
 SE3_PHOTOMETRIC_WINDOW_WEIGHT=0.5
+SE3_PHOTOMETRIC_MAX_SAMPLES=2000
 SE3_PHOTOMETRIC_MIN_SAMPLES=8
 SE3_PHOTOMETRIC_MIN_HESSIAN_RANK=3
 SE3_PHOTOMETRIC_MAX_HESSIAN_CONDITION=1000000000000.0
@@ -411,6 +412,8 @@ Options:
                                Sliding-window 2D visual alignment factor weight. Default: 1.0.
   --se3-photometric-window-weight W
                                Sliding-window SE3 photometric factor weight. Default: 0.5.
+  --se3-photometric-max-samples N
+                               Maximum sparse-depth samples used per SE3 photometric BA batch. Default: 2000.
   --se3-photometric-min-samples N
                                Minimum valid sparse-depth samples needed before adding an SE3 photometric BA factor. Default: 8.
   --se3-photometric-min-hessian-rank N
@@ -1022,6 +1025,10 @@ while [[ $# -gt 0 ]]; do
       SE3_PHOTOMETRIC_WINDOW_WEIGHT="$2"
       shift 2
       ;;
+    --se3-photometric-max-samples)
+      SE3_PHOTOMETRIC_MAX_SAMPLES="$2"
+      shift 2
+      ;;
     --se3-photometric-min-samples)
       SE3_PHOTOMETRIC_MIN_SAMPLES="$2"
       shift 2
@@ -1247,6 +1254,7 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   rendered_frame_cache_size:=64 \
   observed_frame_cache_size:=128 \
   visual_pending_factor_queue_size:="${VISUAL_PENDING_FACTOR_QUEUE_SIZE}" \
+  se3_photometric_max_samples:="${SE3_PHOTOMETRIC_MAX_SAMPLES}" \
   se3_photometric_min_samples:="${SE3_PHOTOMETRIC_MIN_SAMPLES}" \
   se3_photometric_min_hessian_rank:="${SE3_PHOTOMETRIC_MIN_HESSIAN_RANK}" \
   se3_photometric_max_hessian_condition:="${SE3_PHOTOMETRIC_MAX_HESSIAN_CONDITION}" \
@@ -1519,6 +1527,7 @@ REFERENCE_ERROR_BIN_COUNT_REPORT="${REFERENCE_ERROR_BIN_COUNT}" \
 REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MIN}" \
 REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MAX}" \
 REFERENCE_TIME_OFFSET_SWEEP_STEP_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_STEP}" \
+SE3_PHOTOMETRIC_MAX_SAMPLES_REPORT="${SE3_PHOTOMETRIC_MAX_SAMPLES}" \
 SE3_PHOTOMETRIC_USE_RENDERED_GRADIENT_REPORT="${SE3_PHOTOMETRIC_USE_RENDERED_GRADIENT}" \
 python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${MIN_POSES}" "${MIN_STATUS_SAMPLES}" "${MIN_POINT_FRAMES}" "${REQUIRE_BA_FEEDBACK}" \
@@ -1576,6 +1585,7 @@ visual_depth_max_dt_ns = int(sys.argv[14])
 visual_depth_dilation_px = int(sys.argv[15])
 visual_alignment_window_weight = float(sys.argv[16])
 se3_photometric_window_weight = float(sys.argv[17])
+se3_photometric_max_samples = int(os.environ["SE3_PHOTOMETRIC_MAX_SAMPLES_REPORT"])
 se3_photometric_min_samples = int(sys.argv[18])
 se3_photometric_min_hessian_rank = int(sys.argv[19])
 se3_photometric_max_hessian_condition = float(sys.argv[20])
@@ -1975,6 +1985,7 @@ report = {
         "visual_depth_dilation_px": visual_depth_dilation_px,
         "visual_alignment_window_weight": visual_alignment_window_weight,
         "se3_photometric_window_weight": se3_photometric_window_weight,
+        "se3_photometric_max_samples": se3_photometric_max_samples,
         "mapper_feedback_sync_tolerance_sec": mapper_feedback_sync_tolerance_sec,
         "visual_pending_factor_queue_size": visual_pending_factor_queue_size,
         "se3_photometric_min_samples": se3_photometric_min_samples,
