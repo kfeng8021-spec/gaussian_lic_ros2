@@ -159,6 +159,9 @@ REFERENCE_MAX_MEAN_M=1.5
 REFERENCE_MAX_ERROR_M=5.0
 REFERENCE_MAX_PATH_DRIFT=0.75
 REFERENCE_ERROR_BIN_COUNT=8
+REFERENCE_TIME_OFFSET_SWEEP_MIN=-0.5
+REFERENCE_TIME_OFFSET_SWEEP_MAX=0.5
+REFERENCE_TIME_OFFSET_SWEEP_STEP=0.1
 EXTERNAL_ODOMETRY_PRIOR_MAX_DT_NS=100000000
 EXTERNAL_ODOMETRY_PRIOR_TRANSLATION_WEIGHT=4.0
 EXTERNAL_ODOMETRY_PRIOR_ROTATION_WEIGHT=4.0
@@ -391,6 +394,8 @@ Options:
   --reference-max-path-drift R Max relative path-length drift. Default: 0.75.
   --reference-error-bin-count N
                                Number of time-ordered trajectory error bins archived in the reference comparison. Default: 8.
+  --reference-time-offset-sweep MIN MAX STEP
+                               Sweep current-trajectory timestamp offsets for diagnostics. Default: -0.5 0.5 0.1; use 0 0 0 to disable.
   --external-odometry-prior-max-dt-ns NS
                                Freshness window for optional external odometry BA prior. Default: 100000000.
   --external-odometry-prior-translation-weight W
@@ -980,6 +985,12 @@ while [[ $# -gt 0 ]]; do
       REFERENCE_ERROR_BIN_COUNT="$2"
       shift 2
       ;;
+    --reference-time-offset-sweep)
+      REFERENCE_TIME_OFFSET_SWEEP_MIN="$2"
+      REFERENCE_TIME_OFFSET_SWEEP_MAX="$3"
+      REFERENCE_TIME_OFFSET_SWEEP_STEP="$4"
+      shift 4
+      ;;
     --external-odometry-prior-max-dt-ns)
       EXTERNAL_ODOMETRY_PRIOR_MAX_DT_NS="$2"
       shift 2
@@ -1341,6 +1352,9 @@ POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M_REPORT="${POST_BA_STEP_GUARD_REJECT_T
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
 REFERENCE_ERROR_BIN_COUNT_REPORT="${REFERENCE_ERROR_BIN_COUNT}" \
+REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MIN}" \
+REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MAX}" \
+REFERENCE_TIME_OFFSET_SWEEP_STEP_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_STEP}" \
 python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${MIN_POSES}" "${MIN_STATUS_SAMPLES}" "${MIN_POINT_FRAMES}" "${REQUIRE_BA_FEEDBACK}" \
   "${REQUIRE_REFERENCE_TRAJECTORY}" "${MIN_REFERENCE_POSES}" "${REQUIRE_NONDEGENERATE_BA}" \
@@ -1509,6 +1523,9 @@ reference_max_mean_m = float(sys.argv[54])
 reference_max_error_m = float(sys.argv[55])
 reference_max_path_drift = float(sys.argv[56])
 reference_error_bin_count = int(os.environ["REFERENCE_ERROR_BIN_COUNT_REPORT"])
+reference_time_offset_sweep_min = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT"])
+reference_time_offset_sweep_max = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT"])
+reference_time_offset_sweep_step = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_STEP_REPORT"])
 has_external_reference_tum = reference_tum_path is not None and reference_tum_path.is_file() and reference_tum_path.stat().st_size > 0
 imu_linear_acceleration_scale = float(os.environ["IMU_LINEAR_ACCELERATION_SCALE_REPORT"])
 playback_rate = float(os.environ["PLAYBACK_RATE_REPORT"])
@@ -1763,6 +1780,11 @@ report = {
         "reference_max_error_m": reference_max_error_m,
         "reference_max_path_drift": reference_max_path_drift,
         "reference_error_bin_count": reference_error_bin_count,
+        "reference_time_offset_sweep": {
+            "min": reference_time_offset_sweep_min,
+            "max": reference_time_offset_sweep_max,
+            "step": reference_time_offset_sweep_step,
+        },
         "playback_rate": playback_rate,
         "playback_start_offset": playback_start_offset,
         "playback_clock_topics_all": playback_clock_topics_all,
@@ -1904,6 +1926,13 @@ if [[ -s "${REFERENCE_TUM}" && -s "${CURRENT_TUM}" ]]; then
   )
   if [[ "${REFERENCE_ERROR_BIN_COUNT}" != "0" ]]; then
     compare_cmd+=(--error-bin-count "${REFERENCE_ERROR_BIN_COUNT}")
+  fi
+  if [[ "${REFERENCE_TIME_OFFSET_SWEEP_STEP}" != "0" && "${REFERENCE_TIME_OFFSET_SWEEP_STEP}" != "0.0" ]]; then
+    compare_cmd+=(
+      --time-offset-sweep-min "${REFERENCE_TIME_OFFSET_SWEEP_MIN}"
+      --time-offset-sweep-max "${REFERENCE_TIME_OFFSET_SWEEP_MAX}"
+      --time-offset-sweep-step "${REFERENCE_TIME_OFFSET_SWEEP_STEP}"
+    )
   fi
   set +e
   "${compare_cmd[@]}"
