@@ -458,6 +458,12 @@ public:
     gaussian_snapshot_lidar_pose_correction_max_rotation_rad_ = finite_nonnegative_parameter(
       "gaussian_snapshot_lidar_pose_correction_max_rotation_rad",
       declare_parameter<double>("gaussian_snapshot_lidar_pose_correction_max_rotation_rad", 0.02));
+    gaussian_snapshot_lidar_pose_correction_min_match_ratio_ = finite_nonnegative_parameter(
+      "gaussian_snapshot_lidar_pose_correction_min_match_ratio",
+      declare_parameter<double>("gaussian_snapshot_lidar_pose_correction_min_match_ratio", 0.0));
+    gaussian_snapshot_lidar_pose_correction_max_mean_residual_m_ = finite_nonnegative_parameter(
+      "gaussian_snapshot_lidar_pose_correction_max_mean_residual_m",
+      declare_parameter<double>("gaussian_snapshot_lidar_pose_correction_max_mean_residual_m", 0.0));
     gaussian_snapshot_lidar_plane_factor_weight_ = finite_positive_parameter(
       "gaussian_snapshot_lidar_plane_factor_weight",
       declare_parameter<double>("gaussian_snapshot_lidar_plane_factor_weight", 1.0));
@@ -1990,11 +1996,13 @@ private:
     match_weights.reserve(source_w.capacity());
     double residual_weight_sum = 0.0;
     double residual_norm_sum = 0.0;
+    size_t finite_sample_count = 0U;
     for (size_t point_index = 0U; point_index < frame_points_i.size(); point_index += stride) {
       const auto & point_i = frame_points_i[point_index];
       if (!point_i.allFinite()) {
         continue;
       }
+      ++finite_sample_count;
       const Eigen::Vector3d point_w = q_w_i * point_i + predicted_pose.p_w_i;
       const auto nearest =
         gaussian_snapshot_.find_nearest(
@@ -2019,6 +2027,18 @@ private:
     }
     if (source_w.size() < static_cast<size_t>(lidar_min_points_) ||
       residual_weight_sum <= std::numeric_limits<double>::epsilon())
+    {
+      return correction;
+    }
+    const double match_ratio = finite_sample_count > 0U
+      ? static_cast<double>(source_w.size()) / static_cast<double>(finite_sample_count)
+      : 0.0;
+    if (match_ratio < gaussian_snapshot_lidar_pose_correction_min_match_ratio_) {
+      return correction;
+    }
+    const double mean_residual_m = residual_norm_sum / residual_weight_sum;
+    if (gaussian_snapshot_lidar_pose_correction_max_mean_residual_m_ > 0.0 &&
+      mean_residual_m > gaussian_snapshot_lidar_pose_correction_max_mean_residual_m_)
     {
       return correction;
     }
@@ -2086,7 +2106,7 @@ private:
 
     correction.applied = true;
     correction.matched_points = source_w.size();
-    correction.mean_residual_m = residual_norm_sum / residual_weight_sum;
+    correction.mean_residual_m = mean_residual_m;
     correction.delta_p_w = step_p;
     correction.delta_q = step_q;
     return correction;
@@ -4392,6 +4412,8 @@ private:
   double gaussian_snapshot_lidar_pose_correction_gain_{0.3};
   double gaussian_snapshot_lidar_pose_correction_max_translation_m_{0.05};
   double gaussian_snapshot_lidar_pose_correction_max_rotation_rad_{0.02};
+  double gaussian_snapshot_lidar_pose_correction_min_match_ratio_{0.0};
+  double gaussian_snapshot_lidar_pose_correction_max_mean_residual_m_{0.0};
   double gaussian_snapshot_lidar_plane_factor_weight_{1.0};
   double gaussian_snapshot_lidar_min_opacity_{0.01};
   double gaussian_snapshot_lidar_plane_min_anisotropy_{0.25};

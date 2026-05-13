@@ -238,6 +238,12 @@ def generate_launch_description():
     gaussian_snapshot_lidar_pose_correction_max_rotation_rad = LaunchConfiguration(
         "gaussian_snapshot_lidar_pose_correction_max_rotation_rad"
     )
+    gaussian_snapshot_lidar_pose_correction_min_match_ratio = LaunchConfiguration(
+        "gaussian_snapshot_lidar_pose_correction_min_match_ratio"
+    )
+    gaussian_snapshot_lidar_pose_correction_max_mean_residual_m = LaunchConfiguration(
+        "gaussian_snapshot_lidar_pose_correction_max_mean_residual_m"
+    )
     gaussian_snapshot_lidar_plane_factor_weight = LaunchConfiguration(
         "gaussian_snapshot_lidar_plane_factor_weight"
     )
@@ -475,6 +481,8 @@ def generate_launch_description():
                 "gaussian_snapshot_lidar_pose_correction_max_rotation_rad",
                 default_value="0.02",
             ),
+            DeclareLaunchArgument("gaussian_snapshot_lidar_pose_correction_min_match_ratio", default_value="0.0"),
+            DeclareLaunchArgument("gaussian_snapshot_lidar_pose_correction_max_mean_residual_m", default_value="0.0"),
             DeclareLaunchArgument("gaussian_snapshot_lidar_plane_factor_weight", default_value="1.0"),
             DeclareLaunchArgument("gaussian_snapshot_lidar_min_opacity", default_value="0.01"),
             DeclareLaunchArgument("gaussian_snapshot_lidar_plane_min_anisotropy", default_value="0.25"),
@@ -718,6 +726,12 @@ def generate_launch_description():
                         ),
                         "gaussian_snapshot_lidar_pose_correction_max_rotation_rad": (
                             gaussian_snapshot_lidar_pose_correction_max_rotation_rad
+                        ),
+                        "gaussian_snapshot_lidar_pose_correction_min_match_ratio": (
+                            gaussian_snapshot_lidar_pose_correction_min_match_ratio
+                        ),
+                        "gaussian_snapshot_lidar_pose_correction_max_mean_residual_m": (
+                            gaussian_snapshot_lidar_pose_correction_max_mean_residual_m
                         ),
                         "gaussian_snapshot_lidar_plane_factor_weight": (
                             gaussian_snapshot_lidar_plane_factor_weight
