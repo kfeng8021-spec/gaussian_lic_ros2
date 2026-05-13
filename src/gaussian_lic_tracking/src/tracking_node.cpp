@@ -2845,22 +2845,23 @@ private:
     return true;
   }
 
-  const PendingSe3PhotometricFactor * select_se3_photometric_pose_correction(
+  std::optional<size_t> select_se3_photometric_pose_correction_index(
     const int64_t stamp_ns) const
   {
     if (!enable_se3_photometric_pose_correction_ ||
       se3_photometric_pose_correction_gain_ <= 0.0 ||
       pending_visual_se3_photometric_factors_.empty())
     {
-      return nullptr;
+      return std::nullopt;
     }
 
     const int64_t max_dt_ns = se3_photometric_pose_correction_max_dt_ns_ > 0LL
       ? se3_photometric_pose_correction_max_dt_ns_
       : visual_factor_max_dt_ns_;
-    const PendingSe3PhotometricFactor * best = nullptr;
+    std::optional<size_t> best_index;
     int64_t best_delta_ns = std::numeric_limits<int64_t>::max();
-    for (const auto & pending : pending_visual_se3_photometric_factors_) {
+    for (size_t index = 0; index < pending_visual_se3_photometric_factors_.size(); ++index) {
+      const auto & pending = pending_visual_se3_photometric_factors_[index];
       if (last_applied_se3_photometric_pose_correction_stamp_ns_.has_value() &&
         pending.stamp_ns == last_applied_se3_photometric_pose_correction_stamp_ns_.value() &&
         pending.source_id == last_applied_se3_photometric_pose_correction_source_id_)
@@ -2869,24 +2870,25 @@ private:
       }
       const int64_t delta_ns = stamp_delta_ns(pending.stamp_ns, stamp_ns);
       if (delta_ns <= max_dt_ns && delta_ns < best_delta_ns) {
-        best = &pending;
+        best_index = index;
         best_delta_ns = delta_ns;
       }
     }
-    return best;
+    return best_index;
   }
 
   bool apply_se3_photometric_pose_correction(
     gaussian_lic_tracking::TrajectoryPose & tracking_pose)
   {
-    const auto * pending = select_se3_photometric_pose_correction(tracking_pose.stamp_ns);
-    if (pending == nullptr) {
+    const auto pending_index = select_se3_photometric_pose_correction_index(tracking_pose.stamp_ns);
+    if (!pending_index.has_value()) {
       return false;
     }
+    const auto pending = pending_visual_se3_photometric_factors_[pending_index.value()];
 
     Eigen::Matrix<double, 6, 1> body_delta =
       gaussian_lic_tracking::transform_camera_delta_to_body(
-      q_i_c_, p_i_c_, pending->linearization.gauss_newton_step);
+      q_i_c_, p_i_c_, pending.linearization.gauss_newton_step);
     if (!body_delta.allFinite()) {
       return false;
     }
@@ -2920,13 +2922,16 @@ private:
 
     tracking_pose.p_w_i += translation_delta;
     tracking_pose.q_w_i = (rotation_correction * tracking_pose.q_w_i).normalized();
+    pending_visual_se3_photometric_factors_.erase(
+      pending_visual_se3_photometric_factors_.begin() +
+      static_cast<std::deque<PendingSe3PhotometricFactor>::difference_type>(pending_index.value()));
     ++se3_photometric_pose_correction_count_;
     last_se3_photometric_pose_correction_stamp_delta_ns_ =
-      stamp_delta_ns(pending->stamp_ns, tracking_pose.stamp_ns);
+      stamp_delta_ns(pending.stamp_ns, tracking_pose.stamp_ns);
     last_se3_photometric_pose_correction_translation_m_ = translation_m;
     last_se3_photometric_pose_correction_rotation_rad_ = rotation_rad;
-    last_applied_se3_photometric_pose_correction_stamp_ns_ = pending->stamp_ns;
-    last_applied_se3_photometric_pose_correction_source_id_ = pending->source_id;
+    last_applied_se3_photometric_pose_correction_stamp_ns_ = pending.stamp_ns;
+    last_applied_se3_photometric_pose_correction_source_id_ = pending.source_id;
     return true;
   }
 
