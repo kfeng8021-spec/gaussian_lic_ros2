@@ -83,6 +83,8 @@ SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT=0.0
 SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT=0.0
 SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT=0.0
 SLIDING_WINDOW_BIAS_WEIGHT=1.0
+SLIDING_WINDOW_GYRO_BIAS_WEIGHT=1.0
+SLIDING_WINDOW_ACCEL_BIAS_WEIGHT=1.0
 SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT=2.0
 SLIDING_WINDOW_POSE_ROTATION_WEIGHT=2.0
 SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT=0.1
@@ -373,6 +375,10 @@ Options:
                                Optional insertion-time accel-bias anchor prior. Default: 0.0 disabled.
   --sliding-window-bias-weight W
                                IMU bias random-walk residual weight. Default: 1.0.
+  --sliding-window-gyro-bias-weight W
+                               Multiplier for gyro-bias random-walk residuals. Default: 1.0.
+  --sliding-window-accel-bias-weight W
+                               Multiplier for accel-bias random-walk residuals. Default: 1.0.
   --sliding-window-pose-translation-weight W
                                Pose prior translation weight. Default: 2.0.
   --sliding-window-pose-rotation-weight W
@@ -860,6 +866,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sliding-window-bias-weight)
       SLIDING_WINDOW_BIAS_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-gyro-bias-weight)
+      SLIDING_WINDOW_GYRO_BIAS_WEIGHT="$2"
+      shift 2
+      ;;
+    --sliding-window-accel-bias-weight)
+      SLIDING_WINDOW_ACCEL_BIAS_WEIGHT="$2"
       shift 2
       ;;
     --sliding-window-pose-translation-weight)
@@ -1540,6 +1554,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_gyro_bias_prior_weight:="${SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT}" \
   sliding_window_accel_bias_prior_weight:="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT}" \
   sliding_window_bias_weight:="${SLIDING_WINDOW_BIAS_WEIGHT}" \
+  sliding_window_gyro_bias_weight:="${SLIDING_WINDOW_GYRO_BIAS_WEIGHT}" \
+  sliding_window_accel_bias_weight:="${SLIDING_WINDOW_ACCEL_BIAS_WEIGHT}" \
   sliding_window_pose_translation_weight:="${SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT}" \
   sliding_window_pose_rotation_weight:="${SLIDING_WINDOW_POSE_ROTATION_WEIGHT}" \
   sliding_window_smoothness_rotation_weight:="${SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT}" \
@@ -1734,6 +1750,9 @@ SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOO
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
 SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT}" \
 SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT}" \
+SLIDING_WINDOW_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_BIAS_WEIGHT}" \
+SLIDING_WINDOW_GYRO_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_WEIGHT}" \
+SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_WEIGHT}" \
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
@@ -1977,6 +1996,9 @@ sliding_window_gyro_bias_prior_weight = float(
 sliding_window_accel_bias_prior_weight = float(
     os.environ["SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT"]
 )
+sliding_window_bias_weight = float(os.environ["SLIDING_WINDOW_BIAS_WEIGHT_REPORT"])
+sliding_window_gyro_bias_weight = float(os.environ["SLIDING_WINDOW_GYRO_BIAS_WEIGHT_REPORT"])
+sliding_window_accel_bias_weight = float(os.environ["SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT"])
 enable_sliding_window_relative_translation_factor = (
     os.environ["ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT"] == "true"
 )
@@ -2447,6 +2469,9 @@ report = {
         "sliding_window_imu_velocity_prior_weight": sliding_window_imu_velocity_prior_weight,
         "sliding_window_gyro_bias_prior_weight": sliding_window_gyro_bias_prior_weight,
         "sliding_window_accel_bias_prior_weight": sliding_window_accel_bias_prior_weight,
+        "sliding_window_bias_weight": sliding_window_bias_weight,
+        "sliding_window_gyro_bias_weight": sliding_window_gyro_bias_weight,
+        "sliding_window_accel_bias_weight": sliding_window_accel_bias_weight,
         "enable_sliding_window_relative_translation_factor": (
             enable_sliding_window_relative_translation_factor
         ),

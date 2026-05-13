@@ -54,6 +54,8 @@ struct SlidingWindowImuFactor
   double velocity_weight{1.0};
   double position_weight{1.0};
   double bias_weight{1.0};
+  double gyro_bias_weight{1.0};
+  double accel_bias_weight{1.0};
   Eigen::Matrix<double, 9, 9> sqrt_information{Eigen::Matrix<double, 9, 9>::Zero()};
 };
 

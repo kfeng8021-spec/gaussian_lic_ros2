@@ -38,6 +38,8 @@ int main()
   factor.preintegration = preintegration;
   factor.weight = 1.0;
   factor.bias_weight = 9.0;
+  factor.gyro_bias_weight = 4.0;
+  factor.accel_bias_weight = 0.25;
   optimizer.add_imu_factor(factor);
 
   const auto normal = optimizer.build_normal_equation(0.0);
@@ -47,11 +49,12 @@ int main()
   }
 
   Eigen::MatrixXd expected = Eigen::MatrixXd::Zero(6, 30);
-  const double scale = std::sqrt(factor.bias_weight);
-  expected.block<3, 3>(0, 9) = -scale * Eigen::Matrix3d::Identity();
-  expected.block<3, 3>(3, 12) = -scale * Eigen::Matrix3d::Identity();
-  expected.block<3, 3>(0, 24) = scale * Eigen::Matrix3d::Identity();
-  expected.block<3, 3>(3, 27) = scale * Eigen::Matrix3d::Identity();
+  const double gyro_scale = std::sqrt(factor.bias_weight * factor.gyro_bias_weight);
+  const double accel_scale = std::sqrt(factor.bias_weight * factor.accel_bias_weight);
+  expected.block<3, 3>(0, 9) = -gyro_scale * Eigen::Matrix3d::Identity();
+  expected.block<3, 3>(3, 12) = -accel_scale * Eigen::Matrix3d::Identity();
+  expected.block<3, 3>(0, 24) = gyro_scale * Eigen::Matrix3d::Identity();
+  expected.block<3, 3>(3, 27) = accel_scale * Eigen::Matrix3d::Identity();
 
   const Eigen::MatrixXd actual = normal.jacobian.block(9, 0, 6, 30);
   const double max_abs_error = (actual - expected).cwiseAbs().maxCoeff();

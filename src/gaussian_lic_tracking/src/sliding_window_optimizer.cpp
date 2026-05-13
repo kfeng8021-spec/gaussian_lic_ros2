@@ -606,9 +606,11 @@ void SlidingWindowOptimizer::add_imu_factor(const SlidingWindowImuFactor & facto
   }
   if (!std::isfinite(factor.weight) || !std::isfinite(factor.rotation_weight) ||
     !std::isfinite(factor.velocity_weight) || !std::isfinite(factor.position_weight) ||
-    !std::isfinite(factor.bias_weight) || factor.weight <= 0.0 ||
+    !std::isfinite(factor.bias_weight) || !std::isfinite(factor.gyro_bias_weight) ||
+    !std::isfinite(factor.accel_bias_weight) || factor.weight <= 0.0 ||
     factor.rotation_weight < 0.0 || factor.velocity_weight < 0.0 ||
-    factor.position_weight < 0.0 || factor.bias_weight < 0.0)
+    factor.position_weight < 0.0 || factor.bias_weight < 0.0 ||
+    factor.gyro_bias_weight < 0.0 || factor.accel_bias_weight < 0.0)
   {
     throw std::runtime_error("IMU factor weights must be finite and valid");
   }
@@ -617,7 +619,9 @@ void SlidingWindowOptimizer::add_imu_factor(const SlidingWindowImuFactor & facto
   }
   if (!has_full_imu_sqrt_information(factor) &&
     factor.rotation_weight == 0.0 && factor.velocity_weight == 0.0 &&
-    factor.position_weight == 0.0 && factor.bias_weight == 0.0)
+    factor.position_weight == 0.0 &&
+    factor.bias_weight * factor.gyro_bias_weight == 0.0 &&
+    factor.bias_weight * factor.accel_bias_weight == 0.0)
   {
     throw std::runtime_error("IMU factor must keep at least one residual block active");
   }
@@ -1284,7 +1288,11 @@ Eigen::VectorXd SlidingWindowOptimizer::build_residual(
       states[static_cast<size_t>(to)].gyro_bias - states[static_cast<size_t>(from)].gyro_bias;
     bias_residual.template segment<3>(3) =
       states[static_cast<size_t>(to)].accel_bias - states[static_cast<size_t>(from)].accel_bias;
-    append(std::sqrt(factor.bias_weight) * bias_residual, &SlidingWindowCostBreakdown::imu_cost);
+    bias_residual.template segment<3>(0) *=
+      std::sqrt(factor.bias_weight * factor.gyro_bias_weight);
+    bias_residual.template segment<3>(3) *=
+      std::sqrt(factor.bias_weight * factor.accel_bias_weight);
+    append(bias_residual, &SlidingWindowCostBreakdown::imu_cost);
   }
 
   for (const auto & prior : pose_priors_) {
@@ -1554,7 +1562,8 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
     if (!rows_available(row + 9, 6)) {
       return fallback_to_numeric();
     }
-    const double bias_scale = std::sqrt(factor.bias_weight);
+    const double gyro_bias_scale = std::sqrt(factor.bias_weight * factor.gyro_bias_weight);
+    const double accel_bias_scale = std::sqrt(factor.bias_weight * factor.accel_bias_weight);
     const Eigen::Index from_offset = variable_offsets[static_cast<size_t>(from)];
     const Eigen::Index to_offset = variable_offsets[static_cast<size_t>(to)];
     if (from_offset >= 0) {
@@ -1575,9 +1584,9 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
       jacobian.block(row, from_offset, 9, static_cast<Eigen::Index>(kStateDof)) =
         imu_sqrt_information * raw_jacobian;
       jacobian.template block<3, 3>(row + 9, from_offset + 9) =
-        -bias_scale * Eigen::Matrix3d::Identity();
+        -gyro_bias_scale * Eigen::Matrix3d::Identity();
       jacobian.template block<3, 3>(row + 12, from_offset + 12) =
-        -bias_scale * Eigen::Matrix3d::Identity();
+        -accel_bias_scale * Eigen::Matrix3d::Identity();
     }
     if (to_offset >= 0) {
       Eigen::Matrix<double, 9, 15> raw_jacobian = Eigen::Matrix<double, 9, 15>::Zero();
@@ -1587,9 +1596,9 @@ std::vector<SlidingWindowOptimizer::NumericJacobianBlock> SlidingWindowOptimizer
       jacobian.block(row, to_offset, 9, static_cast<Eigen::Index>(kStateDof)) =
         imu_sqrt_information * raw_jacobian;
       jacobian.template block<3, 3>(row + 9, to_offset + 9) =
-        bias_scale * Eigen::Matrix3d::Identity();
+        gyro_bias_scale * Eigen::Matrix3d::Identity();
       jacobian.template block<3, 3>(row + 12, to_offset + 12) =
-        bias_scale * Eigen::Matrix3d::Identity();
+        accel_bias_scale * Eigen::Matrix3d::Identity();
     }
     row += 15;
   }
