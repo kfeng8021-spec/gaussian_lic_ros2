@@ -49,6 +49,10 @@ POST_BA_STEP_GUARD_MIN_VISUAL_INLIER_RATIO=0.85
 POST_BA_STEP_GUARD_MAX_VISUAL_RESIDUAL=0.3
 POST_BA_STEP_GUARD_MIN_VISUAL_COVERAGE_TILES=8
 POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M=0.0
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M=0.0
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE=0.85
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M=0.05
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M=0.0
 TRACKING_STEP_GUARD_VELOCITY_SCALE=0.0
 TRACKING_STEP_GUARD_ACCELERATION_MPS2=0.0
 TRACKING_STEP_GUARD_MAX_VELOCITY_MPS=0.0
@@ -256,6 +260,14 @@ Options:
                                SE3 photometric coverage tiles needed for full confidence-gated post-BA allowance. Default: 8.
   --post-ba-step-guard-reject-to-pre-ba-over-m M
                                Reject over-large post-BA candidates to the pre-BA LiDAR/IMU pose instead of clamping their direction. Default: 0.0 disabled.
+  --post-ba-step-guard-pre-ba-agreement-max-pose-step-m M
+                               Allow a larger post-BA step up to M only when it agrees with the pre-BA LiDAR/IMU step. Default: 0.0 disabled.
+  --post-ba-step-guard-pre-ba-agreement-min-cosine C
+                               Direction cosine required for pre-BA agreement. Default: 0.85.
+  --post-ba-step-guard-pre-ba-agreement-max-delta-m M
+                               Max post-BA to pre-BA pose distance for agreement allowance. Default: 0.05.
+  --post-ba-step-guard-pre-ba-agreement-margin-m M
+                               Extra allowance added to the pre-BA step before the agreement cap. Default: 0.0.
   --tracking-step-guard-velocity-scale S
                                Optional speed-scaled adaptive pose-step allowance. Default: 0.0 disabled.
   --tracking-step-guard-acceleration-mps2 A
@@ -622,6 +634,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --post-ba-step-guard-reject-to-pre-ba-over-m)
       POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M="$2"
+      shift 2
+      ;;
+    --post-ba-step-guard-pre-ba-agreement-max-pose-step-m)
+      POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M="$2"
+      shift 2
+      ;;
+    --post-ba-step-guard-pre-ba-agreement-min-cosine)
+      POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE="$2"
+      shift 2
+      ;;
+    --post-ba-step-guard-pre-ba-agreement-max-delta-m)
+      POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M="$2"
+      shift 2
+      ;;
+    --post-ba-step-guard-pre-ba-agreement-margin-m)
+      POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M="$2"
       shift 2
       ;;
     --require-deskew)
@@ -1216,6 +1244,10 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   post_ba_step_guard_max_visual_residual:="${POST_BA_STEP_GUARD_MAX_VISUAL_RESIDUAL}" \
   post_ba_step_guard_min_visual_coverage_tiles:="${POST_BA_STEP_GUARD_MIN_VISUAL_COVERAGE_TILES}" \
   post_ba_step_guard_reject_to_pre_ba_over_m:="${POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M}" \
+  post_ba_step_guard_pre_ba_agreement_max_pose_step_m:="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M}" \
+  post_ba_step_guard_pre_ba_agreement_min_cosine:="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE}" \
+  post_ba_step_guard_pre_ba_agreement_max_delta_m:="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M}" \
+  post_ba_step_guard_pre_ba_agreement_margin_m:="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M}" \
   tracking_step_guard_velocity_scale:="${TRACKING_STEP_GUARD_VELOCITY_SCALE}" \
   tracking_step_guard_acceleration_mps2:="${TRACKING_STEP_GUARD_ACCELERATION_MPS2}" \
   tracking_step_guard_max_velocity_mps:="${TRACKING_STEP_GUARD_MAX_VELOCITY_MPS}" \
@@ -1416,6 +1448,10 @@ POST_BA_STEP_GUARD_MIN_VISUAL_INLIER_RATIO_REPORT="${POST_BA_STEP_GUARD_MIN_VISU
 POST_BA_STEP_GUARD_MAX_VISUAL_RESIDUAL_REPORT="${POST_BA_STEP_GUARD_MAX_VISUAL_RESIDUAL}" \
 POST_BA_STEP_GUARD_MIN_VISUAL_COVERAGE_TILES_REPORT="${POST_BA_STEP_GUARD_MIN_VISUAL_COVERAGE_TILES}" \
 POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M_REPORT="${POST_BA_STEP_GUARD_REJECT_TO_PRE_BA_OVER_M}" \
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M_REPORT="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M}" \
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE_REPORT="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE}" \
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M_REPORT="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M}" \
+POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M_REPORT="${POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M}" \
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
@@ -1607,6 +1643,18 @@ sliding_window_multihop_relative_translation_min_dt_s = float(
 )
 sliding_window_multihop_relative_translation_max_dt_s = float(
     os.environ["SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S_REPORT"]
+)
+post_ba_step_guard_pre_ba_agreement_max_pose_step_m = float(
+    os.environ["POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M_REPORT"]
+)
+post_ba_step_guard_pre_ba_agreement_min_cosine = float(
+    os.environ["POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MIN_COSINE_REPORT"]
+)
+post_ba_step_guard_pre_ba_agreement_max_delta_m = float(
+    os.environ["POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_DELTA_M_REPORT"]
+)
+post_ba_step_guard_pre_ba_agreement_margin_m = float(
+    os.environ["POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MARGIN_M_REPORT"]
 )
 tracking_max_pose_step_m = float(sys.argv[44])
 tracking_step_guard_velocity_scale = float(sys.argv[45])
@@ -2002,6 +2050,18 @@ report = {
         ),
         "post_ba_step_guard_reject_to_pre_ba_over_m": (
             post_ba_step_guard_reject_to_pre_ba_over_m
+        ),
+        "post_ba_step_guard_pre_ba_agreement_max_pose_step_m": (
+            post_ba_step_guard_pre_ba_agreement_max_pose_step_m
+        ),
+        "post_ba_step_guard_pre_ba_agreement_min_cosine": (
+            post_ba_step_guard_pre_ba_agreement_min_cosine
+        ),
+        "post_ba_step_guard_pre_ba_agreement_max_delta_m": (
+            post_ba_step_guard_pre_ba_agreement_max_delta_m
+        ),
+        "post_ba_step_guard_pre_ba_agreement_margin_m": (
+            post_ba_step_guard_pre_ba_agreement_margin_m
         ),
         "tracking_step_guard_velocity_scale": tracking_step_guard_velocity_scale,
         "tracking_step_guard_acceleration_mps2": tracking_step_guard_acceleration_mps2,

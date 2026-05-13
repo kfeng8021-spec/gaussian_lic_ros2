@@ -364,6 +364,18 @@ public:
     post_ba_step_guard_reject_to_pre_ba_over_m_ = finite_nonnegative_parameter(
       "post_ba_step_guard_reject_to_pre_ba_over_m",
       declare_parameter<double>("post_ba_step_guard_reject_to_pre_ba_over_m", 0.0));
+    post_ba_step_guard_pre_ba_agreement_max_pose_step_m_ = finite_nonnegative_parameter(
+      "post_ba_step_guard_pre_ba_agreement_max_pose_step_m",
+      declare_parameter<double>("post_ba_step_guard_pre_ba_agreement_max_pose_step_m", 0.0));
+    post_ba_step_guard_pre_ba_agreement_min_cosine_ = finite_unit_interval_parameter(
+      "post_ba_step_guard_pre_ba_agreement_min_cosine",
+      declare_parameter<double>("post_ba_step_guard_pre_ba_agreement_min_cosine", 0.85));
+    post_ba_step_guard_pre_ba_agreement_max_delta_m_ = finite_nonnegative_parameter(
+      "post_ba_step_guard_pre_ba_agreement_max_delta_m",
+      declare_parameter<double>("post_ba_step_guard_pre_ba_agreement_max_delta_m", 0.05));
+    post_ba_step_guard_pre_ba_agreement_margin_m_ = finite_nonnegative_parameter(
+      "post_ba_step_guard_pre_ba_agreement_margin_m",
+      declare_parameter<double>("post_ba_step_guard_pre_ba_agreement_margin_m", 0.0));
     tracking_step_guard_velocity_scale_ = finite_nonnegative_parameter(
       "tracking_step_guard_velocity_scale",
       declare_parameter<double>("tracking_step_guard_velocity_scale", 0.0));
@@ -3447,6 +3459,30 @@ private:
           std::max(stage_base_step_m, hard_velocity_step_m));
       }
     }
+    if (stage == StepGuardStage::kPostBa &&
+      post_ba_step_guard_pre_ba_agreement_max_pose_step_m_ > allowed_step_m &&
+      fallback_pose != nullptr &&
+      fallback_pose->stamp_ns == pose.stamp_ns &&
+      valid_trajectory_pose(*fallback_pose))
+    {
+      const Eigen::Vector3d pre_ba_delta = fallback_pose->p_w_i - previous.p_w_i;
+      const double pre_ba_step_m = pre_ba_delta.norm();
+      const double ba_pre_delta_m = (pose.p_w_i - fallback_pose->p_w_i).norm();
+      if (std::isfinite(pre_ba_step_m) && std::isfinite(ba_pre_delta_m) &&
+        pre_ba_step_m > 1.0e-9 && step_m > 1.0e-9 &&
+        ba_pre_delta_m <= post_ba_step_guard_pre_ba_agreement_max_delta_m_)
+      {
+        const double agreement_cosine = delta.dot(pre_ba_delta) / (step_m * pre_ba_step_m);
+        if (std::isfinite(agreement_cosine) &&
+          agreement_cosine >= post_ba_step_guard_pre_ba_agreement_min_cosine_)
+        {
+          const double agreed_limit = std::min(
+            post_ba_step_guard_pre_ba_agreement_max_pose_step_m_,
+            pre_ba_step_m + post_ba_step_guard_pre_ba_agreement_margin_m_);
+          allowed_step_m = std::max(allowed_step_m, agreed_limit);
+        }
+      }
+    }
     last_tracking_step_guard_raw_step_m_ = step_m;
     last_tracking_step_guard_allowed_step_m_ = allowed_step_m;
     last_tracking_step_guard_dt_s_ = dt_s;
@@ -4036,6 +4072,10 @@ private:
   double post_ba_step_guard_max_visual_residual_{0.3};
   int post_ba_step_guard_min_visual_coverage_tiles_{8};
   double post_ba_step_guard_reject_to_pre_ba_over_m_{0.0};
+  double post_ba_step_guard_pre_ba_agreement_max_pose_step_m_{0.0};
+  double post_ba_step_guard_pre_ba_agreement_min_cosine_{0.85};
+  double post_ba_step_guard_pre_ba_agreement_max_delta_m_{0.05};
+  double post_ba_step_guard_pre_ba_agreement_margin_m_{0.0};
   double tracking_step_guard_velocity_scale_{0.0};
   double tracking_step_guard_acceleration_mps2_{0.0};
   double tracking_step_guard_max_velocity_mps_{0.0};
