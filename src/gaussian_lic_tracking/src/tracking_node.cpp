@@ -545,6 +545,9 @@ public:
     sliding_window_max_feedback_accel_bias_step_ = finite_nonnegative_parameter(
       "sliding_window_max_feedback_accel_bias_step",
       declare_parameter<double>("sliding_window_max_feedback_accel_bias_step", 0.0));
+    sliding_window_min_bias_feedback_visual_factors_ = integer_parameter_at_least(
+      "sliding_window_min_bias_feedback_visual_factors",
+      declare_parameter<int>("sliding_window_min_bias_feedback_visual_factors", 0), 0);
     sliding_window_max_normal_equation_condition_ = finite_positive_parameter(
       "sliding_window_max_normal_equation_condition",
       declare_parameter<double>("sliding_window_max_normal_equation_condition", 1.0e13));
@@ -2359,6 +2362,7 @@ private:
     sliding_window_optimizer_.add_pose_prior(prior);
     bool window_factor_added = false;
     bool external_feedback_factor_added = false;
+    size_t visual_feedback_factors_added = 0;
     if (sliding_window_imu_velocity_prior_weight_ > 0.0 ||
       sliding_window_gyro_bias_prior_weight_ > 0.0 ||
       sliding_window_accel_bias_prior_weight_ > 0.0)
@@ -2430,6 +2434,7 @@ private:
       try {
         sliding_window_optimizer_.add_visual_alignment_factor(visual_factor);
         ++sliding_window_total_visual_factors_;
+        ++visual_feedback_factors_added;
         window_factor_added = true;
         external_feedback_factor_added = true;
       } catch (const std::exception & ex) {
@@ -2443,6 +2448,7 @@ private:
       try {
         sliding_window_optimizer_.add_se3_photometric_factor(se3_factor);
         ++sliding_window_total_se3_photometric_factors_;
+        ++visual_feedback_factors_added;
         window_factor_added = true;
         external_feedback_factor_added = true;
       } catch (const std::exception & ex) {
@@ -2582,14 +2588,24 @@ private:
                 raw_velocity_delta * (sliding_window_max_feedback_velocity_mps_ / raw_velocity_delta_mps);
             }
             clamp_vector_norm(applied.v_w_i, sliding_window_max_feedback_velocity_norm_mps_);
-            clamp_vector_step(
-              applied.gyro_bias, sliding_window_bias_.gyro,
-              sliding_window_max_feedback_gyro_bias_step_);
-            clamp_vector_step(
-              applied.accel_bias, sliding_window_bias_.accel,
-              sliding_window_max_feedback_accel_bias_step_);
-            clamp_vector_norm(applied.gyro_bias, sliding_window_max_feedback_gyro_bias_norm_);
-            clamp_vector_norm(applied.accel_bias, sliding_window_max_feedback_accel_bias_norm_);
+            const bool hold_bias_feedback =
+              sliding_window_min_bias_feedback_visual_factors_ > 0 &&
+              visual_feedback_factors_added <
+              static_cast<size_t>(sliding_window_min_bias_feedback_visual_factors_);
+            if (hold_bias_feedback) {
+              applied.gyro_bias = sliding_window_bias_.gyro;
+              applied.accel_bias = sliding_window_bias_.accel;
+              ++sliding_window_bias_feedback_hold_count_;
+            } else {
+              clamp_vector_step(
+                applied.gyro_bias, sliding_window_bias_.gyro,
+                sliding_window_max_feedback_gyro_bias_step_);
+              clamp_vector_step(
+                applied.accel_bias, sliding_window_bias_.accel,
+                sliding_window_max_feedback_accel_bias_step_);
+              clamp_vector_norm(applied.gyro_bias, sliding_window_max_feedback_gyro_bias_norm_);
+              clamp_vector_norm(applied.accel_bias, sliding_window_max_feedback_accel_bias_norm_);
+            }
             if (!valid_sliding_window_state(applied)) {
               ++sliding_window_invalid_optimized_states_;
               RCLCPP_WARN_THROTTLE(
@@ -4326,6 +4342,9 @@ private:
       sliding_window_max_feedback_rotation_rad_;
     status.sliding_window_max_feedback_velocity_mps =
       sliding_window_max_feedback_velocity_mps_;
+    status.sliding_window_bias_feedback_holds = sliding_window_bias_feedback_hold_count_;
+    status.sliding_window_min_bias_feedback_visual_factors =
+      static_cast<uint64_t>(sliding_window_min_bias_feedback_visual_factors_);
     status.sliding_window_marginalized_states = static_cast<uint64_t>(summary.marginalized_state_count);
     status.sliding_window_schur_marginalizations =
       static_cast<uint64_t>(summary.schur_marginalization_count);
@@ -4703,6 +4722,7 @@ private:
   double sliding_window_max_feedback_accel_bias_norm_{2.5};
   double sliding_window_max_feedback_gyro_bias_step_{0.0};
   double sliding_window_max_feedback_accel_bias_step_{0.0};
+  int sliding_window_min_bias_feedback_visual_factors_{0};
   double sliding_window_max_normal_equation_condition_{1.0e13};
   double sliding_window_min_normal_equation_rank_ratio_{0.8};
   double sliding_window_max_state_gap_s_{1.0};
@@ -4823,6 +4843,7 @@ private:
   uint64_t sliding_window_imu_factor_skip_count_{0};
   uint64_t sliding_window_imu_time_gap_skip_count_{0};
   uint64_t sliding_window_feedback_update_count_{0};
+  uint64_t sliding_window_bias_feedback_hold_count_{0};
   int64_t last_sliding_window_feedback_stamp_ns_{0};
   double last_sliding_window_feedback_translation_delta_m_{0.0};
   double last_sliding_window_feedback_rotation_delta_rad_{0.0};

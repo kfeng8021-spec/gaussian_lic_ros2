@@ -177,6 +177,9 @@ def generate_launch_description():
     sliding_window_max_feedback_accel_bias_step = LaunchConfiguration(
         "sliding_window_max_feedback_accel_bias_step"
     )
+    sliding_window_min_bias_feedback_visual_factors = LaunchConfiguration(
+        "sliding_window_min_bias_feedback_visual_factors"
+    )
     sliding_window_max_normal_equation_condition = LaunchConfiguration(
         "sliding_window_max_normal_equation_condition"
     )
@@ -492,6 +495,7 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_max_feedback_accel_bias_norm", default_value="2.5"),
             DeclareLaunchArgument("sliding_window_max_feedback_gyro_bias_step", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_max_feedback_accel_bias_step", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_min_bias_feedback_visual_factors", default_value="0"),
             DeclareLaunchArgument("sliding_window_max_normal_equation_condition", default_value="10000000000000.0"),
             DeclareLaunchArgument("sliding_window_min_normal_equation_rank_ratio", default_value="0.8"),
             DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0"),
@@ -751,6 +755,9 @@ def generate_launch_description():
                         "sliding_window_max_feedback_accel_bias_norm": sliding_window_max_feedback_accel_bias_norm,
                         "sliding_window_max_feedback_gyro_bias_step": sliding_window_max_feedback_gyro_bias_step,
                         "sliding_window_max_feedback_accel_bias_step": sliding_window_max_feedback_accel_bias_step,
+                        "sliding_window_min_bias_feedback_visual_factors": (
+                            sliding_window_min_bias_feedback_visual_factors
+                        ),
                         "sliding_window_max_normal_equation_condition": sliding_window_max_normal_equation_condition,
                         "sliding_window_min_normal_equation_rank_ratio": sliding_window_min_normal_equation_rank_ratio,
                         "sliding_window_max_state_gap_s": sliding_window_max_state_gap_s,
