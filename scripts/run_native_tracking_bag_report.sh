@@ -219,6 +219,10 @@ REFERENCE_MAX_MEAN_M=1.5
 REFERENCE_MAX_ERROR_M=5.0
 REFERENCE_MAX_PATH_DRIFT=0.75
 REFERENCE_ERROR_BIN_COUNT=8
+REFERENCE_MIN_ERROR_BIN_MATCHES=0
+REFERENCE_MAX_ERROR_BIN_RMSE_M=0.0
+REFERENCE_MAX_ERROR_BIN_MEAN_M=0.0
+REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M=0.0
 REFERENCE_TIME_OFFSET_SWEEP_MIN=-0.5
 REFERENCE_TIME_OFFSET_SWEEP_MAX=0.5
 REFERENCE_TIME_OFFSET_SWEEP_STEP=0.1
@@ -569,6 +573,14 @@ Options:
   --reference-max-path-drift R Max relative path-length drift. Default: 0.75.
   --reference-error-bin-count N
                                Number of time-ordered trajectory error bins archived in the reference comparison. Default: 8.
+  --reference-min-error-bin-matches N
+                               Minimum matched poses required in every trajectory error bin. Default: 0 disabled.
+  --reference-max-error-bin-rmse-m M
+                               Maximum RMSE allowed in every trajectory error bin. Default: 0.0 disabled.
+  --reference-max-error-bin-mean-m M
+                               Maximum mean translation error allowed in every trajectory error bin. Default: 0.0 disabled.
+  --reference-max-error-bin-bias-norm-m M
+                               Maximum norm of each error-bin XYZ bias vector. Default: 0.0 disabled.
   --reference-time-offset-sweep MIN MAX STEP
                                Sweep current-trajectory timestamp offsets for diagnostics. Default: -0.5 0.5 0.1; use 0 0 0 to disable.
   --external-odometry-prior-max-dt-ns NS
@@ -1411,6 +1423,22 @@ while [[ $# -gt 0 ]]; do
       REFERENCE_ERROR_BIN_COUNT="$2"
       shift 2
       ;;
+    --reference-min-error-bin-matches)
+      REFERENCE_MIN_ERROR_BIN_MATCHES="$2"
+      shift 2
+      ;;
+    --reference-max-error-bin-rmse-m)
+      REFERENCE_MAX_ERROR_BIN_RMSE_M="$2"
+      shift 2
+      ;;
+    --reference-max-error-bin-mean-m)
+      REFERENCE_MAX_ERROR_BIN_MEAN_M="$2"
+      shift 2
+      ;;
+    --reference-max-error-bin-bias-norm-m)
+      REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M="$2"
+      shift 2
+      ;;
     --reference-time-offset-sweep)
       REFERENCE_TIME_OFFSET_SWEEP_MIN="$2"
       REFERENCE_TIME_OFFSET_SWEEP_MAX="$3"
@@ -1883,6 +1911,10 @@ SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S_REPORT="${SLIDING_WINDOW_M
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS}" \
 REFERENCE_ERROR_BIN_COUNT_REPORT="${REFERENCE_ERROR_BIN_COUNT}" \
+REFERENCE_MIN_ERROR_BIN_MATCHES_REPORT="${REFERENCE_MIN_ERROR_BIN_MATCHES}" \
+REFERENCE_MAX_ERROR_BIN_RMSE_M_REPORT="${REFERENCE_MAX_ERROR_BIN_RMSE_M}" \
+REFERENCE_MAX_ERROR_BIN_MEAN_M_REPORT="${REFERENCE_MAX_ERROR_BIN_MEAN_M}" \
+REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M_REPORT="${REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M}" \
 REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MIN}" \
 REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_MAX}" \
 REFERENCE_TIME_OFFSET_SWEEP_STEP_REPORT="${REFERENCE_TIME_OFFSET_SWEEP_STEP}" \
@@ -2214,6 +2246,11 @@ reference_max_mean_m = float(sys.argv[54])
 reference_max_error_m = float(sys.argv[55])
 reference_max_path_drift = float(sys.argv[56])
 reference_error_bin_count = int(os.environ["REFERENCE_ERROR_BIN_COUNT_REPORT"])
+reference_min_error_bin_matches = int(os.environ["REFERENCE_MIN_ERROR_BIN_MATCHES_REPORT"])
+reference_max_error_bin_rmse_m = float(os.environ["REFERENCE_MAX_ERROR_BIN_RMSE_M_REPORT"])
+reference_max_error_bin_mean_m = float(os.environ["REFERENCE_MAX_ERROR_BIN_MEAN_M_REPORT"])
+reference_max_error_bin_bias_norm_m = float(
+    os.environ["REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M_REPORT"])
 reference_time_offset_sweep_min = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_MIN_REPORT"])
 reference_time_offset_sweep_max = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_MAX_REPORT"])
 reference_time_offset_sweep_step = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP_STEP_REPORT"])
@@ -2556,6 +2593,10 @@ report = {
         "reference_max_error_m": reference_max_error_m,
         "reference_max_path_drift": reference_max_path_drift,
         "reference_error_bin_count": reference_error_bin_count,
+        "reference_min_error_bin_matches": reference_min_error_bin_matches,
+        "reference_max_error_bin_rmse_m": reference_max_error_bin_rmse_m,
+        "reference_max_error_bin_mean_m": reference_max_error_bin_mean_m,
+        "reference_max_error_bin_bias_norm_m": reference_max_error_bin_bias_norm_m,
         "reference_time_offset_sweep": {
             "min": reference_time_offset_sweep_min,
             "max": reference_time_offset_sweep_max,
@@ -2827,6 +2868,18 @@ if [[ -s "${REFERENCE_TUM}" && -s "${CURRENT_TUM}" ]]; then
   )
   if [[ "${REFERENCE_ERROR_BIN_COUNT}" != "0" ]]; then
     compare_cmd+=(--error-bin-count "${REFERENCE_ERROR_BIN_COUNT}")
+  fi
+  if [[ "${REFERENCE_MIN_ERROR_BIN_MATCHES}" != "0" ]]; then
+    compare_cmd+=(--min-error-bin-matches "${REFERENCE_MIN_ERROR_BIN_MATCHES}")
+  fi
+  if [[ "${REFERENCE_MAX_ERROR_BIN_RMSE_M}" != "0" && "${REFERENCE_MAX_ERROR_BIN_RMSE_M}" != "0.0" ]]; then
+    compare_cmd+=(--max-error-bin-rmse-m "${REFERENCE_MAX_ERROR_BIN_RMSE_M}")
+  fi
+  if [[ "${REFERENCE_MAX_ERROR_BIN_MEAN_M}" != "0" && "${REFERENCE_MAX_ERROR_BIN_MEAN_M}" != "0.0" ]]; then
+    compare_cmd+=(--max-error-bin-mean-m "${REFERENCE_MAX_ERROR_BIN_MEAN_M}")
+  fi
+  if [[ "${REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M}" != "0" && "${REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M}" != "0.0" ]]; then
+    compare_cmd+=(--max-error-bin-bias-norm-m "${REFERENCE_MAX_ERROR_BIN_BIAS_NORM_M}")
   fi
   if [[ "${REFERENCE_TIME_OFFSET_SWEEP_STEP}" != "0" && "${REFERENCE_TIME_OFFSET_SWEEP_STEP}" != "0.0" ]]; then
     compare_cmd+=(

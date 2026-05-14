@@ -376,6 +376,13 @@ def summarize_error_bins(matches, align, bin_count):
     return bins
 
 
+def bias_norm(bin_summary):
+    bias = bin_summary.get("bias_xyz_m", [0.0, 0.0, 0.0])
+    if not isinstance(bias, list) or len(bias) != 3:
+        return 0.0
+    return math.sqrt(sum(float(component) * float(component) for component in bias))
+
+
 def shifted_poses(poses, offset_s):
     if abs(offset_s) <= 1.0e-12:
         return poses
@@ -479,6 +486,62 @@ def compute_report(args):
     if baseline_path > 0.0 and relative_path_drift > args.max_path_drift:
         errors.append(f"path drift {relative_path_drift:.2%} > {args.max_path_drift:.2%}")
 
+    error_bin_count = getattr(args, "error_bin_count", 0)
+    min_error_bin_matches = getattr(args, "min_error_bin_matches", 0)
+    max_error_bin_rmse_m = getattr(args, "max_error_bin_rmse_m", 0.0)
+    max_error_bin_mean_m = getattr(args, "max_error_bin_mean_m", 0.0)
+    max_error_bin_bias_norm_m = getattr(args, "max_error_bin_bias_norm_m", 0.0)
+    error_bins = []
+    error_bin_thresholds_enabled = (
+        min_error_bin_matches > 0
+        or max_error_bin_rmse_m > 0.0
+        or max_error_bin_mean_m > 0.0
+        or max_error_bin_bias_norm_m > 0.0
+    )
+    if error_bin_count > 0:
+        error_bins = summarize_error_bins(matches, args.align, error_bin_count)
+    elif error_bin_thresholds_enabled:
+        errors.append("error-bin thresholds require --error-bin-count > 0")
+
+    for bin_summary in error_bins:
+        index = int(bin_summary.get("index", -1))
+        count = int(bin_summary.get("count", 0))
+        if min_error_bin_matches > 0 and count < min_error_bin_matches:
+            errors.append(
+                f"error bin {index} matched poses {count} < "
+                f"min_error_bin_matches {min_error_bin_matches}"
+            )
+        bin_rmse = float(bin_summary.get("translation_rmse_m", 0.0))
+        if max_error_bin_rmse_m > 0.0 and bin_rmse > max_error_bin_rmse_m:
+            errors.append(
+                f"error bin {index} rmse {bin_rmse:.6f} m > "
+                f"{max_error_bin_rmse_m:.6f} m"
+            )
+        bin_mean = float(bin_summary.get("translation_mean_m", 0.0))
+        if max_error_bin_mean_m > 0.0 and bin_mean > max_error_bin_mean_m:
+            errors.append(
+                f"error bin {index} mean {bin_mean:.6f} m > "
+                f"{max_error_bin_mean_m:.6f} m"
+            )
+        bin_bias_norm = bias_norm(bin_summary)
+        bin_summary["bias_norm_m"] = bin_bias_norm
+        if (
+            max_error_bin_bias_norm_m > 0.0
+            and bin_bias_norm > max_error_bin_bias_norm_m
+        ):
+            errors.append(
+                f"error bin {index} bias norm {bin_bias_norm:.6f} m > "
+                f"{max_error_bin_bias_norm_m:.6f} m"
+            )
+
+    thresholds.update({
+        "error_bin_count": error_bin_count,
+        "min_error_bin_matches": min_error_bin_matches,
+        "max_error_bin_rmse_m": max_error_bin_rmse_m,
+        "max_error_bin_mean_m": max_error_bin_mean_m,
+        "max_error_bin_bias_norm_m": max_error_bin_bias_norm_m,
+    })
+
     report = {
         "baseline": str(Path(args.baseline).expanduser().resolve()),
         "current": str(Path(args.current).expanduser().resolve()),
@@ -496,9 +559,8 @@ def compute_report(args):
         "ok": not errors,
         "errors": errors,
     }
-    error_bin_count = getattr(args, "error_bin_count", 0)
-    if error_bin_count > 0:
-        report["error_bins"] = summarize_error_bins(matches, args.align, error_bin_count)
+    if error_bins:
+        report["error_bins"] = error_bins
     time_offset_sweep = compute_time_offset_sweep(baseline, current, args)
     if time_offset_sweep is not None:
         report["time_offset_sweep"] = time_offset_sweep
@@ -531,6 +593,30 @@ def main(argv=None):
         type=int,
         default=0,
         help="Optional number of time-ordered match bins to summarize for drift-shape diagnostics.",
+    )
+    parser.add_argument(
+        "--min-error-bin-matches",
+        type=int,
+        default=0,
+        help="Optional minimum matched poses per time-ordered error bin. Default: 0 disabled.",
+    )
+    parser.add_argument(
+        "--max-error-bin-rmse-m",
+        type=float,
+        default=0.0,
+        help="Optional maximum RMSE for every time-ordered error bin. Default: 0 disabled.",
+    )
+    parser.add_argument(
+        "--max-error-bin-mean-m",
+        type=float,
+        default=0.0,
+        help="Optional maximum mean translation error for every time-ordered error bin. Default: 0 disabled.",
+    )
+    parser.add_argument(
+        "--max-error-bin-bias-norm-m",
+        type=float,
+        default=0.0,
+        help="Optional maximum norm of the XYZ bias vector for every error bin. Default: 0 disabled.",
     )
     parser.add_argument(
         "--time-offset-sweep-min",

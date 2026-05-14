@@ -135,6 +135,9 @@ def check_script_contract(manifest: dict[str, Any], script: str, errors: list[st
         "--min-se3-photometric-factor-delta-per-status-bin",
         "min_visual_factor_delta_per_status_bin",
         "min_se3_photometric_factor_delta_per_status_bin",
+        "--reference-max-error-bin-rmse-m",
+        "--reference-max-error-bin-bias-norm-m",
+        "reference_max_error_bin_bias_norm_m",
     ):
         require_snippet(script, option, "run_native_tracking_bag_report.sh", errors)
 
