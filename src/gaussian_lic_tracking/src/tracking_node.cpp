@@ -635,6 +635,51 @@ public:
       declare_parameter<double>("sliding_window_smoothness_bias_weight", 0.1));
     sliding_window_smoothness_use_motion_targets_ =
       declare_parameter<bool>("sliding_window_smoothness_use_motion_targets", false);
+    sliding_window_smoothness_motion_target_min_visual_factors_ = integer_parameter_at_least(
+      "sliding_window_smoothness_motion_target_min_visual_factors",
+      declare_parameter<int>("sliding_window_smoothness_motion_target_min_visual_factors", 0),
+      0);
+    sliding_window_smoothness_motion_target_min_se3_photometric_factors_ =
+      integer_parameter_at_least(
+      "sliding_window_smoothness_motion_target_min_se3_photometric_factors",
+      declare_parameter<int>(
+        "sliding_window_smoothness_motion_target_min_se3_photometric_factors", 0),
+      0);
+    sliding_window_smoothness_motion_target_recent_window_ = integer_parameter_at_least(
+      "sliding_window_smoothness_motion_target_recent_window",
+      declare_parameter<int>("sliding_window_smoothness_motion_target_recent_window", 0),
+      0);
+    sliding_window_smoothness_motion_target_min_recent_visual_factors_ =
+      integer_parameter_at_least(
+      "sliding_window_smoothness_motion_target_min_recent_visual_factors",
+      declare_parameter<int>(
+        "sliding_window_smoothness_motion_target_min_recent_visual_factors", 0),
+      0);
+    sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors_ =
+      integer_parameter_at_least(
+      "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors",
+      declare_parameter<int>(
+        "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors", 0),
+      0);
+    sliding_window_smoothness_motion_target_start_after_s_ =
+      finite_nonnegative_parameter(
+      "sliding_window_smoothness_motion_target_start_after_s",
+      declare_parameter<double>("sliding_window_smoothness_motion_target_start_after_s", 0.0));
+    sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps_ =
+      finite_nonnegative_parameter(
+      "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps",
+      declare_parameter<double>(
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps", 0.25));
+    sliding_window_smoothness_motion_target_max_position_rate_delta_mps_ =
+      finite_nonnegative_parameter(
+      "sliding_window_smoothness_motion_target_max_position_rate_delta_mps",
+      declare_parameter<double>(
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_mps", 0.5));
+    sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2_ =
+      finite_nonnegative_parameter(
+      "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2",
+      declare_parameter<double>(
+        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2", 2.0));
     enable_sliding_window_relative_translation_factor_ =
       declare_parameter<bool>("enable_sliding_window_relative_translation_factor", false);
     sliding_window_relative_translation_weight_ = finite_nonnegative_parameter(
@@ -2397,11 +2442,119 @@ private:
     return *it;
   }
 
+  static bool clamp_motion_target_norm(Eigen::Vector3d & vector, const double max_norm)
+  {
+    if (!std::isfinite(max_norm) || max_norm <= 0.0) {
+      return false;
+    }
+    const double norm = vector.norm();
+    if (!std::isfinite(norm) || norm <= max_norm) {
+      return false;
+    }
+    vector *= max_norm / norm;
+    return true;
+  }
+
+  void record_relative_motion_target_norms(
+    const Eigen::Vector3d & rotation_rate_delta,
+    const Eigen::Vector3d & position_rate_delta,
+    const Eigen::Vector3d & velocity_acceleration_delta)
+  {
+    last_sliding_window_smoothness_motion_target_rotation_rate_delta_norm_ =
+      rotation_rate_delta.norm();
+    last_sliding_window_smoothness_motion_target_position_rate_delta_norm_ =
+      position_rate_delta.norm();
+    last_sliding_window_smoothness_motion_target_velocity_acceleration_delta_norm_ =
+      velocity_acceleration_delta.norm();
+    sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm_ =
+      std::max(
+      sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm_,
+      last_sliding_window_smoothness_motion_target_rotation_rate_delta_norm_);
+    sliding_window_smoothness_motion_target_max_position_rate_delta_norm_ =
+      std::max(
+      sliding_window_smoothness_motion_target_max_position_rate_delta_norm_,
+      last_sliding_window_smoothness_motion_target_position_rate_delta_norm_);
+    sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm_ =
+      std::max(
+      sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm_,
+      last_sliding_window_smoothness_motion_target_velocity_acceleration_delta_norm_);
+  }
+
+  void update_motion_target_support_history(
+    const size_t visual_factor_count,
+    const size_t se3_photometric_factor_count)
+  {
+    if (sliding_window_smoothness_motion_target_recent_window_ <= 0) {
+      return;
+    }
+    motion_target_support_history_.emplace_back(visual_factor_count, se3_photometric_factor_count);
+    const size_t max_size = static_cast<size_t>(sliding_window_smoothness_motion_target_recent_window_);
+    while (motion_target_support_history_.size() > max_size) {
+      motion_target_support_history_.pop_front();
+    }
+    last_sliding_window_smoothness_motion_target_recent_visual_factors_ = 0;
+    last_sliding_window_smoothness_motion_target_recent_se3_photometric_factors_ = 0;
+    for (const auto & counts : motion_target_support_history_) {
+      last_sliding_window_smoothness_motion_target_recent_visual_factors_ += counts.first;
+      last_sliding_window_smoothness_motion_target_recent_se3_photometric_factors_ += counts.second;
+    }
+  }
+
+  bool motion_target_recent_support_is_healthy() const
+  {
+    if (sliding_window_smoothness_motion_target_recent_window_ <= 0) {
+      return true;
+    }
+    const size_t required_window =
+      static_cast<size_t>(sliding_window_smoothness_motion_target_recent_window_);
+    if (motion_target_support_history_.size() < required_window) {
+      return false;
+    }
+    if (last_sliding_window_smoothness_motion_target_recent_visual_factors_ <
+      static_cast<uint64_t>(sliding_window_smoothness_motion_target_min_recent_visual_factors_))
+    {
+      return false;
+    }
+    if (last_sliding_window_smoothness_motion_target_recent_se3_photometric_factors_ <
+      static_cast<uint64_t>(
+        sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors_))
+    {
+      return false;
+    }
+    return true;
+  }
+
   void apply_relative_motion_smoothness_targets(
     gaussian_lic_tracking::SlidingWindowTrajectorySmoothnessFactor & factor,
-    const gaussian_lic_tracking::TrajectoryPose & next_pose) const
+    const gaussian_lic_tracking::TrajectoryPose & next_pose,
+    const size_t visual_factor_count,
+    const size_t se3_photometric_factor_count)
   {
     if (!sliding_window_smoothness_use_motion_targets_) {
+      return;
+    }
+    if (sliding_window_smoothness_motion_target_start_after_s_ > 0.0 &&
+      sliding_window_start_stamp_ns_.has_value())
+    {
+      const double elapsed_s =
+        static_cast<double>(next_pose.stamp_ns - sliding_window_start_stamp_ns_.value()) /
+        static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
+      if (elapsed_s < sliding_window_smoothness_motion_target_start_after_s_) {
+        ++sliding_window_smoothness_motion_target_warmup_skip_count_;
+        return;
+      }
+    }
+    if (visual_factor_count <
+      static_cast<size_t>(sliding_window_smoothness_motion_target_min_visual_factors_) ||
+      se3_photometric_factor_count <
+      static_cast<size_t>(
+        sliding_window_smoothness_motion_target_min_se3_photometric_factors_))
+    {
+      ++sliding_window_smoothness_motion_target_support_skip_count_;
+      return;
+    }
+    if (!motion_target_recent_support_is_healthy()) {
+      ++sliding_window_smoothness_motion_target_recent_support_skip_count_;
       return;
     }
     const auto previous_pose = find_relative_motion_pose(factor.previous_stamp_ns);
@@ -2409,6 +2562,7 @@ private:
     if (!previous_pose.has_value() || !current_pose.has_value() ||
       next_pose.stamp_ns != factor.next_stamp_ns)
     {
+      ++sliding_window_smoothness_motion_target_history_miss_count_;
       return;
     }
     const double previous_dt_s =
@@ -2418,6 +2572,7 @@ private:
       static_cast<double>(next_pose.stamp_ns - current_pose->stamp_ns) /
       static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
     if (previous_dt_s <= 0.0 || next_dt_s <= 0.0) {
+      ++sliding_window_smoothness_motion_target_invalid_count_;
       return;
     }
     const auto rotation_rate = [](const Eigen::Quaterniond & from,
@@ -2442,7 +2597,27 @@ private:
       factor.target_rotation_rate_delta.setZero();
       factor.target_position_rate_delta.setZero();
       factor.target_velocity_acceleration_delta.setZero();
+      ++sliding_window_smoothness_motion_target_invalid_count_;
+      return;
     }
+    const bool clamped =
+      clamp_motion_target_norm(
+      factor.target_rotation_rate_delta,
+      sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps_) |
+      clamp_motion_target_norm(
+      factor.target_position_rate_delta,
+      sliding_window_smoothness_motion_target_max_position_rate_delta_mps_) |
+      clamp_motion_target_norm(
+      factor.target_velocity_acceleration_delta,
+      sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2_);
+    if (clamped) {
+      ++sliding_window_smoothness_motion_target_clamp_count_;
+    }
+    ++sliding_window_smoothness_motion_target_applied_count_;
+    record_relative_motion_target_norms(
+      factor.target_rotation_rate_delta,
+      factor.target_position_rate_delta,
+      factor.target_velocity_acceleration_delta);
   }
 
   gaussian_lic_tracking::TrajectoryPose update_sliding_window(
@@ -2471,6 +2646,9 @@ private:
     state.gyro_bias = sliding_window_bias_.gyro;
     state.accel_bias = sliding_window_bias_.accel;
     state.fixed = !has_sliding_window_state_;
+    if (!sliding_window_start_stamp_ns_.has_value()) {
+      sliding_window_start_stamp_ns_ = input_pose.stamp_ns;
+    }
     sliding_window_optimizer_.add_or_update_state(state);
 
     gaussian_lic_tracking::SlidingWindowPosePrior prior;
@@ -2588,6 +2766,7 @@ private:
           "sliding window relative translation factor skipped: %s", ex.what());
       }
     }
+    update_motion_target_support_history(visual_factors.size(), se3_photometric_factors.size());
     if (enable_sliding_window_smoothness_factor_ &&
       previous_sliding_window_stamp_ns_.has_value() && has_sliding_window_state_)
     {
@@ -2602,7 +2781,8 @@ private:
         sliding_window_smoothness_position_velocity_weight_;
       factor.gyro_bias_rate_weight = sliding_window_smoothness_bias_weight_;
       factor.accel_bias_rate_weight = sliding_window_smoothness_bias_weight_;
-      apply_relative_motion_smoothness_targets(factor, input_pose);
+      apply_relative_motion_smoothness_targets(
+        factor, input_pose, visual_factors.size(), se3_photometric_factors.size());
       try {
         sliding_window_optimizer_.add_trajectory_smoothness_factor(factor);
         window_factor_added = true;
@@ -4439,6 +4619,20 @@ private:
       sliding_window_se3_photometric_factor_skip_count_;
     status.sliding_window_smoothness_factor_skip_count =
       sliding_window_smoothness_factor_skip_count_;
+    status.sliding_window_smoothness_motion_target_applied_count =
+      sliding_window_smoothness_motion_target_applied_count_;
+    status.sliding_window_smoothness_motion_target_support_skip_count =
+      sliding_window_smoothness_motion_target_support_skip_count_;
+    status.sliding_window_smoothness_motion_target_recent_support_skip_count =
+      sliding_window_smoothness_motion_target_recent_support_skip_count_;
+    status.sliding_window_smoothness_motion_target_warmup_skip_count =
+      sliding_window_smoothness_motion_target_warmup_skip_count_;
+    status.sliding_window_smoothness_motion_target_history_miss_count =
+      sliding_window_smoothness_motion_target_history_miss_count_;
+    status.sliding_window_smoothness_motion_target_invalid_count =
+      sliding_window_smoothness_motion_target_invalid_count_;
+    status.sliding_window_smoothness_motion_target_clamp_count =
+      sliding_window_smoothness_motion_target_clamp_count_;
     status.sliding_window_imu_factor_skip_count = sliding_window_imu_factor_skip_count_;
     status.sliding_window_imu_time_gap_skip_count = sliding_window_imu_time_gap_skip_count_;
     status.sliding_window_last_imu_preintegration_samples =
@@ -4523,6 +4717,22 @@ private:
     status.sliding_window_relative_translation_factor_cost =
       summary.relative_translation_factor_cost;
     status.sliding_window_smoothness_factor_cost = summary.smoothness_factor_cost;
+    status.sliding_window_smoothness_motion_target_last_rotation_rate_delta_norm =
+      last_sliding_window_smoothness_motion_target_rotation_rate_delta_norm_;
+    status.sliding_window_smoothness_motion_target_last_position_rate_delta_norm =
+      last_sliding_window_smoothness_motion_target_position_rate_delta_norm_;
+    status.sliding_window_smoothness_motion_target_last_velocity_acceleration_delta_norm =
+      last_sliding_window_smoothness_motion_target_velocity_acceleration_delta_norm_;
+    status.sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm =
+      sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm_;
+    status.sliding_window_smoothness_motion_target_max_position_rate_delta_norm =
+      sliding_window_smoothness_motion_target_max_position_rate_delta_norm_;
+    status.sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm =
+      sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm_;
+    status.sliding_window_smoothness_motion_target_recent_visual_factors =
+      last_sliding_window_smoothness_motion_target_recent_visual_factors_;
+    status.sliding_window_smoothness_motion_target_recent_se3_photometric_factors =
+      last_sliding_window_smoothness_motion_target_recent_se3_photometric_factors_;
     status.sliding_window_last_step_norm = summary.last_step_norm;
     status.sliding_window_last_step_scale = summary.last_step_scale;
     status.sliding_window_last_damping = summary.last_damping;
@@ -4897,6 +5107,15 @@ private:
   double sliding_window_smoothness_position_velocity_weight_{0.0};
   double sliding_window_smoothness_bias_weight_{0.1};
   bool sliding_window_smoothness_use_motion_targets_{false};
+  int sliding_window_smoothness_motion_target_min_visual_factors_{0};
+  int sliding_window_smoothness_motion_target_min_se3_photometric_factors_{0};
+  int sliding_window_smoothness_motion_target_recent_window_{0};
+  int sliding_window_smoothness_motion_target_min_recent_visual_factors_{0};
+  int sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors_{0};
+  double sliding_window_smoothness_motion_target_start_after_s_{0.0};
+  double sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps_{0.25};
+  double sliding_window_smoothness_motion_target_max_position_rate_delta_mps_{0.5};
+  double sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2_{2.0};
   bool enable_sliding_window_relative_translation_factor_{false};
   double sliding_window_relative_translation_weight_{0.0};
   double sliding_window_relative_translation_huber_delta_m_{0.1};
@@ -4958,6 +5177,7 @@ private:
   gaussian_lic_tracking::ImuBias sliding_window_bias_;
   bool sliding_window_preintegrator_initialized_{false};
   bool has_sliding_window_state_{false};
+  std::optional<int64_t> sliding_window_start_stamp_ns_;
   int64_t last_sliding_window_stamp_ns_{0};
   std::optional<int64_t> previous_sliding_window_stamp_ns_;
   std::optional<int64_t> last_trajectory_control_stamp_ns_;
@@ -4972,6 +5192,13 @@ private:
   uint64_t sliding_window_visual_factor_skip_count_{0};
   uint64_t sliding_window_se3_photometric_factor_skip_count_{0};
   uint64_t sliding_window_smoothness_factor_skip_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_applied_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_support_skip_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_recent_support_skip_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_warmup_skip_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_history_miss_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_invalid_count_{0};
+  uint64_t sliding_window_smoothness_motion_target_clamp_count_{0};
   uint64_t sliding_window_imu_factor_skip_count_{0};
   uint64_t sliding_window_imu_time_gap_skip_count_{0};
   uint64_t sliding_window_feedback_update_count_{0};
@@ -4993,6 +5220,15 @@ private:
   uint64_t trajectory_control_pose_skip_count_{0};
   uint64_t tracking_step_guard_clamp_count_{0};
   uint64_t tracking_step_guard_pre_lio_clamp_count_{0};
+  double last_sliding_window_smoothness_motion_target_rotation_rate_delta_norm_{0.0};
+  double last_sliding_window_smoothness_motion_target_position_rate_delta_norm_{0.0};
+  double last_sliding_window_smoothness_motion_target_velocity_acceleration_delta_norm_{0.0};
+  double sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm_{0.0};
+  double sliding_window_smoothness_motion_target_max_position_rate_delta_norm_{0.0};
+  double sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm_{0.0};
+  uint64_t last_sliding_window_smoothness_motion_target_recent_visual_factors_{0};
+  uint64_t last_sliding_window_smoothness_motion_target_recent_se3_photometric_factors_{0};
+  std::deque<std::pair<size_t, size_t>> motion_target_support_history_;
   uint64_t tracking_step_guard_post_ba_clamp_count_{0};
   uint64_t tracking_step_guard_post_ba_rejection_count_{0};
   double last_tracking_step_guard_raw_step_m_{0.0};

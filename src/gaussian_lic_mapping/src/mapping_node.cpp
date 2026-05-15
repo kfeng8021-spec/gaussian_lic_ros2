@@ -880,6 +880,7 @@ private:
     if (publish_rendered_preview_ && normalized_qos_token(render_mode_) != "off") {
       try {
         rendered_image_pub_->publish(make_rendered_preview_message(frame_stamp));
+        ++rendered_preview_count_;
       } catch (const std::exception & ex) {
         ++render_error_count_;
         RCLCPP_WARN_THROTTLE(
@@ -2263,6 +2264,22 @@ private:
     msg.mean_iteration_ms = mean_iteration_ms_;
     msg.gpu_memory_mb = 0.0F;
     msg.active_profile = active_profile_;
+    msg.pointcloud_messages = pointcloud_count_;
+    msg.pose_messages = pose_count_;
+    msg.image_messages = image_count_;
+    msg.depth_messages = depth_count_;
+    msg.aligned_frames = aligned_frame_count_;
+    msg.converted_frames = converted_frame_count_;
+    msg.dropped_pointcloud_messages = dropped_pointcloud_count_;
+    msg.dropped_pose_messages = dropped_pose_count_;
+    msg.dropped_image_messages = dropped_image_count_;
+    msg.dropped_depth_messages = dropped_depth_count_;
+    msg.pending_pointcloud_messages = static_cast<uint64_t>(q_points);
+    msg.pending_pose_messages = static_cast<uint64_t>(q_pose);
+    msg.pending_image_messages = static_cast<uint64_t>(q_image);
+    msg.pending_depth_messages = static_cast<uint64_t>(q_depth);
+    msg.rendered_preview_count = rendered_preview_count_;
+    msg.render_error_count = render_error_count_;
     status_pub_->publish(msg);
 
     const auto intrinsics = current_intrinsics();
@@ -2463,6 +2480,7 @@ private:
   uint64_t dropped_depth_count_{0};
   uint64_t conversion_error_count_{0};
   uint64_t render_error_count_{0};
+  uint64_t rendered_preview_count_{0};
   int last_image_width_{0};
   int last_image_height_{0};
   cv::Mat last_image_rgb_float_;

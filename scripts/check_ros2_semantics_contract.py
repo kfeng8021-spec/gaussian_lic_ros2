@@ -21,9 +21,13 @@ SLIDING_WINDOW_OPTIMIZER = ROOT / "src" / "gaussian_lic_tracking" / "src" / "sli
 SLIDING_WINDOW_HEADER = ROOT / "src" / "gaussian_lic_tracking" / "include" / "gaussian_lic_tracking" / "sliding_window_optimizer.hpp"
 IMU_PREINTEGRATOR = ROOT / "src" / "gaussian_lic_tracking" / "src" / "imu_preintegrator.cpp"
 TRACKING_STATUS_MSG = ROOT / "src" / "gaussian_lic_msgs" / "msg" / "TrackingStatus.msg"
+MAPPING_STATUS_MSG = ROOT / "src" / "gaussian_lic_msgs" / "msg" / "MappingStatus.msg"
 NATIVE_TRACKING_REPORT = ROOT / "scripts" / "run_native_tracking_bag_report.sh"
 SYNTHETIC_GS_FRAME_PUB = (
     ROOT / "src" / "gaussian_lic_tools" / "gaussian_lic_tools" / "synthetic_gs_frame_pub.py"
+)
+NATIVE_TRACKING_RECORDER = (
+    ROOT / "src" / "gaussian_lic_tools" / "gaussian_lic_tools" / "native_tracking_recorder.py"
 )
 TRACKING_SMOKE_TEST = ROOT / "scripts" / "tracking_smoke_test.sh"
 SEMANTICS_DOC = ROOT / "docs" / "ROS2_SEMANTICS.md"
@@ -74,7 +78,9 @@ def main() -> int:
     sliding_window_header_text = read(SLIDING_WINDOW_HEADER)
     imu_preintegrator_text = read(IMU_PREINTEGRATOR)
     tracking_status_msg_text = read(TRACKING_STATUS_MSG)
+    mapping_status_msg_text = read(MAPPING_STATUS_MSG)
     native_tracking_report_text = read(NATIVE_TRACKING_REPORT)
+    native_tracking_recorder_text = read(NATIVE_TRACKING_RECORDER)
     synthetic_pub_text = read(SYNTHETIC_GS_FRAME_PUB)
     tracking_smoke_text = read(TRACKING_SMOKE_TEST)
     timing_audit_text = read(TIMING_AUDIT)
@@ -385,6 +391,52 @@ def main() -> int:
         errors.append("tracking_node must attach delayed visual factors to active window states")
     if "observed_frame_cache_size:=128" not in native_tracking_report_text:
         errors.append("native tracking real-bag report must enlarge the observed-frame cache")
+    if 'stop_process_group "${record_pid}" INT' not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must stop the recorder with SIGINT for final metrics flush")
+    if 'stop_process_group "${record_pid}" TERM' in native_tracking_report_text:
+        errors.append("native tracking real-bag report must not stop the recorder with SIGTERM")
+    if "canonical_float()" not in native_tracking_report_text or "MAPPER_FEEDBACK_MAX_DEPTH" not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must canonicalize mapper double parameters for ros2 CLI overrides")
+    if (
+        "--post-play-drain-target-poses" not in native_tracking_report_text
+        or "--post-play-drain-target-visual-factors" not in native_tracking_report_text
+        or "--post-play-drain-target-se3-factors" not in native_tracking_report_text
+        or "wait_for_recorder_drain" not in native_tracking_report_text
+        or "post_play_drain_target_poses" not in native_tracking_report_text
+        or "post_play_drain_target_visual_factors" not in native_tracking_report_text
+        or "post_play_drain_target_se3_factors" not in native_tracking_report_text
+    ):
+        errors.append("native tracking real-bag report must support pose and visual/SE3 evidence drain waits before recorder shutdown")
+    for field_name in (
+        "pointcloud_messages",
+        "pose_messages",
+        "image_messages",
+        "depth_messages",
+        "aligned_frames",
+        "converted_frames",
+        "dropped_pointcloud_messages",
+        "dropped_pose_messages",
+        "dropped_image_messages",
+        "dropped_depth_messages",
+        "pending_pointcloud_messages",
+        "pending_pose_messages",
+        "pending_image_messages",
+        "pending_depth_messages",
+        "rendered_preview_count",
+        "render_error_count",
+    ):
+        if field_name not in mapping_status_msg_text or f"msg.{field_name}" not in mapping_text:
+            errors.append(f"MappingStatus must publish mapper feedback liveness diagnostics: {field_name}")
+    if "++rendered_preview_count_" not in mapping_text:
+        errors.append("mapping_node must count successful rendered preview publications")
+    if '"rendered_preview_count"' not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must gate mapper rendered-preview liveness")
+    if (
+        "import signal" not in native_tracking_recorder_text
+        or "signal.SIGTERM" not in native_tracking_recorder_text
+        or "node.flush(final=True)" not in native_tracking_recorder_text
+    ):
+        errors.append("native_tracking_recorder must convert shutdown signals into a final binned-summary flush")
     if "VISUAL_DEPTH_FRAME_CACHE_SIZE=64" not in native_tracking_report_text or \
             'depth_frame_cache_size:="${VISUAL_DEPTH_FRAME_CACHE_SIZE}"' not in native_tracking_report_text:
         errors.append("native tracking real-bag report must enlarge the visual depth-frame cache")
@@ -429,6 +481,40 @@ def main() -> int:
         errors.append("tracking_node must default trajectory smoothness BA factors to true")
     if 'DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true")' not in tracking_launch_text:
         errors.append("tracking.launch.py must default trajectory smoothness BA factors to true")
+    for argument in (
+        "sliding_window_smoothness_motion_target_min_visual_factors",
+        "sliding_window_smoothness_motion_target_min_se3_photometric_factors",
+        "sliding_window_smoothness_motion_target_recent_window",
+        "sliding_window_smoothness_motion_target_min_recent_visual_factors",
+        "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors",
+        "sliding_window_smoothness_motion_target_start_after_s",
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps",
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_mps",
+        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2",
+    ):
+        if argument not in tracking_node_text or argument not in tracking_launch_text:
+            errors.append(f"tracking_node and tracking.launch.py must expose bounded smoothness target parameter {argument}")
+        if argument not in native_tracking_report_text:
+            errors.append(f"native tracking real-bag report must archive bounded smoothness target parameter {argument}")
+    for field in (
+        "sliding_window_smoothness_motion_target_applied_count",
+        "sliding_window_smoothness_motion_target_support_skip_count",
+        "sliding_window_smoothness_motion_target_recent_support_skip_count",
+        "sliding_window_smoothness_motion_target_warmup_skip_count",
+        "sliding_window_smoothness_motion_target_history_miss_count",
+        "sliding_window_smoothness_motion_target_invalid_count",
+        "sliding_window_smoothness_motion_target_clamp_count",
+        "sliding_window_smoothness_motion_target_last_rotation_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_last_position_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_last_velocity_acceleration_delta_norm",
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm",
+        "sliding_window_smoothness_motion_target_recent_visual_factors",
+        "sliding_window_smoothness_motion_target_recent_se3_photometric_factors",
+    ):
+        if field not in tracking_status_msg_text or f"status.{field}" not in tracking_node_text:
+            errors.append(f"TrackingStatus must publish bounded smoothness target diagnostic {field}")
     if "run_serialized_callback" not in tracking_node_text or "std::scoped_lock<std::mutex>" not in tracking_node_text:
         errors.append("tracking_node callbacks must pass through the serialization guard")
     if "accept_stream_stamp" not in tracking_node_text or "non-monotonic stamp" not in tracking_node_text:
@@ -558,6 +644,13 @@ def main() -> int:
         "sliding_window_visual_factor_skip_count",
         "sliding_window_se3_photometric_factor_skip_count",
         "sliding_window_smoothness_factor_skip_count",
+        "sliding_window_smoothness_motion_target_applied_count",
+        "sliding_window_smoothness_motion_target_support_skip_count",
+        "sliding_window_smoothness_motion_target_recent_support_skip_count",
+        "sliding_window_smoothness_motion_target_warmup_skip_count",
+        "sliding_window_smoothness_motion_target_history_miss_count",
+        "sliding_window_smoothness_motion_target_invalid_count",
+        "sliding_window_smoothness_motion_target_clamp_count",
         "sliding_window_orphan_factors",
         "sliding_window_imu_factor_skip_count",
         "sliding_window_imu_factor_replacement_count",
@@ -615,6 +708,12 @@ def main() -> int:
         "sliding_window_visual_factor_cost",
         "sliding_window_se3_photometric_factor_cost",
         "sliding_window_smoothness_factor_cost",
+        "sliding_window_smoothness_motion_target_last_rotation_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_last_position_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_last_velocity_acceleration_delta_norm",
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_norm",
+        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_norm",
         "trajectory_control_poses",
         "trajectory_deskew_queries",
         "trajectory_deskew_hits",

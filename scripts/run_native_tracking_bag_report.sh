@@ -13,6 +13,10 @@ PLAYBACK_START_OFFSET=0.0
 PLAYBACK_CLOCK_TOPICS_ALL=false
 TIMEOUT_SEC=30
 POST_PLAY_SETTLE_SEC=8
+POST_PLAY_DRAIN_TARGET_POSES=0
+POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS=0
+POST_PLAY_DRAIN_TARGET_SE3_FACTORS=0
+POST_PLAY_DRAIN_TIMEOUT_SEC=0
 MIN_POSES=20
 MIN_STATUS_SAMPLES=1
 MIN_STATUS_BIN_SAMPLE_COUNT=0
@@ -103,6 +107,15 @@ SLIDING_WINDOW_SMOOTHNESS_VELOCITY_WEIGHT=0.1
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT=0.0
 SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT=0.1
 SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS=false
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS=0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS=0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW=0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS=0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS=0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S=0.0
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS=0.25
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS=0.5
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2=2.0
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR=false
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT=0.0
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M=0.1
@@ -231,6 +244,76 @@ EXTERNAL_ODOMETRY_PRIOR_MAX_DT_NS=100000000
 EXTERNAL_ODOMETRY_PRIOR_TRANSLATION_WEIGHT=4.0
 EXTERNAL_ODOMETRY_PRIOR_ROTATION_WEIGHT=4.0
 
+canonical_float() {
+  python3 - "$1" <<'PY'
+import math
+import sys
+
+value = float(sys.argv[1])
+if not math.isfinite(value):
+    raise SystemExit(f"expected finite float, got {sys.argv[1]!r}")
+print(str(value))
+PY
+}
+
+read_recorder_drain_value() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+metrics_path = Path(sys.argv[1])
+metric_name = sys.argv[2]
+if not metrics_path.is_file():
+    print(0)
+    raise SystemExit(0)
+try:
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    print(0)
+    raise SystemExit(0)
+if metric_name == "trajectory_poses":
+    print(int(metrics.get("trajectory_poses", 0) or 0))
+    raise SystemExit(0)
+last = metrics.get("tracking_status", {}).get("last", {})
+print(int(last.get(metric_name, 0) or 0))
+PY
+}
+
+wait_for_recorder_drain() {
+  local metrics_path="$1"
+  local target_poses="$2"
+  local target_visual="$3"
+  local target_se3="$4"
+  local timeout_sec="$5"
+  if (( target_poses <= 0 && target_visual <= 0 && target_se3 <= 0 )); then
+    return
+  fi
+  if (( timeout_sec <= 0 )); then
+    return
+  fi
+  local deadline=$(( $(date +%s) + timeout_sec ))
+  local poses=0
+  local visual=0
+  local se3=0
+  while true; do
+    poses="$(read_recorder_drain_value "${metrics_path}" trajectory_poses)"
+    visual="$(read_recorder_drain_value "${metrics_path}" sliding_window_total_visual_factors)"
+    se3="$(read_recorder_drain_value "${metrics_path}" sliding_window_total_se3_photometric_factors)"
+    if (( (target_poses <= 0 || poses >= target_poses) &&
+          (target_visual <= 0 || visual >= target_visual) &&
+          (target_se3 <= 0 || se3 >= target_se3) )); then
+      echo "[native-tracking] post-play drain reached poses=${poses}/${target_poses} visual=${visual}/${target_visual} se3=${se3}/${target_se3}" >&2
+      return
+    fi
+    if (( $(date +%s) >= deadline )); then
+      echo "[native-tracking] post-play drain timed out at poses=${poses}/${target_poses} visual=${visual}/${target_visual} se3=${se3}/${target_se3}" >&2
+      return
+    fi
+    sleep 1
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/run_native_tracking_bag_report.sh [OPTIONS]
@@ -249,6 +332,14 @@ Options:
   --clock-topics-all           Publish /clock immediately before each replayed message instead of using periodic --clock.
   --timeout SEC                Topic/report timeout. Default: 30.
   --post-play-settle SEC       Time to drain tracking callbacks after rosbag play exits. Default: 8.
+  --post-play-drain-target-poses N
+                               After post-play settle, keep recorder/tracker alive until trajectory_poses reaches N or the drain timeout expires. Default: 0 disabled.
+  --post-play-drain-target-visual-factors N
+                               Also wait until sliding_window_total_visual_factors reaches N. Default: 0 disabled.
+  --post-play-drain-target-se3-factors N
+                               Also wait until sliding_window_total_se3_photometric_factors reaches N. Default: 0 disabled.
+  --post-play-drain-timeout SEC
+                               Maximum additional drain wait. Default: 0 disabled.
   --min-poses N                Minimum recorded frontend odometry poses. Default: 20.
   --min-status-samples N       Minimum TrackingStatus samples. Default: 1.
   --write-status-history       Write per-sample TrackingStatus JSONL for drift diagnostics.
@@ -429,6 +520,24 @@ Options:
                                Bias smoothness weight. Default: 0.1.
   --sliding-window-smoothness-use-motion-targets
                                Use pre-BA local motion curvature as the smoothness target instead of forcing zero curvature. Default: disabled.
+  --sliding-window-smoothness-motion-target-min-visual-factors N
+                               Only apply motion targets when this update has at least N visual factors. Default: 0.
+  --sliding-window-smoothness-motion-target-min-se3-photometric-factors N
+                               Only apply motion targets when this update has at least N SE3 photometric factors. Default: 0.
+  --sliding-window-smoothness-motion-target-recent-window N
+                               Require a recent support window of N BA updates before applying measured motion targets. Default: 0 disabled.
+  --sliding-window-smoothness-motion-target-min-recent-visual-factors N
+                               Minimum visual factors across the recent support window. Default: 0.
+  --sliding-window-smoothness-motion-target-min-recent-se3-photometric-factors N
+                               Minimum SE3 photometric factors across the recent support window. Default: 0.
+  --sliding-window-smoothness-motion-target-start-after-s SEC
+                               Delay motion-target smoothness until SEC after the first sliding-window state. Default: 0.0.
+  --sliding-window-smoothness-motion-target-max-rotation-rate-delta-radps W
+                               Clamp motion-target rotation-rate delta norm. 0 disables clamping. Default: 0.25.
+  --sliding-window-smoothness-motion-target-max-position-rate-delta-mps W
+                               Clamp motion-target position-rate delta norm. 0 disables clamping. Default: 0.5.
+  --sliding-window-smoothness-motion-target-max-velocity-acceleration-delta-mps2 W
+                               Clamp motion-target velocity-acceleration delta norm. 0 disables clamping. Default: 2.0.
   --enable-sliding-window-relative-translation-factor
                                Add an internal adjacent-pose relative translation prior from raw IMU/pre-LIO propagation. Default: disabled.
   --sliding-window-relative-translation-weight W
@@ -628,6 +737,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --post-play-settle)
       POST_PLAY_SETTLE_SEC="$2"
+      shift 2
+      ;;
+    --post-play-drain-target-poses)
+      POST_PLAY_DRAIN_TARGET_POSES="$2"
+      shift 2
+      ;;
+    --post-play-drain-target-visual-factors)
+      POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS="$2"
+      shift 2
+      ;;
+    --post-play-drain-target-se3-factors)
+      POST_PLAY_DRAIN_TARGET_SE3_FACTORS="$2"
+      shift 2
+      ;;
+    --post-play-drain-timeout)
+      POST_PLAY_DRAIN_TIMEOUT_SEC="$2"
       shift 2
       ;;
     --min-poses)
@@ -991,6 +1116,42 @@ while [[ $# -gt 0 ]]; do
     --sliding-window-smoothness-use-motion-targets)
       SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS=true
       shift
+      ;;
+    --sliding-window-smoothness-motion-target-min-visual-factors)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-min-se3-photometric-factors)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-recent-window)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-min-recent-visual-factors)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-min-recent-se3-photometric-factors)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-start-after-s)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-max-rotation-rate-delta-radps)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-max-position-rate-delta-mps)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS="$2"
+      shift 2
+      ;;
+    --sliding-window-smoothness-motion-target-max-velocity-acceleration-delta-mps2)
+      SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2="$2"
+      shift 2
       ;;
     --enable-sliding-window-relative-translation-factor)
       ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR=true
@@ -1499,6 +1660,18 @@ if (( MAPPER_FEEDBACK_TORCH_OPTIMIZATION_STEPS > 0 )); then
   fi
 fi
 
+for float_var in \
+  MAPPER_FEEDBACK_MAX_DEPTH \
+  MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC \
+  MAPPER_FEEDBACK_GAUSSIAN_MAP_PUBLISH_MIN_INTERVAL_SEC \
+  MAPPER_FEEDBACK_POSITION_LR \
+  MAPPER_FEEDBACK_FEATURE_LR \
+  MAPPER_FEEDBACK_OPACITY_LR \
+  MAPPER_FEEDBACK_SCALING_LR \
+  MAPPER_FEEDBACK_ROTATION_LR; do
+  printf -v "${float_var}" '%s' "$(canonical_float "${!float_var}")"
+done
+
 if [[ ! -f "${BAG_PATH}/metadata.yaml" ]]; then
   echo "frontend-raw bag metadata not found: ${BAG_PATH}" >&2
   exit 2
@@ -1553,7 +1726,7 @@ cleanup() {
     wait "${play_pid}" 2>/dev/null || true
   fi
   if [[ -n "${record_pid:-}" ]]; then
-    stop_process_group "${record_pid}" TERM
+    stop_process_group "${record_pid}" INT
   fi
   if [[ -n "${mapper_pid:-}" ]]; then
     stop_process_group "${mapper_pid}" TERM
@@ -1702,6 +1875,15 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_smoothness_position_velocity_weight:="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
   sliding_window_smoothness_bias_weight:="${SLIDING_WINDOW_SMOOTHNESS_BIAS_WEIGHT}" \
   sliding_window_smoothness_use_motion_targets:="${SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS}" \
+  sliding_window_smoothness_motion_target_min_visual_factors:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS}" \
+  sliding_window_smoothness_motion_target_min_se3_photometric_factors:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS}" \
+  sliding_window_smoothness_motion_target_recent_window:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW}" \
+  sliding_window_smoothness_motion_target_min_recent_visual_factors:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS}" \
+  sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS}" \
+  sliding_window_smoothness_motion_target_start_after_s:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S}" \
+  sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS}" \
+  sliding_window_smoothness_motion_target_max_position_rate_delta_mps:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS}" \
+  sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2:="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2}" \
   enable_sliding_window_relative_translation_factor:="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
   sliding_window_relative_translation_weight:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
   sliding_window_relative_translation_huber_delta_m:="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
@@ -1829,7 +2011,13 @@ wait "${play_pid}"
 unset play_pid
 
 sleep "${POST_PLAY_SETTLE_SEC}"
-stop_process_group "${record_pid}" TERM
+wait_for_recorder_drain \
+  "${ARTIFACT_DIR}/metrics.json" \
+  "${POST_PLAY_DRAIN_TARGET_POSES}" \
+  "${POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS}" \
+  "${POST_PLAY_DRAIN_TARGET_SE3_FACTORS}" \
+  "${POST_PLAY_DRAIN_TIMEOUT_SEC}"
+stop_process_group "${record_pid}" INT
 unset record_pid
 
 stop_process_group "${launch_pid}" TERM
@@ -1837,6 +2025,13 @@ unset launch_pid
 
 set +e
 IMU_LINEAR_ACCELERATION_SCALE_REPORT="${IMU_LINEAR_ACCELERATION_SCALE}" \
+PLAYBACK_DURATION_REPORT="${PLAYBACK_DURATION}" \
+TIMEOUT_SEC_REPORT="${TIMEOUT_SEC}" \
+POST_PLAY_SETTLE_SEC_REPORT="${POST_PLAY_SETTLE_SEC}" \
+POST_PLAY_DRAIN_TARGET_POSES_REPORT="${POST_PLAY_DRAIN_TARGET_POSES}" \
+POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS_REPORT="${POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS}" \
+POST_PLAY_DRAIN_TARGET_SE3_FACTORS_REPORT="${POST_PLAY_DRAIN_TARGET_SE3_FACTORS}" \
+POST_PLAY_DRAIN_TIMEOUT_SEC_REPORT="${POST_PLAY_DRAIN_TIMEOUT_SEC}" \
 PLAYBACK_RATE_REPORT="${PLAYBACK_RATE}" \
 PLAYBACK_START_OFFSET_REPORT="${PLAYBACK_START_OFFSET}" \
 PLAYBACK_CLOCK_TOPICS_ALL_REPORT="${PLAYBACK_CLOCK_TOPICS_ALL}" \
@@ -1897,6 +2092,15 @@ SLIDING_WINDOW_MAX_FEEDBACK_ACCEL_BIAS_STEP_REPORT="${SLIDING_WINDOW_MAX_FEEDBAC
 SLIDING_WINDOW_MIN_BIAS_FEEDBACK_VISUAL_FACTORS_REPORT="${SLIDING_WINDOW_MIN_BIAS_FEEDBACK_VISUAL_FACTORS}" \
 SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT_REPORT="${SLIDING_WINDOW_SMOOTHNESS_POSITION_VELOCITY_WEIGHT}" \
 SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS}" \
+SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2_REPORT="${SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2}" \
 SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT}" \
 SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_PRIOR_WEIGHT}" \
 SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_PRIOR_WEIGHT}" \
@@ -2152,6 +2356,35 @@ sliding_window_smoothness_use_motion_targets = (
     os.environ["SLIDING_WINDOW_SMOOTHNESS_USE_MOTION_TARGETS_REPORT"].lower()
     == "true"
 )
+sliding_window_smoothness_motion_target_min_visual_factors = int(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_VISUAL_FACTORS_REPORT"]
+)
+sliding_window_smoothness_motion_target_min_se3_photometric_factors = int(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_SE3_PHOTOMETRIC_FACTORS_REPORT"]
+)
+sliding_window_smoothness_motion_target_recent_window = int(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_RECENT_WINDOW_REPORT"]
+)
+sliding_window_smoothness_motion_target_min_recent_visual_factors = int(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_VISUAL_FACTORS_REPORT"]
+)
+sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors = int(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MIN_RECENT_SE3_PHOTOMETRIC_FACTORS_REPORT"]
+)
+sliding_window_smoothness_motion_target_start_after_s = float(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_START_AFTER_S_REPORT"]
+)
+sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps = float(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_ROTATION_RATE_DELTA_RADPS_REPORT"]
+)
+sliding_window_smoothness_motion_target_max_position_rate_delta_mps = float(
+    os.environ["SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_POSITION_RATE_DELTA_MPS_REPORT"]
+)
+sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2 = float(
+    os.environ[
+        "SLIDING_WINDOW_SMOOTHNESS_MOTION_TARGET_MAX_VELOCITY_ACCELERATION_DELTA_MPS2_REPORT"
+    ]
+)
 sliding_window_imu_velocity_prior_weight = float(
     os.environ["SLIDING_WINDOW_IMU_VELOCITY_PRIOR_WEIGHT_REPORT"]
 )
@@ -2270,8 +2503,16 @@ reference_time_offset_sweep_step = float(os.environ["REFERENCE_TIME_OFFSET_SWEEP
 has_external_reference_tum = reference_tum_path is not None and reference_tum_path.is_file() and reference_tum_path.stat().st_size > 0
 imu_linear_acceleration_scale = float(os.environ["IMU_LINEAR_ACCELERATION_SCALE_REPORT"])
 playback_rate = float(os.environ["PLAYBACK_RATE_REPORT"])
+playback_duration_sec = float(os.environ["PLAYBACK_DURATION_REPORT"])
 playback_start_offset = float(os.environ["PLAYBACK_START_OFFSET_REPORT"])
 playback_clock_topics_all = os.environ["PLAYBACK_CLOCK_TOPICS_ALL_REPORT"].lower() == "true"
+timeout_sec = float(os.environ["TIMEOUT_SEC_REPORT"])
+post_play_settle_sec = float(os.environ["POST_PLAY_SETTLE_SEC_REPORT"])
+post_play_drain_target_poses = int(os.environ["POST_PLAY_DRAIN_TARGET_POSES_REPORT"])
+post_play_drain_target_visual_factors = int(
+    os.environ["POST_PLAY_DRAIN_TARGET_VISUAL_FACTORS_REPORT"])
+post_play_drain_target_se3_factors = int(os.environ["POST_PLAY_DRAIN_TARGET_SE3_FACTORS_REPORT"])
+post_play_drain_timeout_sec = float(os.environ["POST_PLAY_DRAIN_TIMEOUT_SEC_REPORT"])
 max_lidar_invalid_frames = int(os.environ["MAX_LIDAR_INVALID_FRAMES_REPORT"])
 min_status_bin_sample_count = int(os.environ["MIN_STATUS_BIN_SAMPLE_COUNT_REPORT"])
 min_visual_factor_delta_per_status_bin = int(
@@ -2316,6 +2557,34 @@ def summary_delta(bin_summary, key):
 
 if metrics.get("trajectory_poses", 0) < min_poses:
     errors.append(f"trajectory poses {metrics.get('trajectory_poses', 0)} < {min_poses}")
+if (
+    post_play_drain_target_poses > 0
+    and int(metrics.get("trajectory_poses", 0) or 0) < post_play_drain_target_poses
+):
+    errors.append(
+        "post-play trajectory drain target not reached: "
+        f"{metrics.get('trajectory_poses', 0)} < {post_play_drain_target_poses}"
+    )
+if (
+    post_play_drain_target_visual_factors > 0
+    and int(last.get("sliding_window_total_visual_factors", 0) or 0) <
+    post_play_drain_target_visual_factors
+):
+    errors.append(
+        "post-play visual-factor drain target not reached: "
+        f"{last.get('sliding_window_total_visual_factors', 0)} < "
+        f"{post_play_drain_target_visual_factors}"
+    )
+if (
+    post_play_drain_target_se3_factors > 0
+    and int(last.get("sliding_window_total_se3_photometric_factors", 0) or 0) <
+    post_play_drain_target_se3_factors
+):
+    errors.append(
+        "post-play SE3 photometric-factor drain target not reached: "
+        f"{last.get('sliding_window_total_se3_photometric_factors', 0)} < "
+        f"{post_play_drain_target_se3_factors}"
+    )
 if status.get("samples", 0) < min_status:
     errors.append(f"tracking status samples {status.get('samples', 0)} < {min_status}")
 if topic_counts.get("/points_for_gs", 0) < min_point_frames:
@@ -2377,6 +2646,30 @@ if require_gaussian_snapshot:
     elif received_chunks != expected_chunks:
         errors.append(
             f"gaussian snapshot chunks incomplete: {received_chunks}/{expected_chunks}")
+if enable_gaussian_map_feedback:
+    for key in (
+        "pointcloud_messages",
+        "pose_messages",
+        "image_messages",
+        "aligned_frames",
+        "converted_frames",
+        "dropped_pointcloud_messages",
+        "dropped_pose_messages",
+        "dropped_image_messages",
+        "dropped_depth_messages",
+        "pending_pointcloud_messages",
+        "pending_pose_messages",
+        "pending_image_messages",
+        "pending_depth_messages",
+        "rendered_preview_count",
+        "render_error_count",
+    ):
+        if key not in mapping_last:
+            errors.append(f"mapping_status.{key} is missing")
+    if int(mapping_last.get("rendered_preview_count", 0)) <= 0:
+        errors.append("mapping_status.rendered_preview_count is zero")
+    if int(mapping_last.get("render_error_count", 0)) != 0:
+        errors.append(f"mapping_status.render_error_count is {mapping_last.get('render_error_count')}")
 if (
     enable_gaussian_map_feedback
     and mapper_feedback_torch_optimization_enabled
@@ -2615,9 +2908,16 @@ report = {
             "max": reference_time_offset_sweep_max,
             "step": reference_time_offset_sweep_step,
         },
+        "playback_duration_sec": playback_duration_sec,
         "playback_rate": playback_rate,
         "playback_start_offset": playback_start_offset,
         "playback_clock_topics_all": playback_clock_topics_all,
+        "timeout_sec": timeout_sec,
+        "post_play_settle_sec": post_play_settle_sec,
+        "post_play_drain_target_poses": post_play_drain_target_poses,
+        "post_play_drain_target_visual_factors": post_play_drain_target_visual_factors,
+        "post_play_drain_target_se3_factors": post_play_drain_target_se3_factors,
+        "post_play_drain_timeout_sec": post_play_drain_timeout_sec,
         "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
         "max_lidar_invalid_frames": max_lidar_invalid_frames,
         "min_status_bin_sample_count": min_status_bin_sample_count,
@@ -2736,6 +3036,33 @@ report = {
         ),
         "sliding_window_smoothness_use_motion_targets": (
             sliding_window_smoothness_use_motion_targets
+        ),
+        "sliding_window_smoothness_motion_target_min_visual_factors": (
+            sliding_window_smoothness_motion_target_min_visual_factors
+        ),
+        "sliding_window_smoothness_motion_target_min_se3_photometric_factors": (
+            sliding_window_smoothness_motion_target_min_se3_photometric_factors
+        ),
+        "sliding_window_smoothness_motion_target_recent_window": (
+            sliding_window_smoothness_motion_target_recent_window
+        ),
+        "sliding_window_smoothness_motion_target_min_recent_visual_factors": (
+            sliding_window_smoothness_motion_target_min_recent_visual_factors
+        ),
+        "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors": (
+            sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors
+        ),
+        "sliding_window_smoothness_motion_target_start_after_s": (
+            sliding_window_smoothness_motion_target_start_after_s
+        ),
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps": (
+            sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps
+        ),
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_mps": (
+            sliding_window_smoothness_motion_target_max_position_rate_delta_mps
+        ),
+        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2": (
+            sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2
         ),
         "sliding_window_imu_velocity_prior_weight": sliding_window_imu_velocity_prior_weight,
         "sliding_window_gyro_bias_prior_weight": sliding_window_gyro_bias_prior_weight,

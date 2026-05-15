@@ -66,3 +66,23 @@ float32 mean_iteration_ms
 float32 gpu_memory_mb
 
 string active_profile
+
+# Input synchronization diagnostics. `num_dropped_messages` keeps the legacy
+# aggregate, while these fields identify whether late feedback gaps come from
+# point/pose/image/depth alignment, queue pressure, or render throughput.
+uint64 pointcloud_messages
+uint64 pose_messages
+uint64 image_messages
+uint64 depth_messages
+uint64 aligned_frames
+uint64 converted_frames
+uint64 dropped_pointcloud_messages
+uint64 dropped_pose_messages
+uint64 dropped_image_messages
+uint64 dropped_depth_messages
+uint64 pending_pointcloud_messages
+uint64 pending_pose_messages
+uint64 pending_image_messages
+uint64 pending_depth_messages
+uint64 rendered_preview_count
+uint64 render_error_count

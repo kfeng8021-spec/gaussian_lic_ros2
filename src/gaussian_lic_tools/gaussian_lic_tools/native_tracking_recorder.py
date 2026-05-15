@@ -2,6 +2,7 @@
 
 import json
 import math
+import signal
 from pathlib import Path
 
 import rclpy
@@ -349,6 +350,14 @@ class NativeTrackingRecorder(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = NativeTrackingRecorder()
+
+    def request_final_flush(_signum, _frame):
+        raise KeyboardInterrupt
+
+    previous_sigint = signal.getsignal(signal.SIGINT)
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGINT, request_final_flush)
+    signal.signal(signal.SIGTERM, request_final_flush)
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
@@ -357,6 +366,8 @@ def main(args=None):
         if "context is not valid" not in str(exc):
             raise
     finally:
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
         node.flush(final=True)
         node.destroy_node()
         if rclpy.ok():

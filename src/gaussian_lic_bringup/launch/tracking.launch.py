@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -219,6 +220,37 @@ def generate_launch_description():
     sliding_window_smoothness_bias_weight = LaunchConfiguration("sliding_window_smoothness_bias_weight")
     sliding_window_smoothness_use_motion_targets = LaunchConfiguration(
         "sliding_window_smoothness_use_motion_targets"
+    )
+    sliding_window_smoothness_motion_target_min_visual_factors = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_min_visual_factors"
+    )
+    sliding_window_smoothness_motion_target_min_se3_photometric_factors = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_min_se3_photometric_factors"
+    )
+    sliding_window_smoothness_motion_target_recent_window = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_recent_window"
+    )
+    sliding_window_smoothness_motion_target_min_recent_visual_factors = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_min_recent_visual_factors"
+    )
+    sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors = (
+        LaunchConfiguration(
+            "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors"
+        )
+    )
+    sliding_window_smoothness_motion_target_start_after_s = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_start_after_s"
+    )
+    sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps"
+    )
+    sliding_window_smoothness_motion_target_max_position_rate_delta_mps = LaunchConfiguration(
+        "sliding_window_smoothness_motion_target_max_position_rate_delta_mps"
+    )
+    sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2 = (
+        LaunchConfiguration(
+            "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2"
+        )
     )
     enable_sliding_window_relative_translation_factor = LaunchConfiguration(
         "enable_sliding_window_relative_translation_factor"
@@ -535,6 +567,42 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_smoothness_position_velocity_weight", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_smoothness_bias_weight", default_value="0.1"),
             DeclareLaunchArgument("sliding_window_smoothness_use_motion_targets", default_value="false"),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_min_visual_factors",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_min_se3_photometric_factors",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_recent_window",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_min_recent_visual_factors",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_start_after_s",
+                default_value="0.0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps",
+                default_value="0.25",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_max_position_rate_delta_mps",
+                default_value="0.5",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2",
+                default_value="2.0",
+            ),
             DeclareLaunchArgument("enable_sliding_window_relative_translation_factor", default_value="false"),
             DeclareLaunchArgument("sliding_window_relative_translation_weight", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_relative_translation_huber_delta_m", default_value="0.1"),
@@ -813,6 +881,45 @@ def generate_launch_description():
                         "sliding_window_smoothness_bias_weight": sliding_window_smoothness_bias_weight,
                         "sliding_window_smoothness_use_motion_targets": (
                             sliding_window_smoothness_use_motion_targets
+                        ),
+                        "sliding_window_smoothness_motion_target_min_visual_factors": (
+                            sliding_window_smoothness_motion_target_min_visual_factors
+                        ),
+                        "sliding_window_smoothness_motion_target_min_se3_photometric_factors": (
+                            sliding_window_smoothness_motion_target_min_se3_photometric_factors
+                        ),
+                        "sliding_window_smoothness_motion_target_recent_window": (
+                            sliding_window_smoothness_motion_target_recent_window
+                        ),
+                        "sliding_window_smoothness_motion_target_min_recent_visual_factors": (
+                            sliding_window_smoothness_motion_target_min_recent_visual_factors
+                        ),
+                        "sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors": (
+                            sliding_window_smoothness_motion_target_min_recent_se3_photometric_factors
+                        ),
+                        "sliding_window_smoothness_motion_target_start_after_s": (
+                            ParameterValue(
+                                sliding_window_smoothness_motion_target_start_after_s,
+                                value_type=float,
+                            )
+                        ),
+                        "sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps": (
+                            ParameterValue(
+                                sliding_window_smoothness_motion_target_max_rotation_rate_delta_radps,
+                                value_type=float,
+                            )
+                        ),
+                        "sliding_window_smoothness_motion_target_max_position_rate_delta_mps": (
+                            ParameterValue(
+                                sliding_window_smoothness_motion_target_max_position_rate_delta_mps,
+                                value_type=float,
+                            )
+                        ),
+                        "sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2": (
+                            ParameterValue(
+                                sliding_window_smoothness_motion_target_max_velocity_acceleration_delta_mps2,
+                                value_type=float,
+                            )
                         ),
                         "enable_sliding_window_relative_translation_factor": (
                             enable_sliding_window_relative_translation_factor
