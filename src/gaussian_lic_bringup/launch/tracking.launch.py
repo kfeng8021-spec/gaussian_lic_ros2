@@ -95,6 +95,12 @@ def generate_launch_description():
     rendered_frame_cache_size = LaunchConfiguration("rendered_frame_cache_size")
     observed_frame_cache_size = LaunchConfiguration("observed_frame_cache_size")
     visual_pending_factor_queue_size = LaunchConfiguration("visual_pending_factor_queue_size")
+    enable_visual_factor_quality_weighting = LaunchConfiguration(
+        "enable_visual_factor_quality_weighting"
+    )
+    visual_factor_quality_min_weight_scale = LaunchConfiguration(
+        "visual_factor_quality_min_weight_scale"
+    )
     enable_visual_factor_quality_selection = LaunchConfiguration(
         "enable_visual_factor_quality_selection"
     )
@@ -513,6 +519,8 @@ def generate_launch_description():
             DeclareLaunchArgument("rendered_frame_cache_size", default_value="8"),
             DeclareLaunchArgument("observed_frame_cache_size", default_value="64"),
             DeclareLaunchArgument("visual_pending_factor_queue_size", default_value="64"),
+            DeclareLaunchArgument("enable_visual_factor_quality_weighting", default_value="false"),
+            DeclareLaunchArgument("visual_factor_quality_min_weight_scale", default_value="0.25"),
             DeclareLaunchArgument("enable_visual_factor_quality_selection", default_value="false"),
             DeclareLaunchArgument("enable_visual_factor_quality_reference_cap", default_value="true"),
             DeclareLaunchArgument(
@@ -802,6 +810,15 @@ def generate_launch_description():
                         "rendered_frame_cache_size": rendered_frame_cache_size,
                         "observed_frame_cache_size": observed_frame_cache_size,
                         "visual_pending_factor_queue_size": visual_pending_factor_queue_size,
+                        "enable_visual_factor_quality_weighting": (
+                            enable_visual_factor_quality_weighting
+                        ),
+                        "visual_factor_quality_min_weight_scale": (
+                            ParameterValue(
+                                visual_factor_quality_min_weight_scale,
+                                value_type=float,
+                            )
+                        ),
                         "enable_visual_factor_quality_selection": enable_visual_factor_quality_selection,
                         "enable_visual_factor_quality_reference_cap": (
                             enable_visual_factor_quality_reference_cap

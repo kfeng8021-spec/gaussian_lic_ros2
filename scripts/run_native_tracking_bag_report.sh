@@ -216,6 +216,8 @@ VISUAL_DEPTH_DILATION_PX=5
 RENDERED_FRAME_CACHE_SIZE=64
 OBSERVED_FRAME_CACHE_SIZE=128
 VISUAL_PENDING_FACTOR_QUEUE_SIZE=128
+ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING=false
+VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE=0.25
 ENABLE_VISUAL_FACTOR_QUALITY_SELECTION=false
 ENABLE_VISUAL_FACTOR_QUALITY_REFERENCE_CAP=true
 VISUAL_FACTOR_QUALITY_SELECTION_MAX_PER_REFERENCE=2
@@ -686,6 +688,12 @@ Options:
                                tracking_node observed-image cache size for delayed mapper feedback. Default: 128.
   --visual-pending-factor-queue-size N
                                tracking_node pending visual/SE3 factor queue size before BA ingestion. Default: 128.
+  --enable-visual-factor-quality-weighting
+                               Preserve visual/SE3 factor continuity but downweight stale, saturated, or low-coverage observations. Default: disabled.
+  --disable-visual-factor-quality-weighting
+                               Disable visual/SE3 quality weight scaling.
+  --visual-factor-quality-min-weight-scale S
+                               Minimum multiplicative weight scale for quality-weighted visual/SE3 factors. Default: 0.25.
   --enable-visual-factor-quality-selection
                                Enable quality-ranked pending visual/SE3 selection before BA ingestion. Default: disabled.
   --disable-visual-factor-quality-selection
@@ -1598,6 +1606,18 @@ while [[ $# -gt 0 ]]; do
       VISUAL_PENDING_FACTOR_QUEUE_SIZE="$2"
       shift 2
       ;;
+    --enable-visual-factor-quality-weighting)
+      ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING=true
+      shift
+      ;;
+    --disable-visual-factor-quality-weighting)
+      ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING=false
+      shift
+      ;;
+    --visual-factor-quality-min-weight-scale)
+      VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE="$2"
+      shift 2
+      ;;
     --enable-visual-factor-quality-selection)
       ENABLE_VISUAL_FACTOR_QUALITY_SELECTION=true
       shift
@@ -1976,6 +1996,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   rendered_frame_cache_size:="${RENDERED_FRAME_CACHE_SIZE}" \
   observed_frame_cache_size:="${OBSERVED_FRAME_CACHE_SIZE}" \
   visual_pending_factor_queue_size:="${VISUAL_PENDING_FACTOR_QUEUE_SIZE}" \
+  enable_visual_factor_quality_weighting:="${ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING}" \
+  visual_factor_quality_min_weight_scale:="${VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE}" \
   enable_visual_factor_quality_selection:="${ENABLE_VISUAL_FACTOR_QUALITY_SELECTION}" \
   enable_visual_factor_quality_reference_cap:="${ENABLE_VISUAL_FACTOR_QUALITY_REFERENCE_CAP}" \
   visual_factor_quality_selection_max_per_reference:="${VISUAL_FACTOR_QUALITY_SELECTION_MAX_PER_REFERENCE}" \
@@ -2395,6 +2417,8 @@ VISUAL_ALIGNMENT_MAX_SHIFT_PX_REPORT="${VISUAL_ALIGNMENT_MAX_SHIFT_PX}" \
 VISUAL_ALIGNMENT_SCORE_MODE_REPORT="${VISUAL_ALIGNMENT_SCORE_MODE}" \
 VISUAL_ALIGNMENT_FACTOR_SOURCE_REPORT="${VISUAL_ALIGNMENT_FACTOR_SOURCE}" \
 VISUAL_FACTOR_SOURCE_ID_MODE_REPORT="${VISUAL_FACTOR_SOURCE_ID_MODE}" \
+ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING_REPORT="${ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING}" \
+VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE_REPORT="${VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE}" \
 ENABLE_VISUAL_FACTOR_QUALITY_SELECTION_REPORT="${ENABLE_VISUAL_FACTOR_QUALITY_SELECTION}" \
 ENABLE_VISUAL_FACTOR_QUALITY_REFERENCE_CAP_REPORT="${ENABLE_VISUAL_FACTOR_QUALITY_REFERENCE_CAP}" \
 VISUAL_FACTOR_QUALITY_SELECTION_MAX_PER_REFERENCE_REPORT="${VISUAL_FACTOR_QUALITY_SELECTION_MAX_PER_REFERENCE}" \
@@ -2460,6 +2484,12 @@ visual_alignment_max_shift_px = int(os.environ["VISUAL_ALIGNMENT_MAX_SHIFT_PX_RE
 visual_alignment_score_mode = os.environ["VISUAL_ALIGNMENT_SCORE_MODE_REPORT"]
 visual_alignment_factor_source = os.environ["VISUAL_ALIGNMENT_FACTOR_SOURCE_REPORT"]
 visual_factor_source_id_mode = os.environ["VISUAL_FACTOR_SOURCE_ID_MODE_REPORT"]
+enable_visual_factor_quality_weighting = (
+    os.environ["ENABLE_VISUAL_FACTOR_QUALITY_WEIGHTING_REPORT"].lower() == "true"
+)
+visual_factor_quality_min_weight_scale = float(
+    os.environ["VISUAL_FACTOR_QUALITY_MIN_WEIGHT_SCALE_REPORT"]
+)
 enable_visual_factor_quality_selection = (
     os.environ["ENABLE_VISUAL_FACTOR_QUALITY_SELECTION_REPORT"].lower() == "true"
 )
@@ -3351,6 +3381,8 @@ report = {
         "visual_alignment_window_weight": visual_alignment_window_weight,
         "visual_alignment_saturation_margin_px": visual_alignment_saturation_margin_px,
         "visual_alignment_saturated_weight_scale": visual_alignment_saturated_weight_scale,
+        "enable_visual_factor_quality_weighting": enable_visual_factor_quality_weighting,
+        "visual_factor_quality_min_weight_scale": visual_factor_quality_min_weight_scale,
         "se3_photometric_window_weight": se3_photometric_window_weight,
         "se3_photometric_max_samples": se3_photometric_max_samples,
         "mapper_feedback_sync_tolerance_sec": mapper_feedback_sync_tolerance_sec,

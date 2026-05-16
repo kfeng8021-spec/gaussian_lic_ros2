@@ -275,6 +275,11 @@ public:
     visual_pending_factor_queue_size_ = integer_parameter_at_least(
       "visual_pending_factor_queue_size",
       declare_parameter<int>("visual_pending_factor_queue_size", 64), 1);
+    enable_visual_factor_quality_weighting_ =
+      declare_parameter<bool>("enable_visual_factor_quality_weighting", false);
+    visual_factor_quality_min_weight_scale_ = finite_unit_interval_parameter(
+      "visual_factor_quality_min_weight_scale",
+      declare_parameter<double>("visual_factor_quality_min_weight_scale", 0.25));
     enable_visual_factor_quality_selection_ =
       declare_parameter<bool>("enable_visual_factor_quality_selection", false);
     visual_factor_quality_selection_max_per_reference_ = integer_parameter_at_least(
@@ -1900,6 +1905,55 @@ private:
     return score;
   }
 
+  double visual_factor_quality_weight_floor() const
+  {
+    return std::max(visual_factor_quality_min_weight_scale_, 1.0e-9);
+  }
+
+  double bounded_visual_factor_quality_weight(const double weight) const
+  {
+    if (!std::isfinite(weight) || weight <= 0.0) {
+      return visual_factor_quality_weight_floor();
+    }
+    return std::clamp(weight, visual_factor_quality_weight_floor(), 1.0);
+  }
+
+  double visual_pair_dt_quality_weight(const int64_t pair_stamp_delta_ns) const
+  {
+    if (!enable_visual_factor_quality_weighting_ || visual_factor_max_dt_ns_ <= 0LL) {
+      return 1.0;
+    }
+    const double pair_dt_ns = static_cast<double>(std::max<int64_t>(pair_stamp_delta_ns, 0LL));
+    const double max_dt_ns = static_cast<double>(visual_factor_max_dt_ns_);
+    return bounded_visual_factor_quality_weight(1.0 - (pair_dt_ns / max_dt_ns));
+  }
+
+  double visual_alignment_quality_weight_scale(const PendingVisualAlignmentFactor & pending) const
+  {
+    if (!enable_visual_factor_quality_weighting_) {
+      return 1.0;
+    }
+    double weight = visual_pair_dt_quality_weight(pending.pair_stamp_delta_ns);
+    if (visual_alignment_is_saturated(pending.alignment)) {
+      weight = std::min(weight, visual_factor_quality_weight_floor());
+    }
+    return bounded_visual_factor_quality_weight(weight);
+  }
+
+  double se3_photometric_quality_weight_scale(const PendingSe3PhotometricFactor & pending) const
+  {
+    if (!enable_visual_factor_quality_weighting_) {
+      return 1.0;
+    }
+    double weight = visual_pair_dt_quality_weight(pending.pair_stamp_delta_ns);
+    weight *= std::clamp(pending.sample_inlier_ratio, visual_factor_quality_weight_floor(), 1.0);
+    if (pending.coverage_total_tiles > 0U) {
+      weight *= std::clamp(
+        se3_candidate_coverage_ratio(pending), visual_factor_quality_weight_floor(), 1.0);
+    }
+    return bounded_visual_factor_quality_weight(weight);
+  }
+
   bool visual_factor_quality_selection_is_active(const int64_t stamp_ns) const
   {
     if (!enable_visual_factor_quality_selection_) {
@@ -2376,7 +2430,9 @@ private:
           pending.alignment.subpixel_dx,
           pending.alignment.subpixel_dy};
         visual_factor.meters_per_pixel = visual_alignment_meters_per_pixel_;
-        visual_factor.weight = visual_alignment_effective_weight(pending.alignment);
+        visual_factor.weight =
+          visual_alignment_effective_weight(pending.alignment) *
+          visual_alignment_quality_weight_scale(pending);
         visual_factor.huber_delta_m = visual_alignment_huber_delta_m_;
         add_visual_window_factor(visual_factor, visual_alignment_candidate_score(pending));
       }
@@ -2410,7 +2466,8 @@ private:
           pending.linearization.hessian);
         factor.sqrt_information =
           gaussian_lic_tracking::sqrt_information_from_hessian(body_hessian);
-        factor.weight = se3_photometric_window_weight_;
+        factor.weight =
+          se3_photometric_window_weight_ * se3_photometric_quality_weight_scale(pending);
         factor.huber_delta = se3_photometric_factor_huber_delta_;
         if (factor.sqrt_information.norm() > std::numeric_limits<double>::epsilon()) {
           add_se3_photometric_factor(factor, se3_photometric_candidate_score(pending));
@@ -5555,6 +5612,8 @@ private:
   int rendered_frame_cache_size_{8};
   int observed_frame_cache_size_{64};
   int visual_pending_factor_queue_size_{64};
+  bool enable_visual_factor_quality_weighting_{false};
+  double visual_factor_quality_min_weight_scale_{0.25};
   bool enable_visual_factor_quality_selection_{false};
   bool enable_visual_factor_quality_reference_cap_{true};
   int visual_factor_quality_selection_max_per_reference_{2};
