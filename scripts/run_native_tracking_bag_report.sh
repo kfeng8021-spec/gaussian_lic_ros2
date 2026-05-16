@@ -89,6 +89,8 @@ SLIDING_WINDOW_MAX_FEEDBACK_GYRO_BIAS_STEP_EXPLICIT=false
 SLIDING_WINDOW_MAX_FEEDBACK_ACCEL_BIAS_STEP_EXPLICIT=false
 SLIDING_WINDOW_MIN_BIAS_FEEDBACK_VISUAL_FACTORS=0
 SLIDING_WINDOW_SYNC_GUARDED_POSE_STATE=false
+SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT=0.0
+SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT=0.0
 SLIDING_WINDOW_IMU_WEIGHT=1.0
 SLIDING_WINDOW_IMU_ROTATION_WEIGHT=1.0
 SLIDING_WINDOW_IMU_VELOCITY_WEIGHT=1.0
@@ -132,12 +134,18 @@ SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD=0.08
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S=0.45
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S=1.05
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS=1
+ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR=false
+SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S=0.0
+SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS=1
+SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE=pre_ba
+SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S=0.0
 REQUIRE_BA_FEEDBACK=false
 REQUIRE_NONDEGENERATE_BA=false
 REQUIRE_DESKEW=false
 ENABLE_VISUAL_FACTORS=false
 ENABLE_MAPPER_FEEDBACK=false
 MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC=0.05
+MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM=pointcloud
 ENABLE_GAUSSIAN_MAP_FEEDBACK=false
 REQUIRE_GAUSSIAN_SNAPSHOT=false
 MAPPER_FEEDBACK_RENDER_MODE="${MAPPER_FEEDBACK_RENDER_MODE:-debug_input}"
@@ -201,6 +209,8 @@ VISUAL_FACTOR_MAX_DT_NS=300000000
 VISUAL_DEPTH_MAX_DT_NS=0
 VISUAL_DEPTH_FRAME_CACHE_SIZE=64
 VISUAL_DEPTH_DILATION_PX=5
+RENDERED_FRAME_CACHE_SIZE=64
+OBSERVED_FRAME_CACHE_SIZE=128
 VISUAL_PENDING_FACTOR_QUEUE_SIZE=128
 VISUAL_ALIGNMENT_WINDOW_WEIGHT=1.0
 SE3_PHOTOMETRIC_WINDOW_WEIGHT=0.5
@@ -391,6 +401,21 @@ Options:
                                Maximum span for the multi-hop relative translation factor. Default: 1.05.
   --sliding-window-multihop-relative-translation-max-factors N
                                Max multi-hop relative translation factors inserted per frame. Default: 1.
+  --enable-sliding-window-delayed-published-multihop-relative-translation-factor
+                               Add same-stream published-to-published multi-hop relative factors after
+                               post-BA/guard output, so the next solve/marginalization can test endpoint
+                               consistency without replacing the production pre-BA path. Default: disabled.
+  --sliding-window-delayed-published-multihop-start-after-s SEC
+                               Warmup before adding delayed published multi-hop factors. Default: 0.
+  --sliding-window-delayed-published-multihop-max-factors N
+                               Max delayed published multi-hop factors inserted per frame. Default: 1.
+  --sliding-window-relative-motion-history-source pre_ba|published|published_after_warmup
+                               Source used to build relative/multihop motion-history factors.
+                               pre_ba preserves the production default; published tests whether
+                               final post-BA poses reduce long-horizon shape drift.
+  --sliding-window-relative-motion-history-published-after-s SEC
+                               With published_after_warmup, switch from pre-BA to published pose
+                               history after SEC from the first sliding-window state. Default: 0.
   --lidar-keyframe-translation-m M
                                Keyframe insertion threshold. Default: 0.0 for strict replay sweeps.
   --max-lidar-invalid-frames N  Maximum invalid LiDAR frames tolerated by report gate. Default: 0.
@@ -485,6 +510,8 @@ Options:
                                Hold optimized bias feedback unless the current BA update added at least N visual/SE3 factors. Default: 0 disabled.
   --sliding-window-sync-guarded-pose-state
                                Experimental: after post-BA step guard clamps/rejects a pose, synchronize the same sliding-window state to the final published pose. Default: disabled.
+  --sliding-window-guarded-pose-prior-weights TRANS ROT
+                               Experimental: after post-BA guard clamps/rejects a pose, add a soft pose prior at the guarded output pose. Default: 0 0 disabled.
   --sliding-window-imu-weight W
                                IMU residual weight. Default: 1.0.
   --sliding-window-imu-rotation-weight W
@@ -588,6 +615,8 @@ Options:
                                Minimum 1-min(scale)/max(scale) before a Gaussian contributes a plane normal. Default: 0.25.
   --mapper-feedback-sync-tolerance-sec SEC
                                mapping_node frame sync tolerance for mapper feedback. Default: 0.05.
+  --mapper-feedback-sync-anchor STREAM
+                               mapping_node synchronization anchor stream for mapper feedback: pointcloud or image. Default: pointcloud.
   --mapper-feedback-render-mode MODE
                                mapping_node rendered image mode for feedback. Default: debug_input; --enable-gaussian-map-feedback promotes this to rasterizer unless explicitly set.
   --mapper-feedback-pointcloud-coordinates MODE
@@ -633,6 +662,10 @@ Options:
   --visual-factor-max-dt-ns NS Max nearest-stamp delta for rendered/observed visual BA pairing. Default: 300000000.
   --visual-depth-max-dt-ns NS  Max nearest-stamp delta for sparse LiDAR depth selected by SE3 visual BA. Default: 0, follow --visual-factor-max-dt-ns.
   --visual-depth-dilation-px N Sparse LiDAR depth projection dilation radius for SE3 visual BA. Default: 5.
+  --rendered-frame-cache-size N
+                               tracking_node rendered-image cache size for delayed mapper feedback. Default: 64.
+  --observed-frame-cache-size N
+                               tracking_node observed-image cache size for delayed mapper feedback. Default: 128.
   --visual-alignment-window-weight W
                                Sliding-window 2D visual alignment factor weight. Default: 1.0.
   --se3-photometric-window-weight W
@@ -1048,6 +1081,11 @@ while [[ $# -gt 0 ]]; do
       SLIDING_WINDOW_SYNC_GUARDED_POSE_STATE=true
       shift
       ;;
+    --sliding-window-guarded-pose-prior-weights)
+      SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT="$2"
+      SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT="$3"
+      shift 3
+      ;;
     --sliding-window-imu-weight)
       SLIDING_WINDOW_IMU_WEIGHT="$2"
       shift 2
@@ -1220,6 +1258,26 @@ while [[ $# -gt 0 ]]; do
       SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS="$2"
       shift 2
       ;;
+    --enable-sliding-window-delayed-published-multihop-relative-translation-factor)
+      ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR=true
+      shift
+      ;;
+    --sliding-window-delayed-published-multihop-start-after-s)
+      SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S="$2"
+      shift 2
+      ;;
+    --sliding-window-delayed-published-multihop-max-factors)
+      SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS="$2"
+      shift 2
+      ;;
+    --sliding-window-relative-motion-history-source)
+      SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE="$2"
+      shift 2
+      ;;
+    --sliding-window-relative-motion-history-published-after-s)
+      SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S="$2"
+      shift 2
+      ;;
     --require-ba-feedback)
       REQUIRE_BA_FEEDBACK=true
       shift
@@ -1363,6 +1421,10 @@ while [[ $# -gt 0 ]]; do
       MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC="$2"
       shift 2
       ;;
+    --mapper-feedback-sync-anchor)
+      MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM="$2"
+      shift 2
+      ;;
     --mapper-feedback-render-mode)
       MAPPER_FEEDBACK_RENDER_MODE="$2"
       MAPPER_FEEDBACK_RENDER_MODE_EXPLICIT=true
@@ -1468,6 +1530,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --visual-depth-dilation-px)
       VISUAL_DEPTH_DILATION_PX="$2"
+      shift 2
+      ;;
+    --rendered-frame-cache-size)
+      RENDERED_FRAME_CACHE_SIZE="$2"
+      shift 2
+      ;;
+    --observed-frame-cache-size)
+      OBSERVED_FRAME_CACHE_SIZE="$2"
       shift 2
       ;;
     --visual-alignment-window-weight)
@@ -1667,6 +1737,24 @@ if (( MAPPER_FEEDBACK_TORCH_OPTIMIZATION_STEPS > 0 )); then
   fi
 fi
 
+case "${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" in
+  pointcloud|image)
+    ;;
+  *)
+    echo "--mapper-feedback-sync-anchor must be pointcloud or image, got ${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" >&2
+    exit 2
+    ;;
+esac
+
+case "${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE}" in
+  pre_ba|published|published_after_warmup)
+    ;;
+  *)
+    echo "--sliding-window-relative-motion-history-source must be pre_ba, published, or published_after_warmup, got ${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE}" >&2
+    exit 2
+    ;;
+esac
+
 for float_var in \
   MAPPER_FEEDBACK_MAX_DEPTH \
   MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC \
@@ -1675,7 +1763,11 @@ for float_var in \
   MAPPER_FEEDBACK_FEATURE_LR \
   MAPPER_FEEDBACK_OPACITY_LR \
   MAPPER_FEEDBACK_SCALING_LR \
-  MAPPER_FEEDBACK_ROTATION_LR; do
+  MAPPER_FEEDBACK_ROTATION_LR \
+  SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT \
+  SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT \
+  SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S \
+  SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S; do
   printf -v "${float_var}" '%s' "$(canonical_float "${!float_var}")"
 done
 
@@ -1759,8 +1851,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sparse_lidar_depth_dilation_px:="${VISUAL_DEPTH_DILATION_PX}" \
   visual_alignment_window_weight:="${VISUAL_ALIGNMENT_WINDOW_WEIGHT}" \
   se3_photometric_window_weight:="${SE3_PHOTOMETRIC_WINDOW_WEIGHT}" \
-  rendered_frame_cache_size:=64 \
-  observed_frame_cache_size:=128 \
+  rendered_frame_cache_size:="${RENDERED_FRAME_CACHE_SIZE}" \
+  observed_frame_cache_size:="${OBSERVED_FRAME_CACHE_SIZE}" \
   visual_pending_factor_queue_size:="${VISUAL_PENDING_FACTOR_QUEUE_SIZE}" \
   se3_photometric_max_samples:="${SE3_PHOTOMETRIC_MAX_SAMPLES}" \
   se3_photometric_min_samples:="${SE3_PHOTOMETRIC_MIN_SAMPLES}" \
@@ -1864,6 +1956,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_max_feedback_accel_bias_step:="${SLIDING_WINDOW_MAX_FEEDBACK_ACCEL_BIAS_STEP}" \
   sliding_window_min_bias_feedback_visual_factors:="${SLIDING_WINDOW_MIN_BIAS_FEEDBACK_VISUAL_FACTORS}" \
   sliding_window_sync_guarded_pose_state:="${SLIDING_WINDOW_SYNC_GUARDED_POSE_STATE}" \
+  sliding_window_guarded_pose_prior_translation_weight:="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT}" \
+  sliding_window_guarded_pose_prior_rotation_weight:="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT}" \
   sliding_window_imu_weight:="${SLIDING_WINDOW_IMU_WEIGHT}" \
   sliding_window_imu_rotation_weight:="${SLIDING_WINDOW_IMU_ROTATION_WEIGHT}" \
   sliding_window_imu_velocity_weight:="${SLIDING_WINDOW_IMU_VELOCITY_WEIGHT}" \
@@ -1907,6 +2001,11 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_multihop_relative_translation_min_dt_s:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S}" \
   sliding_window_multihop_relative_translation_max_dt_s:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S}" \
   sliding_window_multihop_relative_translation_max_factors:="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS}" \
+  enable_sliding_window_delayed_published_multihop_relative_translation_factor:="${ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR}" \
+  sliding_window_delayed_published_multihop_start_after_s:="${SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S}" \
+  sliding_window_delayed_published_multihop_max_factors:="${SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS}" \
+  sliding_window_relative_motion_history_source:="${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE}" \
+  sliding_window_relative_motion_history_published_after_s:="${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S}" \
   >"${launch_log}" 2>&1 &
 launch_pid=$!
 
@@ -1926,6 +2025,7 @@ if [[ "${ENABLE_MAPPER_FEEDBACK}" == "true" ]]; then
     -p rendered_image_qos_durability:="${RENDERED_IMAGE_QOS_DURABILITY}" \
     -p rendered_image_qos_depth:="${RENDERED_IMAGE_QOS_DEPTH}" \
     -p sync_tolerance_sec:="${MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC}" \
+    -p sync_anchor_stream:="${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" \
     -p select_every_k_frame:="${MAPPER_FEEDBACK_SELECT_EVERY_K_FRAME}" \
     -p require_depth_topic:=false \
     -p publish_gaussian_map:="${MAPPER_FEEDBACK_PUBLISH_GAUSSIAN_MAP}" \
@@ -2117,6 +2217,8 @@ SLIDING_WINDOW_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_BIAS_WEIGHT}" \
 SLIDING_WINDOW_GYRO_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_WEIGHT}" \
 SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_WEIGHT}" \
 SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S_REPORT="${SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S}" \
+SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT}" \
+SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT_REPORT="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT}" \
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M_REPORT="${SLIDING_WINDOW_RELATIVE_TRANSLATION_HUBER_DELTA_M}" \
@@ -2132,6 +2234,11 @@ SLIDING_WINDOW_MULTIHOP_RELATIVE_ROTATION_HUBER_DELTA_RAD_REPORT="${SLIDING_WIND
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MIN_DT_S}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_DT_S}" \
 SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS_REPORT="${SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS}" \
+ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR}" \
+SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S_REPORT="${SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S}" \
+SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS_REPORT="${SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS}" \
+SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE_REPORT="${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE}" \
+SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S_REPORT="${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S}" \
 REFERENCE_ERROR_BIN_COUNT_REPORT="${REFERENCE_ERROR_BIN_COUNT}" \
 REFERENCE_MIN_ERROR_BIN_MATCHES_REPORT="${REFERENCE_MIN_ERROR_BIN_MATCHES}" \
 REFERENCE_MAX_ERROR_BIN_RMSE_M_REPORT="${REFERENCE_MAX_ERROR_BIN_RMSE_M}" \
@@ -2151,6 +2258,9 @@ SE3_PHOTOMETRIC_POSE_CORRECTION_MAX_DT_NS_REPORT="${SE3_PHOTOMETRIC_POSE_CORRECT
 RENDERED_IMAGE_QOS_RELIABILITY_REPORT="${RENDERED_IMAGE_QOS_RELIABILITY}" \
 RENDERED_IMAGE_QOS_DURABILITY_REPORT="${RENDERED_IMAGE_QOS_DURABILITY}" \
 RENDERED_IMAGE_QOS_DEPTH_REPORT="${RENDERED_IMAGE_QOS_DEPTH}" \
+MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM_REPORT="${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" \
+RENDERED_FRAME_CACHE_SIZE_REPORT="${RENDERED_FRAME_CACHE_SIZE}" \
+OBSERVED_FRAME_CACHE_SIZE_REPORT="${OBSERVED_FRAME_CACHE_SIZE}" \
 python3 - "${ARTIFACT_DIR}/metrics.json" "${REPORT_JSON}" \
   "${MIN_POSES}" "${MIN_STATUS_SAMPLES}" "${MIN_POINT_FRAMES}" "${REQUIRE_BA_FEEDBACK}" \
   "${REQUIRE_REFERENCE_TRAJECTORY}" "${MIN_REFERENCE_POSES}" "${REQUIRE_NONDEGENERATE_BA}" \
@@ -2238,6 +2348,7 @@ se3_photometric_pose_correction_max_dt_ns = int(
     os.environ["SE3_PHOTOMETRIC_POSE_CORRECTION_MAX_DT_NS_REPORT"]
 )
 mapper_feedback_sync_tolerance_sec = float(sys.argv[26])
+mapper_feedback_sync_anchor_stream = os.environ["MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM_REPORT"]
 enable_gaussian_map_feedback = sys.argv[27].lower() == "true"
 require_gaussian_snapshot = sys.argv[28].lower() == "true"
 mapper_feedback_torch_device = sys.argv[29]
@@ -2415,6 +2526,12 @@ sliding_window_min_bias_feedback_visual_factors = int(
 sliding_window_sync_guarded_pose_state = (
     os.environ["SLIDING_WINDOW_SYNC_GUARDED_POSE_STATE_REPORT"].lower() == "true"
 )
+sliding_window_guarded_pose_prior_translation_weight = float(
+    os.environ["SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT_REPORT"]
+)
+sliding_window_guarded_pose_prior_rotation_weight = float(
+    os.environ["SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT_REPORT"]
+)
 sliding_window_bias_weight = float(os.environ["SLIDING_WINDOW_BIAS_WEIGHT_REPORT"])
 sliding_window_gyro_bias_weight = float(os.environ["SLIDING_WINDOW_GYRO_BIAS_WEIGHT_REPORT"])
 sliding_window_accel_bias_weight = float(os.environ["SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT"])
@@ -2468,6 +2585,24 @@ sliding_window_multihop_relative_translation_max_dt_s = float(
 )
 sliding_window_multihop_relative_translation_max_factors = int(
     os.environ["SLIDING_WINDOW_MULTIHOP_RELATIVE_TRANSLATION_MAX_FACTORS_REPORT"]
+)
+enable_sliding_window_delayed_published_multihop_relative_translation_factor = (
+    os.environ[
+        "ENABLE_SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_RELATIVE_TRANSLATION_FACTOR_REPORT"
+    ].lower()
+    == "true"
+)
+sliding_window_delayed_published_multihop_start_after_s = float(
+    os.environ["SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_START_AFTER_S_REPORT"]
+)
+sliding_window_delayed_published_multihop_max_factors = int(
+    os.environ["SLIDING_WINDOW_DELAYED_PUBLISHED_MULTIHOP_MAX_FACTORS_REPORT"]
+)
+sliding_window_relative_motion_history_source = os.environ[
+    "SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE_REPORT"
+]
+sliding_window_relative_motion_history_published_after_s = float(
+    os.environ["SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S_REPORT"]
 )
 post_ba_step_guard_pre_ba_agreement_max_pose_step_m = float(
     os.environ["POST_BA_STEP_GUARD_PRE_BA_AGREEMENT_MAX_POSE_STEP_M_REPORT"]
@@ -2875,10 +3010,13 @@ report = {
         "visual_factor_max_dt_ns": visual_factor_max_dt_ns,
         "visual_depth_max_dt_ns": visual_depth_max_dt_ns,
         "visual_depth_dilation_px": visual_depth_dilation_px,
+        "rendered_frame_cache_size": int(os.environ["RENDERED_FRAME_CACHE_SIZE_REPORT"]),
+        "observed_frame_cache_size": int(os.environ["OBSERVED_FRAME_CACHE_SIZE_REPORT"]),
         "visual_alignment_window_weight": visual_alignment_window_weight,
         "se3_photometric_window_weight": se3_photometric_window_weight,
         "se3_photometric_max_samples": se3_photometric_max_samples,
         "mapper_feedback_sync_tolerance_sec": mapper_feedback_sync_tolerance_sec,
+        "mapper_feedback_sync_anchor_stream": mapper_feedback_sync_anchor_stream,
         "visual_pending_factor_queue_size": visual_pending_factor_queue_size,
         "se3_photometric_min_samples": se3_photometric_min_samples,
         "se3_photometric_min_hessian_rank": se3_photometric_min_hessian_rank,
@@ -2947,6 +3085,12 @@ report = {
             sliding_window_marginalization_prior_weight
         ),
         "sliding_window_sync_guarded_pose_state": sliding_window_sync_guarded_pose_state,
+        "sliding_window_guarded_pose_prior_translation_weight": (
+            sliding_window_guarded_pose_prior_translation_weight
+        ),
+        "sliding_window_guarded_pose_prior_rotation_weight": (
+            sliding_window_guarded_pose_prior_rotation_weight
+        ),
         "enable_gaussian_map_feedback": enable_gaussian_map_feedback,
         "require_gaussian_snapshot": require_gaussian_snapshot,
         "gaussian_snapshot_lidar_factor_weight": gaussian_snapshot_lidar_factor_weight,
@@ -3130,6 +3274,21 @@ report = {
         ),
         "sliding_window_multihop_relative_translation_max_factors": (
             sliding_window_multihop_relative_translation_max_factors
+        ),
+        "enable_sliding_window_delayed_published_multihop_relative_translation_factor": (
+            enable_sliding_window_delayed_published_multihop_relative_translation_factor
+        ),
+        "sliding_window_delayed_published_multihop_start_after_s": (
+            sliding_window_delayed_published_multihop_start_after_s
+        ),
+        "sliding_window_delayed_published_multihop_max_factors": (
+            sliding_window_delayed_published_multihop_max_factors
+        ),
+        "sliding_window_relative_motion_history_source": (
+            sliding_window_relative_motion_history_source
+        ),
+        "sliding_window_relative_motion_history_published_after_s": (
+            sliding_window_relative_motion_history_published_after_s
         ),
         "tracking_max_pose_step_m": tracking_max_pose_step_m,
         "enable_pre_lio_tracking_step_guard": enable_pre_lio_tracking_step_guard,

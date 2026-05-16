@@ -187,6 +187,12 @@ def generate_launch_description():
     sliding_window_sync_guarded_pose_state = LaunchConfiguration(
         "sliding_window_sync_guarded_pose_state"
     )
+    sliding_window_guarded_pose_prior_translation_weight = LaunchConfiguration(
+        "sliding_window_guarded_pose_prior_translation_weight"
+    )
+    sliding_window_guarded_pose_prior_rotation_weight = LaunchConfiguration(
+        "sliding_window_guarded_pose_prior_rotation_weight"
+    )
     sliding_window_max_normal_equation_condition = LaunchConfiguration(
         "sliding_window_max_normal_equation_condition"
     )
@@ -299,6 +305,21 @@ def generate_launch_description():
     )
     sliding_window_multihop_relative_translation_max_factors = LaunchConfiguration(
         "sliding_window_multihop_relative_translation_max_factors"
+    )
+    enable_sliding_window_delayed_published_multihop_relative_translation_factor = LaunchConfiguration(
+        "enable_sliding_window_delayed_published_multihop_relative_translation_factor"
+    )
+    sliding_window_delayed_published_multihop_start_after_s = LaunchConfiguration(
+        "sliding_window_delayed_published_multihop_start_after_s"
+    )
+    sliding_window_delayed_published_multihop_max_factors = LaunchConfiguration(
+        "sliding_window_delayed_published_multihop_max_factors"
+    )
+    sliding_window_relative_motion_history_source = LaunchConfiguration(
+        "sliding_window_relative_motion_history_source"
+    )
+    sliding_window_relative_motion_history_published_after_s = LaunchConfiguration(
+        "sliding_window_relative_motion_history_published_after_s"
     )
     imu_history_size = LaunchConfiguration("imu_history_size")
     imu_linear_acceleration_scale = LaunchConfiguration("imu_linear_acceleration_scale")
@@ -548,6 +569,14 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_max_feedback_accel_bias_step", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_min_bias_feedback_visual_factors", default_value="0"),
             DeclareLaunchArgument("sliding_window_sync_guarded_pose_state", default_value="false"),
+            DeclareLaunchArgument(
+                "sliding_window_guarded_pose_prior_translation_weight",
+                default_value="0.0",
+            ),
+            DeclareLaunchArgument(
+                "sliding_window_guarded_pose_prior_rotation_weight",
+                default_value="0.0",
+            ),
             DeclareLaunchArgument("sliding_window_max_normal_equation_condition", default_value="10000000000000.0"),
             DeclareLaunchArgument("sliding_window_min_normal_equation_rank_ratio", default_value="0.8"),
             DeclareLaunchArgument("sliding_window_max_state_gap_s", default_value="1.0"),
@@ -634,6 +663,11 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_multihop_relative_translation_min_dt_s", default_value="0.45"),
             DeclareLaunchArgument("sliding_window_multihop_relative_translation_max_dt_s", default_value="1.05"),
             DeclareLaunchArgument("sliding_window_multihop_relative_translation_max_factors", default_value="1"),
+            DeclareLaunchArgument("enable_sliding_window_delayed_published_multihop_relative_translation_factor", default_value="false"),
+            DeclareLaunchArgument("sliding_window_delayed_published_multihop_start_after_s", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_delayed_published_multihop_max_factors", default_value="1"),
+            DeclareLaunchArgument("sliding_window_relative_motion_history_source", default_value="pre_ba"),
+            DeclareLaunchArgument("sliding_window_relative_motion_history_published_after_s", default_value="0.0"),
             DeclareLaunchArgument("imu_history_size", default_value="12000"),
             DeclareLaunchArgument("imu_linear_acceleration_scale", default_value="1.0"),
             DeclareLaunchArgument("enable_gaussian_snapshot_lidar_factor", default_value="true"),
@@ -856,6 +890,12 @@ def generate_launch_description():
                         "sliding_window_sync_guarded_pose_state": (
                             sliding_window_sync_guarded_pose_state
                         ),
+                        "sliding_window_guarded_pose_prior_translation_weight": (
+                            sliding_window_guarded_pose_prior_translation_weight
+                        ),
+                        "sliding_window_guarded_pose_prior_rotation_weight": (
+                            sliding_window_guarded_pose_prior_rotation_weight
+                        ),
                         "sliding_window_max_normal_equation_condition": sliding_window_max_normal_equation_condition,
                         "sliding_window_min_normal_equation_rank_ratio": sliding_window_min_normal_equation_rank_ratio,
                         "sliding_window_max_state_gap_s": sliding_window_max_state_gap_s,
@@ -973,6 +1013,11 @@ def generate_launch_description():
                         "sliding_window_multihop_relative_translation_max_factors": (
                             sliding_window_multihop_relative_translation_max_factors
                         ),
+                        "enable_sliding_window_delayed_published_multihop_relative_translation_factor": enable_sliding_window_delayed_published_multihop_relative_translation_factor,
+                        "sliding_window_delayed_published_multihop_start_after_s": sliding_window_delayed_published_multihop_start_after_s,
+                        "sliding_window_delayed_published_multihop_max_factors": sliding_window_delayed_published_multihop_max_factors,
+                        "sliding_window_relative_motion_history_source": sliding_window_relative_motion_history_source,
+                        "sliding_window_relative_motion_history_published_after_s": sliding_window_relative_motion_history_published_after_s,
                         "imu_history_size": imu_history_size,
                         "imu_linear_acceleration_scale": imu_linear_acceleration_scale,
                         "enable_gaussian_snapshot_lidar_factor": enable_gaussian_snapshot_lidar_factor,

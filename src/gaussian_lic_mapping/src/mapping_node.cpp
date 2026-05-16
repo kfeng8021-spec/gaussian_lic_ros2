@@ -106,6 +106,9 @@ public:
     publish_tf_ = declare_parameter<bool>("publish_tf", false);
     sync_tolerance_sec_ = declare_parameter<double>("sync_tolerance_sec", 0.01);
     sync_tolerance_nsec_ = seconds_to_nsec(sync_tolerance_sec_, "sync_tolerance_sec");
+    sync_anchor_stream_name_ =
+      normalized_qos_token(declare_parameter<std::string>("sync_anchor_stream", "pointcloud"));
+    sync_anchor_stream_ = parse_sync_anchor_stream(sync_anchor_stream_name_);
     max_queue_size_ = declare_parameter<int>("max_queue_size", 10000);
     sensor_qos_reliability_ = declare_parameter<std::string>("sensor_qos_reliability", "best_effort");
     sensor_qos_history_ = declare_parameter<std::string>("sensor_qos_history", "keep_last");
@@ -355,8 +358,8 @@ public:
       publish_tf_ ? "enabled" : "disabled", world_frame_.c_str(), camera_frame_.c_str());
     RCLCPP_INFO(get_logger(), "Save-map service available at %s",
       save_map_service_.c_str());
-    RCLCPP_INFO(get_logger(), "Frame sync tolerance %.3f sec, max queue %d",
-      sync_tolerance_sec_, max_queue_size_);
+    RCLCPP_INFO(get_logger(), "Frame sync tolerance %.3f sec, anchor %s, max queue %d",
+      sync_tolerance_sec_, sync_anchor_stream_name_.c_str(), max_queue_size_);
     RCLCPP_INFO(get_logger(), "Depth topic synchronization %s",
       require_depth_topic_ ? "required" : "optional; projected point depth fallback enabled");
     RCLCPP_INFO(get_logger(), "Projected point color requirement %s",
@@ -726,7 +729,33 @@ private:
     kAligned
   };
 
+  enum class SyncAnchorStream
+  {
+    kPointcloud,
+    kImage
+  };
+
+  SyncAnchorStream parse_sync_anchor_stream(const std::string & value) const
+  {
+    if (value == "pointcloud") {
+      return SyncAnchorStream::kPointcloud;
+    }
+    if (value == "image") {
+      return SyncAnchorStream::kImage;
+    }
+    throw std::runtime_error(
+      "sync_anchor_stream must be pointcloud or image, got " + value);
+  }
+
   AlignResult pop_aligned_locked(AlignedRosFrame & out)
+  {
+    if (sync_anchor_stream_ == SyncAnchorStream::kImage) {
+      return pop_aligned_image_anchor_locked(out);
+    }
+    return pop_aligned_pointcloud_anchor_locked(out);
+  }
+
+  AlignResult pop_aligned_pointcloud_anchor_locked(AlignedRosFrame & out)
   {
     if (point_buf_.empty() || pose_buf_.empty() || image_buf_.empty() ||
       (require_depth_topic_ && depth_buf_.empty()))
@@ -772,6 +801,70 @@ private:
     }
 
     last_aligned_stamp_ = point_buf_.front()->header.stamp;
+    out.stamp = point_buf_.front()->header.stamp;
+    out.has_stamp = true;
+    out.pointcloud = point_buf_.front();
+    out.pose = pose_buf_.front();
+    out.image = image_buf_.front();
+    out.depth = aligned_depth;
+    point_buf_.pop_front();
+    pose_buf_.pop_front();
+    image_buf_.pop_front();
+    if (aligned_depth) {
+      depth_buf_.pop_front();
+    }
+    ++aligned_frame_count_;
+    return AlignResult::kAligned;
+  }
+
+  AlignResult pop_aligned_image_anchor_locked(AlignedRosFrame & out)
+  {
+    if (point_buf_.empty() || pose_buf_.empty() || image_buf_.empty() ||
+      (require_depth_topic_ && depth_buf_.empty()))
+    {
+      return AlignResult::kNoData;
+    }
+
+    const int64_t frame_time_nsec = stamp_to_nsec(image_buf_.front()->header.stamp);
+
+    if (!trim_until_near(point_buf_, frame_time_nsec, dropped_pointcloud_count_) ||
+      !trim_until_near(pose_buf_, frame_time_nsec, dropped_pose_count_))
+    {
+      return AlignResult::kNoData;
+    }
+
+    sensor_msgs::msg::Image::ConstSharedPtr aligned_depth;
+    if (!depth_buf_.empty()) {
+      (void)trim_until_near(depth_buf_, frame_time_nsec, dropped_depth_count_);
+    }
+    if (!depth_buf_.empty()) {
+      const bool depth_too_new =
+        stamp_to_nsec(depth_buf_.front()->header.stamp) > frame_time_nsec + sync_tolerance_nsec_;
+      if (!depth_too_new) {
+        aligned_depth = depth_buf_.front();
+      } else if (require_depth_topic_) {
+        image_buf_.pop_front();
+        ++dropped_image_count_;
+        return AlignResult::kDropped;
+      }
+    } else if (require_depth_topic_) {
+      return AlignResult::kNoData;
+    }
+
+    const bool pointcloud_too_new =
+      stamp_to_nsec(point_buf_.front()->header.stamp) > frame_time_nsec + sync_tolerance_nsec_;
+    const bool pose_too_new =
+      stamp_to_nsec(pose_buf_.front()->header.stamp) > frame_time_nsec + sync_tolerance_nsec_;
+
+    if (pointcloud_too_new || pose_too_new) {
+      image_buf_.pop_front();
+      ++dropped_image_count_;
+      return AlignResult::kDropped;
+    }
+
+    last_aligned_stamp_ = image_buf_.front()->header.stamp;
+    out.stamp = image_buf_.front()->header.stamp;
+    out.has_stamp = true;
     out.pointcloud = point_buf_.front();
     out.pose = pose_buf_.front();
     out.image = image_buf_.front();
@@ -2264,6 +2357,7 @@ private:
     msg.mean_iteration_ms = mean_iteration_ms_;
     msg.gpu_memory_mb = 0.0F;
     msg.active_profile = active_profile_;
+    msg.sync_anchor_stream = sync_anchor_stream_name_;
     msg.pointcloud_messages = pointcloud_count_;
     msg.pose_messages = pose_count_;
     msg.image_messages = image_count_;
@@ -2288,6 +2382,7 @@ private:
       "received points=%lu pose=%lu image=%lu depth=%lu imu=%lu | aligned=%lu | "
       "converted=%lu train=%zu test=%zu dataset_frames=%zu last_image=%dx%d "
       "last_points=%zu pending_points=%zu map_points=%zu total_points=%zu | "
+      "sync_anchor=%s | "
       "rate tracking=%.2fHz mapping=%.2fHz | "
       "depth_completion=%lu depth_completion_errors=%lu | "
       "torch_cameras=%lu torch_errors=%lu torch_image=%s torch_depth=%s | "
@@ -2307,6 +2402,7 @@ private:
       dataset_.all_frame_count(), last_image_width_, last_image_height_,
       last_points_in_frame_, dataset_.pending_point_count(), dataset_.map_point_count(),
       dataset_.total_point_count(),
+      sync_anchor_stream_name_.c_str(),
       last_tracking_hz_, last_mapping_hz_,
       depth_completion_count_, depth_completion_error_count_,
       torch_camera_count_, torch_camera_error_count_, last_torch_image_dims_.c_str(),
@@ -2356,6 +2452,8 @@ private:
   bool publish_tf_{false};
   double sync_tolerance_sec_{0.01};
   int64_t sync_tolerance_nsec_{10000000LL};
+  std::string sync_anchor_stream_name_{"pointcloud"};
+  SyncAnchorStream sync_anchor_stream_{SyncAnchorStream::kPointcloud};
   int max_queue_size_{10000};
   std::string sensor_qos_reliability_{"best_effort"};
   std::string sensor_qos_history_{"keep_last"};

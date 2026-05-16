@@ -100,6 +100,7 @@ def generate_launch_description():
         for suffix in ("reliability", "history", "depth")
     ]
     require_depth_topic = LaunchConfiguration("require_depth_topic")
+    sync_anchor_stream = LaunchConfiguration("sync_anchor_stream")
     render_mode = LaunchConfiguration("render_mode")
     rendered_image_mode = LaunchConfiguration("rendered_image_mode")
     publish_tf = LaunchConfiguration("publish_tf")
@@ -154,6 +155,7 @@ def generate_launch_description():
                 for suffix in ("reliability", "history", "depth")
             },
             "require_depth_topic": require_depth_topic,
+            "sync_anchor_stream": sync_anchor_stream,
             "render_mode": render_mode,
             "rendered_image_mode": rendered_image_mode,
             "publish_tf": publish_tf,
@@ -482,6 +484,11 @@ def generate_launch_description():
             "require_depth_topic",
             default_value="true",
             description="Require depth_topic in frame synchronization; false uses sparse point-projected depth",
+        ),
+        DeclareLaunchArgument(
+            "sync_anchor_stream",
+            default_value="pointcloud",
+            description="Frame synchronization anchor stream: pointcloud or image",
         ),
         DeclareLaunchArgument(
             "render_mode",

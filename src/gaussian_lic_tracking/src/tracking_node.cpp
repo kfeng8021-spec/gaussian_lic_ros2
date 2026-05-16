@@ -119,6 +119,13 @@ class TrackingNode final : public rclcpp::Node
     kPostBa,
   };
 
+  enum class RelativeMotionHistorySource
+  {
+    kPreBa,
+    kPublished,
+    kPublishedAfterWarmup,
+  };
+
 public:
   explicit TrackingNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : Node("tracking_node", options)
@@ -564,6 +571,12 @@ public:
       declare_parameter<int>("sliding_window_min_bias_feedback_visual_factors", 0), 0);
     sliding_window_sync_guarded_pose_state_ =
       declare_parameter<bool>("sliding_window_sync_guarded_pose_state", false);
+    sliding_window_guarded_pose_prior_translation_weight_ = finite_nonnegative_parameter(
+      "sliding_window_guarded_pose_prior_translation_weight",
+      declare_parameter<double>("sliding_window_guarded_pose_prior_translation_weight", 0.0));
+    sliding_window_guarded_pose_prior_rotation_weight_ = finite_nonnegative_parameter(
+      "sliding_window_guarded_pose_prior_rotation_weight",
+      declare_parameter<double>("sliding_window_guarded_pose_prior_rotation_weight", 0.0));
     sliding_window_max_normal_equation_condition_ = finite_positive_parameter(
       "sliding_window_max_normal_equation_condition",
       declare_parameter<double>("sliding_window_max_normal_equation_condition", 1.0e13));
@@ -723,6 +736,23 @@ public:
     sliding_window_multihop_relative_translation_max_factors_ = integer_parameter_at_least(
       "sliding_window_multihop_relative_translation_max_factors",
       declare_parameter<int>("sliding_window_multihop_relative_translation_max_factors", 1), 1);
+    enable_sliding_window_delayed_published_multihop_relative_translation_factor_ =
+      declare_parameter<bool>(
+      "enable_sliding_window_delayed_published_multihop_relative_translation_factor", false);
+    sliding_window_delayed_published_multihop_start_after_s_ =
+      finite_nonnegative_parameter(
+      "sliding_window_delayed_published_multihop_start_after_s",
+      declare_parameter<double>("sliding_window_delayed_published_multihop_start_after_s", 0.0));
+    sliding_window_delayed_published_multihop_max_factors_ = integer_parameter_at_least(
+      "sliding_window_delayed_published_multihop_max_factors",
+      declare_parameter<int>("sliding_window_delayed_published_multihop_max_factors", 1), 1);
+    sliding_window_relative_motion_history_source_ =
+      parse_relative_motion_history_source(
+      declare_parameter<std::string>("sliding_window_relative_motion_history_source", "pre_ba"));
+    sliding_window_relative_motion_history_published_after_s_ =
+      finite_nonnegative_parameter(
+      "sliding_window_relative_motion_history_published_after_s",
+      declare_parameter<double>("sliding_window_relative_motion_history_published_after_s", 0.0));
     if (sliding_window_multihop_relative_translation_max_dt_s_ <
       sliding_window_multihop_relative_translation_min_dt_s_)
     {
@@ -1390,6 +1420,57 @@ private:
     return value;
   }
 
+  static RelativeMotionHistorySource parse_relative_motion_history_source(const std::string & value)
+  {
+    if (value == "pre_ba") {
+      return RelativeMotionHistorySource::kPreBa;
+    }
+    if (value == "published") {
+      return RelativeMotionHistorySource::kPublished;
+    }
+    if (value == "published_after_warmup") {
+      return RelativeMotionHistorySource::kPublishedAfterWarmup;
+    }
+    throw std::runtime_error(
+            "sliding_window_relative_motion_history_source must be pre_ba, published, "
+            "or published_after_warmup");
+  }
+
+  static const char * relative_motion_history_source_name(
+    const RelativeMotionHistorySource source)
+  {
+    switch (source) {
+      case RelativeMotionHistorySource::kPreBa:
+        return "pre_ba";
+      case RelativeMotionHistorySource::kPublished:
+        return "published";
+      case RelativeMotionHistorySource::kPublishedAfterWarmup:
+        return "published_after_warmup";
+    }
+    return "pre_ba";
+  }
+
+  const gaussian_lic_tracking::TrajectoryPose & select_relative_motion_history_pose(
+    const gaussian_lic_tracking::TrajectoryPose & pre_ba_pose,
+    const gaussian_lic_tracking::TrajectoryPose & published_pose) const
+  {
+    if (sliding_window_relative_motion_history_source_ == RelativeMotionHistorySource::kPublished) {
+      return published_pose;
+    }
+    if (sliding_window_relative_motion_history_source_ ==
+      RelativeMotionHistorySource::kPublishedAfterWarmup &&
+      sliding_window_start_stamp_ns_.has_value())
+    {
+      const double elapsed_s =
+        static_cast<double>(published_pose.stamp_ns - sliding_window_start_stamp_ns_.value()) /
+        static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
+      if (elapsed_s >= sliding_window_relative_motion_history_published_after_s_) {
+        return published_pose;
+      }
+    }
+    return pre_ba_pose;
+  }
+
   template<typename ValueT, typename MinimumT>
   static ValueT integer_parameter_at_least(
     const char * parameter_name,
@@ -1508,17 +1589,26 @@ private:
     if (decode_image_gray(msg, rendered)) {
       cache_rendered_frame(rendered);
       int64_t observed_match_delta_ns = 0;
+      bool observed_cache_had_size_match = false;
       const gaussian_lic_tracking::VisualFrame * observed_frame =
         select_observed_frame_for_stamp(
         rendered.stamp_ns,
         rendered.width,
         rendered.height,
         &observed_match_delta_ns,
-        nullptr);
+        &observed_cache_had_size_match);
+      last_visual_observed_cache_size_ = observed_frame_cache_.size();
+      last_visual_observed_match_delta_ns_ = observed_frame == nullptr ? 0 : observed_match_delta_ns;
       if (observed_frame != nullptr) {
         last_visual_rendered_cache_size_ = rendered_frame_cache_.size();
         last_visual_rendered_match_delta_ns_ = observed_match_delta_ns;
         process_visual_pair(rendered, *observed_frame);
+      } else if (observed_frame_cache_.empty()) {
+        ++visual_observed_miss_count_;
+      } else if (!observed_cache_had_size_match) {
+        ++visual_observed_size_mismatch_count_;
+      } else {
+        ++visual_observed_stale_count_;
       }
     } else {
       ++rendered_invalid_frames_;
@@ -2070,6 +2160,10 @@ private:
     if (post_ba_guard_adjusted_pose && sliding_window_sync_guarded_pose_state_) {
       sync_guarded_pose_to_sliding_window_state(tracking_pose);
     }
+    if (post_ba_guard_adjusted_pose) {
+      add_guarded_pose_prior_to_sliding_window(tracking_pose);
+    }
+    add_delayed_published_multihop_relative_translation_factors(tracking_pose);
     append_trajectory_control_pose(tracking_pose);
 
     geometry_msgs::msg::PoseStamped pose;
@@ -2113,7 +2207,10 @@ private:
     }
     publish_tracking_status(msg.header.stamp);
     last_output_tracking_pose_ = tracking_pose;
-    cache_relative_motion_pose(pre_ba_tracking_pose);
+    cache_relative_motion_pose(
+      relative_motion_pose_history_,
+      select_relative_motion_history_pose(pre_ba_tracking_pose, tracking_pose));
+    cache_relative_motion_pose(published_relative_motion_pose_history_, tracking_pose);
   }
 
   void append_multihop_relative_translation_factors(
@@ -2141,29 +2238,107 @@ private:
       if (dt_ns < min_dt_ns || dt_ns > max_dt_ns) {
         continue;
       }
-      const Eigen::Vector3d delta_p_w = pre_ba_pose.p_w_i - history_pose.p_w_i;
-      if (!delta_p_w.allFinite()) {
+      const auto factor = make_multihop_relative_translation_factor(history_pose, pre_ba_pose);
+      if (!factor.has_value()) {
         continue;
       }
-      gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor factor;
-      factor.from_stamp_ns = history_pose.stamp_ns;
-      factor.to_stamp_ns = pre_ba_pose.stamp_ns;
-      factor.delta_p_w = sliding_window_multihop_relative_translation_in_from_frame_
-        ? history_pose.q_w_i.conjugate() * delta_p_w
-        : delta_p_w;
-      factor.delta_q_from_to =
-        (history_pose.q_w_i.conjugate() * pre_ba_pose.q_w_i).normalized();
-      factor.translation_in_from_frame =
-        sliding_window_multihop_relative_translation_in_from_frame_;
-      factor.weight = sliding_window_multihop_relative_translation_weight_;
-      factor.huber_delta_m = sliding_window_multihop_relative_translation_huber_delta_m_;
-      factor.rotation_weight = sliding_window_multihop_relative_rotation_weight_;
-      factor.rotation_huber_delta_rad =
-        sliding_window_multihop_relative_rotation_huber_delta_rad_;
-      factors.push_back(factor);
+      factors.push_back(factor.value());
       ++added_factors;
       if (added_factors >=
         static_cast<size_t>(sliding_window_multihop_relative_translation_max_factors_))
+      {
+        return;
+      }
+    }
+  }
+
+  std::optional<gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor>
+  make_multihop_relative_translation_factor(
+    const gaussian_lic_tracking::TrajectoryPose & from_pose,
+    const gaussian_lic_tracking::TrajectoryPose & to_pose,
+    const uint8_t source_id = 0U) const
+  {
+    if (from_pose.stamp_ns >= to_pose.stamp_ns ||
+      !from_pose.p_w_i.allFinite() || !to_pose.p_w_i.allFinite() ||
+      !from_pose.q_w_i.coeffs().allFinite() || !to_pose.q_w_i.coeffs().allFinite() ||
+      from_pose.q_w_i.norm() <= std::numeric_limits<double>::epsilon() ||
+      to_pose.q_w_i.norm() <= std::numeric_limits<double>::epsilon())
+    {
+      return std::nullopt;
+    }
+    const Eigen::Vector3d delta_p_w = to_pose.p_w_i - from_pose.p_w_i;
+    if (!delta_p_w.allFinite()) {
+      return std::nullopt;
+    }
+    gaussian_lic_tracking::SlidingWindowRelativeTranslationFactor factor;
+    factor.from_stamp_ns = from_pose.stamp_ns;
+    factor.to_stamp_ns = to_pose.stamp_ns;
+    factor.source_id = source_id;
+    factor.delta_p_w = sliding_window_multihop_relative_translation_in_from_frame_
+      ? from_pose.q_w_i.conjugate() * delta_p_w
+      : delta_p_w;
+    factor.delta_q_from_to =
+      (from_pose.q_w_i.conjugate() * to_pose.q_w_i).normalized();
+    factor.translation_in_from_frame =
+      sliding_window_multihop_relative_translation_in_from_frame_;
+    factor.weight = sliding_window_multihop_relative_translation_weight_;
+    factor.huber_delta_m = sliding_window_multihop_relative_translation_huber_delta_m_;
+    factor.rotation_weight = sliding_window_multihop_relative_rotation_weight_;
+    factor.rotation_huber_delta_rad =
+      sliding_window_multihop_relative_rotation_huber_delta_rad_;
+    return factor;
+  }
+
+  void add_delayed_published_multihop_relative_translation_factors(
+    const gaussian_lic_tracking::TrajectoryPose & published_pose)
+  {
+    if (!enable_sliding_window_delayed_published_multihop_relative_translation_factor_ ||
+      !enable_sliding_window_multihop_relative_translation_factor_ ||
+      sliding_window_multihop_relative_translation_weight_ <= 0.0 ||
+      published_relative_motion_pose_history_.empty() ||
+      !sliding_window_start_stamp_ns_.has_value())
+    {
+      return;
+    }
+    const double elapsed_s =
+      static_cast<double>(published_pose.stamp_ns - sliding_window_start_stamp_ns_.value()) /
+      static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond);
+    if (elapsed_s < sliding_window_delayed_published_multihop_start_after_s_) {
+      return;
+    }
+    const int64_t min_dt_ns = static_cast<int64_t>(
+      sliding_window_multihop_relative_translation_min_dt_s_ *
+      static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond));
+    const int64_t max_dt_ns = static_cast<int64_t>(
+      sliding_window_multihop_relative_translation_max_dt_s_ *
+      static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond));
+    size_t added_factors = 0U;
+    for (const auto & history_pose : published_relative_motion_pose_history_) {
+      if (history_pose.stamp_ns >= published_pose.stamp_ns) {
+        continue;
+      }
+      const int64_t dt_ns = published_pose.stamp_ns - history_pose.stamp_ns;
+      if (dt_ns < min_dt_ns || dt_ns > max_dt_ns) {
+        continue;
+      }
+      const auto factor = make_multihop_relative_translation_factor(
+        history_pose,
+        published_pose,
+        1U);
+      if (!factor.has_value()) {
+        continue;
+      }
+      try {
+        sliding_window_optimizer_.add_relative_translation_factor(factor.value());
+        ++sliding_window_delayed_published_multihop_relative_factor_count_;
+        ++added_factors;
+      } catch (const std::exception & ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "delayed published multi-hop relative factor skipped: %s", ex.what());
+      }
+      if (added_factors >=
+        static_cast<size_t>(sliding_window_delayed_published_multihop_max_factors_))
       {
         return;
       }
@@ -2404,33 +2579,34 @@ private:
     return correction;
   }
 
-  void cache_relative_motion_pose(const gaussian_lic_tracking::TrajectoryPose & pose)
+  void cache_relative_motion_pose(
+    std::deque<gaussian_lic_tracking::TrajectoryPose> & history,
+    const gaussian_lic_tracking::TrajectoryPose & pose)
   {
     if (!pose.p_w_i.allFinite() || !pose.q_w_i.coeffs().allFinite() ||
       pose.q_w_i.norm() <= std::numeric_limits<double>::epsilon())
     {
       return;
     }
-    if (!relative_motion_pose_history_.empty() &&
-      pose.stamp_ns <= relative_motion_pose_history_.back().stamp_ns)
+    if (!history.empty() && pose.stamp_ns <= history.back().stamp_ns)
     {
       return;
     }
-    relative_motion_pose_history_.push_back(pose);
+    history.push_back(pose);
     const int64_t max_history_ns = static_cast<int64_t>(
       std::max(
         sliding_window_multihop_relative_translation_max_dt_s_,
         sliding_window_max_state_gap_s_) *
       static_cast<double>(gaussian_lic_tracking::kNanosecondsPerSecond));
-    while (!relative_motion_pose_history_.empty() &&
-      relative_motion_pose_history_.front().stamp_ns + max_history_ns < pose.stamp_ns)
+    while (!history.empty() &&
+      history.front().stamp_ns + max_history_ns < pose.stamp_ns)
     {
-      relative_motion_pose_history_.pop_front();
+      history.pop_front();
     }
     const size_t max_history_size = std::max<size_t>(
       static_cast<size_t>(sliding_window_max_states_) + 2U, 4U);
-    while (relative_motion_pose_history_.size() > max_history_size) {
-      relative_motion_pose_history_.pop_front();
+    while (history.size() > max_history_size) {
+      history.pop_front();
     }
   }
 
@@ -3169,6 +3345,34 @@ private:
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
         "guarded sliding-window state sync skipped: %s", ex.what());
+    }
+  }
+
+  void add_guarded_pose_prior_to_sliding_window(
+    const gaussian_lic_tracking::TrajectoryPose & pose)
+  {
+    if (sliding_window_guarded_pose_prior_translation_weight_ <= 0.0 &&
+      sliding_window_guarded_pose_prior_rotation_weight_ <= 0.0)
+    {
+      return;
+    }
+    if (!valid_trajectory_pose(pose)) {
+      return;
+    }
+    gaussian_lic_tracking::SlidingWindowPosePrior prior;
+    prior.stamp_ns = pose.stamp_ns;
+    prior.p_w_i = pose.p_w_i;
+    prior.q_w_i = pose.q_w_i.normalized();
+    prior.translation_weight = sliding_window_guarded_pose_prior_translation_weight_;
+    prior.rotation_weight = sliding_window_guarded_pose_prior_rotation_weight_;
+    try {
+      sliding_window_optimizer_.add_pose_prior(prior);
+      ++sliding_window_guarded_pose_prior_count_;
+    } catch (const std::exception & ex) {
+      ++sliding_window_invalid_optimized_states_;
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "guarded sliding-window pose prior skipped: %s", ex.what());
     }
   }
 
@@ -4603,6 +4807,14 @@ private:
 
     const auto & summary = last_sliding_window_summary_;
     status.sliding_window_enabled = enable_sliding_window_optimizer_;
+    status.sliding_window_relative_motion_history_source =
+      relative_motion_history_source_name(sliding_window_relative_motion_history_source_);
+    status.sliding_window_relative_motion_history_published_after_s =
+      sliding_window_relative_motion_history_published_after_s_;
+    status.sliding_window_delayed_published_multihop_relative_factors =
+      sliding_window_delayed_published_multihop_relative_factor_count_;
+    status.sliding_window_delayed_published_multihop_max_factors =
+      static_cast<uint32_t>(sliding_window_delayed_published_multihop_max_factors_);
     status.sliding_window_states = has_last_sliding_window_summary_
       ? static_cast<uint64_t>(summary.state_count)
       : static_cast<uint64_t>(sliding_window_optimizer_.states().size());
@@ -4680,6 +4892,7 @@ private:
       last_sliding_window_optimization_duration_ms_;
     status.sliding_window_feedback_updates = sliding_window_feedback_update_count_;
     status.sliding_window_guarded_state_syncs = sliding_window_guarded_state_sync_count_;
+    status.sliding_window_guarded_pose_priors = sliding_window_guarded_pose_prior_count_;
     status.sliding_window_last_feedback_stamp_ns = last_sliding_window_feedback_stamp_ns_;
     status.sliding_window_last_feedback_translation_delta_m =
       last_sliding_window_feedback_translation_delta_m_;
@@ -4819,6 +5032,11 @@ private:
     status.visual_rendered_miss_count = visual_rendered_miss_count_;
     status.visual_rendered_stale_count = visual_rendered_stale_count_;
     status.visual_rendered_size_mismatch_count = visual_rendered_size_mismatch_count_;
+    status.visual_observed_cache_size = static_cast<uint64_t>(last_visual_observed_cache_size_);
+    status.visual_observed_match_delta_ns = last_visual_observed_match_delta_ns_;
+    status.visual_observed_miss_count = visual_observed_miss_count_;
+    status.visual_observed_stale_count = visual_observed_stale_count_;
+    status.visual_observed_size_mismatch_count = visual_observed_size_mismatch_count_;
     status.visual_depth_cache_size = static_cast<uint64_t>(last_visual_depth_cache_size_);
     status.visual_depth_dilation_px = static_cast<uint32_t>(sparse_lidar_depth_dilation_px_);
     status.visual_depth_match_delta_ns = last_visual_depth_match_delta_ns_;
@@ -5095,6 +5313,8 @@ private:
   double sliding_window_max_feedback_accel_bias_step_{0.0};
   int sliding_window_min_bias_feedback_visual_factors_{0};
   bool sliding_window_sync_guarded_pose_state_{false};
+  double sliding_window_guarded_pose_prior_translation_weight_{0.0};
+  double sliding_window_guarded_pose_prior_rotation_weight_{0.0};
   double sliding_window_max_normal_equation_condition_{1.0e13};
   double sliding_window_min_normal_equation_rank_ratio_{0.8};
   double sliding_window_max_state_gap_s_{1.0};
@@ -5162,6 +5382,12 @@ private:
   double sliding_window_multihop_relative_translation_min_dt_s_{0.45};
   double sliding_window_multihop_relative_translation_max_dt_s_{1.05};
   int sliding_window_multihop_relative_translation_max_factors_{1};
+  bool enable_sliding_window_delayed_published_multihop_relative_translation_factor_{false};
+  double sliding_window_delayed_published_multihop_start_after_s_{0.0};
+  int sliding_window_delayed_published_multihop_max_factors_{1};
+  RelativeMotionHistorySource sliding_window_relative_motion_history_source_{
+    RelativeMotionHistorySource::kPreBa};
+  double sliding_window_relative_motion_history_published_after_s_{0.0};
   int lidar_min_points_{32};
   int lidar_max_frame_points_{2000};
   int lidar_max_map_points_{20000};
@@ -5230,10 +5456,12 @@ private:
   uint64_t sliding_window_smoothness_motion_target_history_miss_count_{0};
   uint64_t sliding_window_smoothness_motion_target_invalid_count_{0};
   uint64_t sliding_window_smoothness_motion_target_clamp_count_{0};
+  uint64_t sliding_window_delayed_published_multihop_relative_factor_count_{0};
   uint64_t sliding_window_imu_factor_skip_count_{0};
   uint64_t sliding_window_imu_time_gap_skip_count_{0};
   uint64_t sliding_window_feedback_update_count_{0};
   uint64_t sliding_window_guarded_state_sync_count_{0};
+  uint64_t sliding_window_guarded_pose_prior_count_{0};
   uint64_t sliding_window_bias_feedback_hold_count_{0};
   int64_t last_sliding_window_feedback_stamp_ns_{0};
   double last_sliding_window_feedback_translation_delta_m_{0.0};
@@ -5272,6 +5500,7 @@ private:
   gaussian_lic_tracking::TrajectoryPose last_lidar_keyframe_pose_;
   std::optional<gaussian_lic_tracking::TrajectoryPose> last_output_tracking_pose_;
   std::deque<gaussian_lic_tracking::TrajectoryPose> relative_motion_pose_history_;
+  std::deque<gaussian_lic_tracking::TrajectoryPose> published_relative_motion_pose_history_;
   bool has_lidar_keyframe_{false};
   gaussian_lic_tracking::GaussianSnapshot gaussian_snapshot_;
   gaussian_lic_tracking::VisualFactor visual_factor_;
@@ -5281,6 +5510,11 @@ private:
   uint64_t visual_rendered_miss_count_{0};
   uint64_t visual_rendered_stale_count_{0};
   uint64_t visual_rendered_size_mismatch_count_{0};
+  size_t last_visual_observed_cache_size_{0};
+  int64_t last_visual_observed_match_delta_ns_{0};
+  uint64_t visual_observed_miss_count_{0};
+  uint64_t visual_observed_stale_count_{0};
+  uint64_t visual_observed_size_mismatch_count_{0};
   gaussian_lic_tracking::VisualResidual last_visual_residual_;
   gaussian_lic_tracking::VisualAlignment last_visual_alignment_;
   gaussian_lic_tracking::VisualPhotometricLinearization last_visual_photometric_linearization_;

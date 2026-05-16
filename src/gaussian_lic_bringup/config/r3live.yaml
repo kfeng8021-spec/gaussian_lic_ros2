@@ -35,6 +35,7 @@ mapping_node:
     process_period_ms: 5
     select_every_k_frame: 5
     require_depth_topic: false
+    sync_anchor_stream: pointcloud
     require_projected_point_color: true
     zbuffer_projected_points: false
     fx: 431.71205

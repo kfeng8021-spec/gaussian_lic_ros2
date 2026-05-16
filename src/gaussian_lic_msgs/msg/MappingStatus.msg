@@ -66,6 +66,7 @@ float32 mean_iteration_ms
 float32 gpu_memory_mb
 
 string active_profile
+string sync_anchor_stream
 
 # Input synchronization diagnostics. `num_dropped_messages` keeps the legacy
 # aggregate, while these fields identify whether late feedback gaps come from

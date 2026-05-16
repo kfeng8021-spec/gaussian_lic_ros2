@@ -927,7 +927,8 @@ void SlidingWindowOptimizer::add_relative_translation_factor(
     relative_translation_factors_.begin(), relative_translation_factors_.end(),
     [&normalized](const SlidingWindowRelativeTranslationFactor & candidate) {
       return candidate.from_stamp_ns == normalized.from_stamp_ns &&
-             candidate.to_stamp_ns == normalized.to_stamp_ns;
+             candidate.to_stamp_ns == normalized.to_stamp_ns &&
+             candidate.source_id == normalized.source_id;
     });
   if (existing == relative_translation_factors_.end()) {
     relative_translation_factors_.push_back(normalized);

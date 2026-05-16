@@ -95,6 +95,10 @@ def main() -> int:
         errors.append("mapping_node still exposes stamp_to_sec; use int64 nanoseconds for sync math")
     if "sync_tolerance_nsec_" not in mapping_text:
         errors.append("mapping_node does not retain a nanosecond sync tolerance")
+    if 'declare_parameter<std::string>("sync_anchor_stream", "pointcloud")' not in mapping_text:
+        errors.append("mapping_node must default frame synchronization to pointcloud anchoring")
+    if "pop_aligned_image_anchor_locked" not in mapping_text:
+        errors.append("mapping_node must expose an image-anchored sync path for mapper feedback continuity tests")
     if "const double frame_time" in mapping_text:
         errors.append("mapping_node frame synchronization regressed to double seconds")
     if "valid_camera_info_intrinsics" not in mapping_text or "std::isfinite(msg.k[2])" not in mapping_text:
@@ -196,6 +200,11 @@ def main() -> int:
         "sliding_window_imu_position_weight",
         "sliding_window_pose_translation_weight",
         "sliding_window_pose_rotation_weight",
+        "enable_sliding_window_delayed_published_multihop_relative_translation_factor",
+        "sliding_window_delayed_published_multihop_start_after_s",
+        "sliding_window_delayed_published_multihop_max_factors",
+        "sliding_window_relative_motion_history_source",
+        "sliding_window_relative_motion_history_published_after_s",
         "enable_sliding_window_smoothness_factor",
         "se3_photometric_factor_huber_delta",
         "se3_photometric_min_hessian_rank",
@@ -241,6 +250,29 @@ def main() -> int:
 
     if 'declare_parameter<bool>("serialize_callbacks", true)' not in tracking_node_text:
         errors.append("tracking_node must default serialize_callbacks to true")
+    if (
+        'declare_parameter<std::string>("sliding_window_relative_motion_history_source", "pre_ba")'
+        not in tracking_node_text
+        or "parse_relative_motion_history_source" not in tracking_node_text
+        or "RelativeMotionHistorySource::kPublished" not in tracking_node_text
+        or "RelativeMotionHistorySource::kPublishedAfterWarmup" not in tracking_node_text
+        or "sliding_window_relative_motion_history_source" not in tracking_status_msg_text
+        or "sliding_window_relative_motion_history_published_after_s" not in tracking_status_msg_text
+        or "sliding_window_delayed_published_multihop_relative_factors" not in tracking_status_msg_text
+        or "sliding_window_delayed_published_multihop_max_factors" not in tracking_status_msg_text
+        or "status.sliding_window_delayed_published_multihop_relative_factors" not in tracking_node_text
+        or "status.sliding_window_delayed_published_multihop_max_factors" not in tracking_node_text
+        or "factor.source_id = source_id" not in tracking_node_text
+        or "candidate.source_id == normalized.source_id" not in sliding_window_text
+        or "enable_sliding_window_delayed_published_multihop_relative_translation_factor" not in native_tracking_report_text
+        or "sliding_window_delayed_published_multihop_start_after_s" not in native_tracking_report_text
+        or "sliding_window_delayed_published_multihop_max_factors" not in native_tracking_report_text
+        or "SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE_REPORT" not in native_tracking_report_text
+        or "SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_PUBLISHED_AFTER_S_REPORT" not in native_tracking_report_text
+    ):
+        errors.append(
+            "tracking_node must expose a default-pre_ba relative-motion history source and publish/report it"
+        )
     if (
         'declare_parameter<std::string>("sensor_qos_history", "keep_last")' not in tracking_node_text
         or "sensor_qos_history" not in tracking_status_msg_text
@@ -387,10 +419,23 @@ def main() -> int:
         errors.append("tracking_node must queue delayed visual factors instead of keeping a single pending slot")
     if 'DeclareLaunchArgument("visual_pending_factor_queue_size", default_value="64")' not in tracking_launch_text:
         errors.append("tracking.launch.py must expose the visual pending factor queue size")
+    for field_name in (
+        "visual_observed_cache_size",
+        "visual_observed_match_delta_ns",
+        "visual_observed_miss_count",
+        "visual_observed_stale_count",
+        "visual_observed_size_mismatch_count",
+    ):
+        if field_name not in tracking_status_msg_text or f"status.{field_name}" not in tracking_node_text:
+            errors.append(f"TrackingStatus must publish rendered-to-observed cache diagnostics: {field_name}")
     if "select_visual_factor_reference" not in tracking_node_text:
         errors.append("tracking_node must attach delayed visual factors to active window states")
-    if "observed_frame_cache_size:=128" not in native_tracking_report_text:
-        errors.append("native tracking real-bag report must enlarge the observed-frame cache")
+    if "OBSERVED_FRAME_CACHE_SIZE=128" not in native_tracking_report_text or \
+            'observed_frame_cache_size:="${OBSERVED_FRAME_CACHE_SIZE}"' not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must expose the enlarged observed-frame cache")
+    if "--observed-frame-cache-size" not in native_tracking_report_text or \
+            "observed_frame_cache_size" not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must record visual cache-size hypotheses")
     if 'stop_process_group "${record_pid}" INT' not in native_tracking_report_text:
         errors.append("native tracking real-bag report must stop the recorder with SIGINT for final metrics flush")
     if 'stop_process_group "${record_pid}" TERM' in native_tracking_report_text:
@@ -424,9 +469,15 @@ def main() -> int:
         "pending_depth_messages",
         "rendered_preview_count",
         "render_error_count",
+        "sync_anchor_stream",
     ):
         if field_name not in mapping_status_msg_text or f"msg.{field_name}" not in mapping_text:
             errors.append(f"MappingStatus must publish mapper feedback liveness diagnostics: {field_name}")
+    if "--mapper-feedback-sync-anchor" not in native_tracking_report_text or \
+            "mapper_feedback_sync_anchor_stream" not in native_tracking_report_text:
+        errors.append("native tracking real-bag report must expose and record the mapper feedback sync anchor")
+    if '"sync_anchor_stream"' not in launch_text or 'default_value="pointcloud"' not in launch_text:
+        errors.append("run_bag.launch.py must expose mapper sync_anchor_stream with pointcloud default")
     if "++rendered_preview_count_" not in mapping_text:
         errors.append("mapping_node must count successful rendered preview publications")
     if '"rendered_preview_count"' not in native_tracking_report_text:
@@ -541,10 +592,18 @@ def main() -> int:
         errors.append("tracking_node must publish accepted sliding-window feedback health")
     if 'declare_parameter<bool>("sliding_window_sync_guarded_pose_state", false)' not in tracking_node_text:
         errors.append("tracking_node must keep guarded-pose state sync default-off until full-window evidence passes")
+    if 'declare_parameter<double>("sliding_window_guarded_pose_prior_translation_weight", 0.0)' not in tracking_node_text or \
+            'declare_parameter<double>("sliding_window_guarded_pose_prior_rotation_weight", 0.0)' not in tracking_node_text:
+        errors.append("tracking_node must keep guarded-pose soft prior default-off until full-window evidence passes")
     if "sliding_window_guarded_state_syncs" not in tracking_status_msg_text or "status.sliding_window_guarded_state_syncs" not in tracking_node_text:
         errors.append("TrackingStatus must publish guarded-pose state sync count")
+    if "sliding_window_guarded_pose_priors" not in tracking_status_msg_text or "status.sliding_window_guarded_pose_priors" not in tracking_node_text:
+        errors.append("TrackingStatus must publish guarded-pose soft-prior count")
     if "sliding_window_sync_guarded_pose_state" not in tracking_launch_text or "--sliding-window-sync-guarded-pose-state" not in native_tracking_report_text:
         errors.append("guarded-pose state sync must be exposed only as an explicit report/launch hypothesis")
+    if "sliding_window_guarded_pose_prior_translation_weight" not in tracking_launch_text or \
+            "--sliding-window-guarded-pose-prior-weights" not in native_tracking_report_text:
+        errors.append("guarded-pose soft prior must be exposed only as an explicit report/launch hypothesis")
     if "invalid_candidate_steps" not in sliding_window_text or "states_are_finite(candidate_states)" not in sliding_window_text:
         errors.append("sliding_window_optimizer must explicitly reject invalid candidate states")
     if "linearization_failure_count" not in sliding_window_text or "linear_solve_failure_count" not in sliding_window_text:

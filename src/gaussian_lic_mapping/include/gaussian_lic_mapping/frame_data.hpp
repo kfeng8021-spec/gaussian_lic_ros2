@@ -21,6 +21,8 @@ namespace gaussian_lic_mapping
 
 struct AlignedRosFrame
 {
+  builtin_interfaces::msg::Time stamp;
+  bool has_stamp{false};
   sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud;
   geometry_msgs::msg::PoseStamped::ConstSharedPtr pose;
   sensor_msgs::msg::Image::ConstSharedPtr image;

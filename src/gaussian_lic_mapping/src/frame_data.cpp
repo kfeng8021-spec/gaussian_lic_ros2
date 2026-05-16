@@ -447,7 +447,11 @@ MapperFrameData convert_aligned_frame(
   }
 
   MapperFrameData out;
-  out.stamp = frame.pointcloud->header.stamp;
+  if (frame.has_stamp) {
+    out.stamp = frame.stamp;
+  } else {
+    out.stamp = frame.pointcloud->header.stamp;
+  }
   out.frame_index = frame_index;
   out.is_keyframe = ((frame_index + 1U) % static_cast<uint64_t>(select_every_k_frame)) == 0U;
   out.image_rgb_float = convert_image_to_rgb_float(*frame.image);
