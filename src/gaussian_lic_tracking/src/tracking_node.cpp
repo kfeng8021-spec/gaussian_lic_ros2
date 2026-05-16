@@ -722,6 +722,12 @@ public:
     sliding_window_bias_random_walk_reference_dt_s_ = finite_nonnegative_parameter(
       "sliding_window_bias_random_walk_reference_dt_s",
       declare_parameter<double>("sliding_window_bias_random_walk_reference_dt_s", 0.0));
+    sliding_window_gyro_bias_random_walk_sigma_ = finite_nonnegative_parameter(
+      "sliding_window_gyro_bias_random_walk_sigma",
+      declare_parameter<double>("sliding_window_gyro_bias_random_walk_sigma", 0.0));
+    sliding_window_accel_bias_random_walk_sigma_ = finite_nonnegative_parameter(
+      "sliding_window_accel_bias_random_walk_sigma",
+      declare_parameter<double>("sliding_window_accel_bias_random_walk_sigma", 0.0));
     sliding_window_pose_translation_weight_ = finite_nonnegative_parameter(
       "sliding_window_pose_translation_weight",
       declare_parameter<double>("sliding_window_pose_translation_weight", 2.0));
@@ -3336,6 +3342,8 @@ private:
         factor.gyro_bias_weight = sliding_window_gyro_bias_weight_;
         factor.accel_bias_weight = sliding_window_accel_bias_weight_;
         factor.bias_random_walk_reference_dt_s = sliding_window_bias_random_walk_reference_dt_s_;
+        factor.gyro_bias_random_walk_sigma = sliding_window_gyro_bias_random_walk_sigma_;
+        factor.accel_bias_random_walk_sigma = sliding_window_accel_bias_random_walk_sigma_;
         try {
           sliding_window_optimizer_.add_imu_factor(factor);
           ++sliding_window_total_imu_factors_;
@@ -5756,6 +5764,8 @@ private:
   double sliding_window_gyro_bias_weight_{1.0};
   double sliding_window_accel_bias_weight_{1.0};
   double sliding_window_bias_random_walk_reference_dt_s_{0.0};
+  double sliding_window_gyro_bias_random_walk_sigma_{0.0};
+  double sliding_window_accel_bias_random_walk_sigma_{0.0};
   double sliding_window_pose_translation_weight_{2.0};
   double sliding_window_pose_rotation_weight_{2.0};
   double external_odometry_prior_translation_weight_{4.0};

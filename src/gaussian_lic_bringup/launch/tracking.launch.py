@@ -237,12 +237,24 @@ def generate_launch_description():
     sliding_window_imu_velocity_prior_weight = LaunchConfiguration(
         "sliding_window_imu_velocity_prior_weight"
     )
+    sliding_window_gyro_bias_prior_weight = LaunchConfiguration(
+        "sliding_window_gyro_bias_prior_weight"
+    )
+    sliding_window_accel_bias_prior_weight = LaunchConfiguration(
+        "sliding_window_accel_bias_prior_weight"
+    )
     sliding_window_imu_max_extrapolation_s = LaunchConfiguration("sliding_window_imu_max_extrapolation_s")
     sliding_window_bias_weight = LaunchConfiguration("sliding_window_bias_weight")
     sliding_window_gyro_bias_weight = LaunchConfiguration("sliding_window_gyro_bias_weight")
     sliding_window_accel_bias_weight = LaunchConfiguration("sliding_window_accel_bias_weight")
     sliding_window_bias_random_walk_reference_dt_s = LaunchConfiguration(
         "sliding_window_bias_random_walk_reference_dt_s"
+    )
+    sliding_window_gyro_bias_random_walk_sigma = LaunchConfiguration(
+        "sliding_window_gyro_bias_random_walk_sigma"
+    )
+    sliding_window_accel_bias_random_walk_sigma = LaunchConfiguration(
+        "sliding_window_accel_bias_random_walk_sigma"
     )
     sliding_window_pose_translation_weight = LaunchConfiguration("sliding_window_pose_translation_weight")
     sliding_window_pose_rotation_weight = LaunchConfiguration("sliding_window_pose_rotation_weight")
@@ -626,11 +638,15 @@ def generate_launch_description():
             DeclareLaunchArgument("sliding_window_imu_velocity_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_imu_position_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_imu_velocity_prior_weight", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_gyro_bias_prior_weight", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_accel_bias_prior_weight", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_imu_max_extrapolation_s", default_value="0.02"),
             DeclareLaunchArgument("sliding_window_bias_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_gyro_bias_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_accel_bias_weight", default_value="1.0"),
             DeclareLaunchArgument("sliding_window_bias_random_walk_reference_dt_s", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_gyro_bias_random_walk_sigma", default_value="0.0"),
+            DeclareLaunchArgument("sliding_window_accel_bias_random_walk_sigma", default_value="0.0"),
             DeclareLaunchArgument("sliding_window_pose_translation_weight", default_value="2.0"),
             DeclareLaunchArgument("sliding_window_pose_rotation_weight", default_value="2.0"),
             DeclareLaunchArgument("enable_sliding_window_smoothness_factor", default_value="true"),
@@ -976,12 +992,24 @@ def generate_launch_description():
                         "sliding_window_imu_velocity_prior_weight": (
                             sliding_window_imu_velocity_prior_weight
                         ),
+                        "sliding_window_gyro_bias_prior_weight": (
+                            sliding_window_gyro_bias_prior_weight
+                        ),
+                        "sliding_window_accel_bias_prior_weight": (
+                            sliding_window_accel_bias_prior_weight
+                        ),
                         "sliding_window_imu_max_extrapolation_s": sliding_window_imu_max_extrapolation_s,
                         "sliding_window_bias_weight": sliding_window_bias_weight,
                         "sliding_window_gyro_bias_weight": sliding_window_gyro_bias_weight,
                         "sliding_window_accel_bias_weight": sliding_window_accel_bias_weight,
                         "sliding_window_bias_random_walk_reference_dt_s": (
                             sliding_window_bias_random_walk_reference_dt_s
+                        ),
+                        "sliding_window_gyro_bias_random_walk_sigma": (
+                            sliding_window_gyro_bias_random_walk_sigma
+                        ),
+                        "sliding_window_accel_bias_random_walk_sigma": (
+                            sliding_window_accel_bias_random_walk_sigma
                         ),
                         "sliding_window_pose_translation_weight": sliding_window_pose_translation_weight,
                         "sliding_window_pose_rotation_weight": sliding_window_pose_rotation_weight,

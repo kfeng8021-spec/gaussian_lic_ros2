@@ -83,6 +83,42 @@ int main()
     return 1;
   }
 
+  gaussian_lic_tracking::SlidingWindowOptimizer sigma_optimizer;
+  sigma_optimizer.add_or_update_state(start);
+  sigma_optimizer.add_or_update_state(end);
+  factor.bias_random_walk_reference_dt_s = 0.0;
+  factor.gyro_bias_random_walk_sigma = 0.5;
+  factor.accel_bias_random_walk_sigma = 2.0;
+  sigma_optimizer.add_imu_factor(factor);
+  const auto sigma_normal = sigma_optimizer.build_normal_equation(0.0);
+  double gyro_covariance = 0.0;
+  double accel_covariance = 0.0;
+  int64_t previous_stamp_ns = preintegration.start_stamp_ns();
+  for (const auto & sample : preintegration.samples()) {
+    const double sample_dt_s = static_cast<double>(sample.stamp_ns - previous_stamp_ns) / 1.0e9;
+    gyro_covariance += sample_dt_s * sample_dt_s *
+      factor.gyro_bias_random_walk_sigma * factor.gyro_bias_random_walk_sigma;
+    accel_covariance += sample_dt_s * sample_dt_s *
+      factor.accel_bias_random_walk_sigma * factor.accel_bias_random_walk_sigma;
+    previous_stamp_ns = sample.stamp_ns;
+  }
+  Eigen::MatrixXd sigma_expected = Eigen::MatrixXd::Zero(6, 30);
+  const double sigma_gyro_scale =
+    std::sqrt(factor.bias_weight * factor.gyro_bias_weight) / std::sqrt(gyro_covariance);
+  const double sigma_accel_scale =
+    std::sqrt(factor.bias_weight * factor.accel_bias_weight) / std::sqrt(accel_covariance);
+  sigma_expected.block<3, 3>(0, 9) = -sigma_gyro_scale * Eigen::Matrix3d::Identity();
+  sigma_expected.block<3, 3>(3, 12) = -sigma_accel_scale * Eigen::Matrix3d::Identity();
+  sigma_expected.block<3, 3>(0, 24) = sigma_gyro_scale * Eigen::Matrix3d::Identity();
+  sigma_expected.block<3, 3>(3, 27) = sigma_accel_scale * Eigen::Matrix3d::Identity();
+  const Eigen::MatrixXd sigma_actual = sigma_normal.jacobian.block(9, 0, 6, 30);
+  const double sigma_max_abs_error = (sigma_actual - sigma_expected).cwiseAbs().maxCoeff();
+  if (!sigma_normal.valid || sigma_max_abs_error > 1.0e-12) {
+    std::cerr << "Coco-LIC sigma-scaled IMU bias random-walk Jacobian is wrong, max_abs_error="
+              << sigma_max_abs_error << "\n";
+    return 1;
+  }
+
   std::cout << "sliding_window_imu_bias_jacobian_probe OK\n";
   return 0;
 }

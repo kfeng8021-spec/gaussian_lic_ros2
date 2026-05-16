@@ -102,6 +102,8 @@ SLIDING_WINDOW_BIAS_WEIGHT=1.0
 SLIDING_WINDOW_GYRO_BIAS_WEIGHT=1.0
 SLIDING_WINDOW_ACCEL_BIAS_WEIGHT=1.0
 SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S=0.0
+SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA=0.0
+SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA=0.0
 SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT=2.0
 SLIDING_WINDOW_POSE_ROTATION_WEIGHT=2.0
 SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT=0.1
@@ -550,6 +552,10 @@ Options:
                                Multiplier for accel-bias random-walk residuals. Default: 1.0.
   --sliding-window-bias-random-walk-reference-dt-s SEC
                                Scale bias random-walk residuals by sqrt(SEC / dt). Default: 0.0 keeps legacy per-step weighting.
+  --sliding-window-gyro-bias-random-walk-sigma SIGMA
+                               Coco-LIC style gyro-bias random-walk sigma used to form sqrt information from IMU sample intervals. Default: 0.0 keeps legacy weighting.
+  --sliding-window-accel-bias-random-walk-sigma SIGMA
+                               Coco-LIC style accel-bias random-walk sigma used to form sqrt information from IMU sample intervals. Default: 0.0 keeps legacy weighting.
   --sliding-window-pose-translation-weight W
                                Pose prior translation weight. Default: 2.0.
   --sliding-window-pose-rotation-weight W
@@ -1180,6 +1186,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sliding-window-bias-random-walk-reference-dt-s)
       SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S="$2"
+      shift 2
+      ;;
+    --sliding-window-gyro-bias-random-walk-sigma)
+      SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA="$2"
+      shift 2
+      ;;
+    --sliding-window-accel-bias-random-walk-sigma)
+      SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA="$2"
       shift 2
       ;;
     --sliding-window-pose-translation-weight)
@@ -2117,6 +2131,8 @@ setsid ros2 launch gaussian_lic_bringup tracking.launch.py \
   sliding_window_gyro_bias_weight:="${SLIDING_WINDOW_GYRO_BIAS_WEIGHT}" \
   sliding_window_accel_bias_weight:="${SLIDING_WINDOW_ACCEL_BIAS_WEIGHT}" \
   sliding_window_bias_random_walk_reference_dt_s:="${SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S}" \
+  sliding_window_gyro_bias_random_walk_sigma:="${SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA}" \
+  sliding_window_accel_bias_random_walk_sigma:="${SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA}" \
   sliding_window_pose_translation_weight:="${SLIDING_WINDOW_POSE_TRANSLATION_WEIGHT}" \
   sliding_window_pose_rotation_weight:="${SLIDING_WINDOW_POSE_ROTATION_WEIGHT}" \
   sliding_window_smoothness_rotation_weight:="${SLIDING_WINDOW_SMOOTHNESS_ROTATION_WEIGHT}" \
@@ -2369,6 +2385,8 @@ SLIDING_WINDOW_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_BIAS_WEIGHT}" \
 SLIDING_WINDOW_GYRO_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_GYRO_BIAS_WEIGHT}" \
 SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_WEIGHT}" \
 SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S_REPORT="${SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S}" \
+SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA_REPORT="${SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA}" \
+SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA_REPORT="${SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA}" \
 SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT_REPORT="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_TRANSLATION_WEIGHT}" \
 SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT_REPORT="${SLIDING_WINDOW_GUARDED_POSE_PRIOR_ROTATION_WEIGHT}" \
 ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT="${ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR}" \
@@ -2731,6 +2749,12 @@ sliding_window_gyro_bias_weight = float(os.environ["SLIDING_WINDOW_GYRO_BIAS_WEI
 sliding_window_accel_bias_weight = float(os.environ["SLIDING_WINDOW_ACCEL_BIAS_WEIGHT_REPORT"])
 sliding_window_bias_random_walk_reference_dt_s = float(
     os.environ["SLIDING_WINDOW_BIAS_RANDOM_WALK_REFERENCE_DT_S_REPORT"]
+)
+sliding_window_gyro_bias_random_walk_sigma = float(
+    os.environ["SLIDING_WINDOW_GYRO_BIAS_RANDOM_WALK_SIGMA_REPORT"]
+)
+sliding_window_accel_bias_random_walk_sigma = float(
+    os.environ["SLIDING_WINDOW_ACCEL_BIAS_RANDOM_WALK_SIGMA_REPORT"]
 )
 enable_sliding_window_relative_translation_factor = (
     os.environ["ENABLE_SLIDING_WINDOW_RELATIVE_TRANSLATION_FACTOR_REPORT"] == "true"
@@ -3611,6 +3635,12 @@ report = {
         "sliding_window_accel_bias_weight": sliding_window_accel_bias_weight,
         "sliding_window_bias_random_walk_reference_dt_s": (
             sliding_window_bias_random_walk_reference_dt_s
+        ),
+        "sliding_window_gyro_bias_random_walk_sigma": (
+            sliding_window_gyro_bias_random_walk_sigma
+        ),
+        "sliding_window_accel_bias_random_walk_sigma": (
+            sliding_window_accel_bias_random_walk_sigma
         ),
         "enable_sliding_window_relative_translation_factor": (
             enable_sliding_window_relative_translation_factor
