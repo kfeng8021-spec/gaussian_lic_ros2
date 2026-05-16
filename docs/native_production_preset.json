@@ -166,6 +166,13 @@
       "translation_rmse_m": 1.3961753383080708,
       "path_drift": 0.04410072920135246,
       "reason": "disabling the per-reference quality cap improves path drift but still misses pose and visual/SE3 drains, starves bins 6/7, drops 78 queued factors, and regresses aggregate RMSE"
+    },
+    {
+      "id": "quality_trim_no_refcap_after108_rendered_depth64",
+      "report": "results/fastlivo2/CBD_Building_01_quality_trim_no_refcap_after108_rendered_depth64_full122_drain1015_probe/native_tracking_report.json",
+      "translation_rmse_m": 1.3706455069020473,
+      "path_drift": 0.051324609931728285,
+      "reason": "delaying no-reference-cap quality trimming to 108 s nearly preserves aggregate RMSE but still misses pose and visual/SE3 drains, starves bins 6/7, drops 94 visual and 79 SE3 pending factors, and slightly regresses path drift"
     }
   ],
   "forbidden_readme_snippets": [
