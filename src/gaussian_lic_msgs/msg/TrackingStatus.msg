@@ -32,6 +32,7 @@ uint64 depth_invalid_frames
 uint64 rendered_invalid_frames
 
 uint64 num_raw_images
+uint64 num_rendered_images
 uint64 num_raw_pointclouds
 uint64 num_raw_imus
 uint64 num_published_poses

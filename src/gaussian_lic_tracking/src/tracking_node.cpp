@@ -1690,6 +1690,7 @@ private:
     {
       return;
     }
+    ++num_rendered_images_;
     gaussian_lic_tracking::VisualFrame rendered;
     if (decode_image_gray(msg, rendered)) {
       cache_rendered_frame(rendered);
@@ -5153,6 +5154,7 @@ private:
     }
 
     status.num_raw_images = num_raw_images_;
+    status.num_rendered_images = num_rendered_images_;
     status.num_raw_pointclouds = num_raw_pointclouds_;
     status.num_raw_imus = num_raw_imus_;
     status.num_published_poses = num_published_poses_;
@@ -5985,6 +5987,7 @@ private:
   bool has_last_sliding_window_summary_{false};
   double last_sliding_window_optimization_duration_ms_{0.0};
   uint64_t num_raw_images_{0};
+  uint64_t num_rendered_images_{0};
   uint64_t num_raw_pointclouds_{0};
   uint64_t num_raw_imus_{0};
   uint64_t num_published_poses_{0};
