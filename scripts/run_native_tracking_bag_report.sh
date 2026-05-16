@@ -154,6 +154,10 @@ MAPPER_FEEDBACK_POINTCLOUD_COORDINATES=world
 MAPPER_FEEDBACK_POINTCLOUD_COORDINATES_EXPLICIT=false
 MAPPER_FEEDBACK_MAX_DEPTH=20.0
 MAPPER_FEEDBACK_MAX_DEPTH_EXPLICIT=false
+MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY=best_effort
+MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY_EXPLICIT=false
+MAPPER_FEEDBACK_IMAGE_QOS_DEPTH=5
+MAPPER_FEEDBACK_IMAGE_QOS_DEPTH_EXPLICIT=false
 MAPPER_FEEDBACK_REQUIRE_PROJECTED_POINT_COLOR=true
 MAPPER_FEEDBACK_ZBUFFER_PROJECTED_POINTS=false
 MAPPER_FEEDBACK_PUBLISH_GAUSSIAN_MAP=false
@@ -623,6 +627,10 @@ Options:
                                mapping_node frame sync tolerance for mapper feedback. Default: 0.05.
   --mapper-feedback-sync-anchor STREAM
                                mapping_node synchronization anchor stream for mapper feedback: pointcloud or image. Default: pointcloud.
+  --mapper-feedback-image-qos-reliability MODE
+                               mapping_node image input QoS reliability for mapper feedback. Default: best_effort; Gaussian feedback strict replay promotes to reliable unless explicitly set.
+  --mapper-feedback-image-qos-depth N
+                               mapping_node image input QoS depth for mapper feedback. Default: 5; Gaussian feedback strict replay promotes to 512 unless explicitly set.
   --mapper-feedback-render-mode MODE
                                mapping_node rendered image mode for feedback. Default: debug_input; --enable-gaussian-map-feedback promotes this to rasterizer unless explicitly set.
   --mapper-feedback-pointcloud-coordinates MODE
@@ -1336,6 +1344,12 @@ while [[ $# -gt 0 ]]; do
       if [[ "${MAPPER_FEEDBACK_MAX_DEPTH_EXPLICIT}" != "true" ]]; then
         MAPPER_FEEDBACK_MAX_DEPTH=20.0
       fi
+      if [[ "${MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY_EXPLICIT}" != "true" ]]; then
+        MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY=reliable
+      fi
+      if [[ "${MAPPER_FEEDBACK_IMAGE_QOS_DEPTH_EXPLICIT}" != "true" ]]; then
+        MAPPER_FEEDBACK_IMAGE_QOS_DEPTH=512
+      fi
       if [[ "${PLAYBACK_RATE_EXPLICIT}" != "true" ]]; then
         PLAYBACK_RATE=0.25
       fi
@@ -1441,6 +1455,16 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mapper-feedback-sync-anchor)
       MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM="$2"
+      shift 2
+      ;;
+    --mapper-feedback-image-qos-reliability)
+      MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY="$2"
+      MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY_EXPLICIT=true
+      shift 2
+      ;;
+    --mapper-feedback-image-qos-depth)
+      MAPPER_FEEDBACK_IMAGE_QOS_DEPTH="$2"
+      MAPPER_FEEDBACK_IMAGE_QOS_DEPTH_EXPLICIT=true
       shift 2
       ;;
     --mapper-feedback-render-mode)
@@ -1787,6 +1811,14 @@ case "${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" in
     exit 2
     ;;
 esac
+case "${MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY}" in
+  reliable|best_effort|besteffort)
+    ;;
+  *)
+    echo "--mapper-feedback-image-qos-reliability must be reliable or best_effort, got ${MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY}" >&2
+    exit 2
+    ;;
+esac
 
 case "${SLIDING_WINDOW_RELATIVE_MOTION_HISTORY_SOURCE}" in
   pre_ba|published|published_after_warmup)
@@ -2072,6 +2104,8 @@ if [[ "${ENABLE_MAPPER_FEEDBACK}" == "true" ]]; then
     -p rendered_image_qos_reliability:="${RENDERED_IMAGE_QOS_RELIABILITY}" \
     -p rendered_image_qos_durability:="${RENDERED_IMAGE_QOS_DURABILITY}" \
     -p rendered_image_qos_depth:="${RENDERED_IMAGE_QOS_DEPTH}" \
+    -p image_qos_reliability:="${MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY}" \
+    -p image_qos_depth:="${MAPPER_FEEDBACK_IMAGE_QOS_DEPTH}" \
     -p sync_tolerance_sec:="${MAPPER_FEEDBACK_SYNC_TOLERANCE_SEC}" \
     -p sync_anchor_stream:="${MAPPER_FEEDBACK_SYNC_ANCHOR_STREAM}" \
     -p select_every_k_frame:="${MAPPER_FEEDBACK_SELECT_EVERY_K_FRAME}" \
@@ -2202,6 +2236,8 @@ MAPPER_FEEDBACK_ZBUFFER_PROJECTED_POINTS_REPORT="${MAPPER_FEEDBACK_ZBUFFER_PROJE
 MAPPER_FEEDBACK_LR_REPORT="${MAPPER_FEEDBACK_POSITION_LR},${MAPPER_FEEDBACK_FEATURE_LR},${MAPPER_FEEDBACK_OPACITY_LR},${MAPPER_FEEDBACK_SCALING_LR},${MAPPER_FEEDBACK_ROTATION_LR}" \
 MAPPER_FEEDBACK_OPTIMIZATION_EVERY_REPORT="${MAPPER_FEEDBACK_TORCH_OPTIMIZATION_EVERY_N_KEYFRAMES}" \
 MAPPER_FEEDBACK_SELECT_EVERY_REPORT="${MAPPER_FEEDBACK_SELECT_EVERY_K_FRAME}" \
+MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY_REPORT="${MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY}" \
+MAPPER_FEEDBACK_IMAGE_QOS_DEPTH_REPORT="${MAPPER_FEEDBACK_IMAGE_QOS_DEPTH}" \
 GAUSSIAN_SNAPSHOT_LIDAR_FACTOR_WEIGHT_REPORT="${GAUSSIAN_SNAPSHOT_LIDAR_FACTOR_WEIGHT}" \
 GAUSSIAN_SNAPSHOT_LIDAR_NEAREST_DISTANCE_M_REPORT="${GAUSSIAN_SNAPSHOT_LIDAR_NEAREST_DISTANCE_M}" \
 GAUSSIAN_SNAPSHOT_LIDAR_RESIDUAL_PREWEIGHT_REPORT="${GAUSSIAN_SNAPSHOT_LIDAR_RESIDUAL_PREWEIGHT}" \
@@ -2447,6 +2483,8 @@ mapper_feedback_torch_optimization_every_n_keyframes = int(
 mapper_feedback_select_every_k_frame = int(
     os.environ["MAPPER_FEEDBACK_SELECT_EVERY_REPORT"]
 )
+mapper_feedback_image_qos_reliability = os.environ["MAPPER_FEEDBACK_IMAGE_QOS_RELIABILITY_REPORT"]
+mapper_feedback_image_qos_depth = int(os.environ["MAPPER_FEEDBACK_IMAGE_QOS_DEPTH_REPORT"])
 gaussian_snapshot_lidar_factor_weight = float(
     os.environ["GAUSSIAN_SNAPSHOT_LIDAR_FACTOR_WEIGHT_REPORT"]
 )
@@ -3255,6 +3293,8 @@ report = {
         "se3_photometric_max_samples": se3_photometric_max_samples,
         "mapper_feedback_sync_tolerance_sec": mapper_feedback_sync_tolerance_sec,
         "mapper_feedback_sync_anchor_stream": mapper_feedback_sync_anchor_stream,
+        "mapper_feedback_image_qos_reliability": mapper_feedback_image_qos_reliability,
+        "mapper_feedback_image_qos_depth": mapper_feedback_image_qos_depth,
         "visual_pending_factor_queue_size": visual_pending_factor_queue_size,
         "se3_photometric_min_samples": se3_photometric_min_samples,
         "se3_photometric_min_hessian_rank": se3_photometric_min_hessian_rank,

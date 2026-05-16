@@ -146,6 +146,8 @@ def check_script_contract(manifest: dict[str, Any], script: str, errors: list[st
         "visual_alignment_factor_source",
         "--visual-factor-source-id-mode",
         "visual_factor_source_id_mode",
+        "--mapper-feedback-image-qos-reliability",
+        "mapper_feedback_image_qos_reliability",
         "visual_factor_continuity",
         "mapper_feedback_continuity",
     ):
