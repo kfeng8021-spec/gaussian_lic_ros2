@@ -31,6 +31,34 @@ BINNED_STATUS_PREFIXES = (
     "visual_",
 )
 
+BINNED_MAPPING_STATUS_FIELDS = {
+    "stamp",
+    "stamp_ns",
+    "pointcloud_messages",
+    "pose_messages",
+    "image_messages",
+    "depth_messages",
+    "aligned_frames",
+    "converted_frames",
+    "dropped_pointcloud_messages",
+    "dropped_pose_messages",
+    "dropped_image_messages",
+    "dropped_depth_messages",
+    "pending_pointcloud_messages",
+    "pending_pose_messages",
+    "pending_image_messages",
+    "pending_depth_messages",
+    "rendered_preview_count",
+    "render_error_count",
+    "gaussian_init_count",
+    "gaussian_extend_count",
+    "gaussian_optimization_count",
+    "gaussian_optimization_steps",
+    "gaussian_densify_count",
+    "gaussian_prune_count",
+    "gaussian_opacity_reset_count",
+}
+
 
 def stamp_to_nsec(stamp):
     return int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
@@ -90,10 +118,10 @@ def is_binned_status_field(name):
     return name == "stamp" or name == "stamp_ns" or name.startswith(BINNED_STATUS_PREFIXES)
 
 
-def compact_status_record(record):
+def compact_numeric_record(record, field_selector):
     compact = {}
     for key, value in record.items():
-        if not is_binned_status_field(key):
+        if not field_selector(key):
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
@@ -101,6 +129,14 @@ def compact_status_record(record):
         if math.isfinite(numeric):
             compact[key] = numeric
     return compact
+
+
+def compact_status_record(record):
+    return compact_numeric_record(record, is_binned_status_field)
+
+
+def compact_mapping_status_record(record):
+    return compact_numeric_record(record, BINNED_MAPPING_STATUS_FIELDS.__contains__)
 
 
 def compute_time_binned_summary(records, bin_count):
@@ -195,6 +231,7 @@ class NativeTrackingRecorder(Node):
         self.status_summary = {}
         self.mapping_status_summary = {}
         self.status_records = []
+        self.mapping_status_records = []
 
         self.create_subscription(Odometry, self.odometry_topic, self.on_odometry, qos)
         self.create_subscription(PointCloud2, self.pointcloud_topic, self.on_pointcloud, qos)
@@ -289,7 +326,14 @@ class NativeTrackingRecorder(Node):
     def on_mapping_status(self, msg):
         self.topic_counts[self.mapping_status_topic] += 1
         self.last_mapping_status = status_to_dict(msg)
+        self.last_mapping_status["stamp"] = stamp_to_tum(msg.header.stamp)
+        self.last_mapping_status["stamp_ns"] = stamp_to_nsec(msg.header.stamp)
         update_numeric_summary(self.mapping_status_summary, self.last_mapping_status)
+        self.mapping_status_records.append(compact_mapping_status_record(self.last_mapping_status))
+        if self.status_history_max_samples > 0:
+            overflow = len(self.mapping_status_records) - self.status_history_max_samples
+            if overflow > 0:
+                del self.mapping_status_records[:overflow]
 
     def flush(self, final=False):
         trajectory_path = self.output_dir / "trajectory.tum"
@@ -336,6 +380,9 @@ class NativeTrackingRecorder(Node):
                 "topic": self.mapping_status_topic,
                 "last": self.last_mapping_status,
                 "summary": self.mapping_status_summary,
+                "history_samples_retained": len(self.mapping_status_records),
+                "status_bin_count": self.status_bin_count,
+                "binned_summary_finalized": bool(final),
             },
             "outputs": {
                 "trajectory_tum": str(trajectory_path),
@@ -344,6 +391,9 @@ class NativeTrackingRecorder(Node):
                     str(status_history_path) if final and self.write_status_history else ""),
             },
         }
+        if final:
+            metrics["mapping_status"]["binned_summary"] = compute_time_binned_summary(
+                self.mapping_status_records, self.status_bin_count)
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 

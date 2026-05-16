@@ -49,6 +49,13 @@ gpu_memory_mb
 
 The current mapping slice fills rates, counters, mapping latency, and mean iteration time. Full tracking/mapping ports must fill tracking latency and GPU memory fields before v0.4 strict reproduction.
 
+`native_tracking_recorder` mirrors the final `/gaussian_lic/status` stream into
+`metrics.mapping_status.summary` and, at shutdown, into
+`metrics.mapping_status.binned_summary`. Full-window native reports then expose
+`mapper_feedback_continuity` with rendered-preview, per-stream drop, pending
+queue, render-error, and Gaussian backend deltas for the same time bins used by
+the tracking-status visual/SE3 continuity block.
+
 ## Native Tracking Status
 
 `TrackingStatus` is the native frontend gate. It is published with transient-local

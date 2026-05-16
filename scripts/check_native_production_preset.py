@@ -147,6 +147,7 @@ def check_script_contract(manifest: dict[str, Any], script: str, errors: list[st
         "--visual-factor-source-id-mode",
         "visual_factor_source_id_mode",
         "visual_factor_continuity",
+        "mapper_feedback_continuity",
     ):
         require_snippet(script, option, "run_native_tracking_bag_report.sh", errors)
 

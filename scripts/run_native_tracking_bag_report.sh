@@ -2750,7 +2750,8 @@ metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 topic_counts = metrics.get("topic_counts", {})
 status = metrics.get("tracking_status", {})
 last = status.get("last") or {}
-mapping_last = metrics.get("mapping_status", {}).get("last") or {}
+mapping_status = metrics.get("mapping_status", {})
+mapping_last = mapping_status.get("last") or {}
 errors = []
 
 
@@ -2845,6 +2846,91 @@ def build_visual_factor_continuity(status):
 
 
 visual_factor_continuity = build_visual_factor_continuity(status)
+
+
+MAPPER_FEEDBACK_CONTINUITY_FIELDS = (
+    "pointcloud_messages",
+    "pose_messages",
+    "image_messages",
+    "depth_messages",
+    "aligned_frames",
+    "converted_frames",
+    "dropped_pointcloud_messages",
+    "dropped_pose_messages",
+    "dropped_image_messages",
+    "dropped_depth_messages",
+    "pending_pointcloud_messages",
+    "pending_pose_messages",
+    "pending_image_messages",
+    "pending_depth_messages",
+    "rendered_preview_count",
+    "render_error_count",
+    "gaussian_extend_count",
+    "gaussian_optimization_count",
+)
+
+
+def build_mapper_feedback_continuity(mapping_status):
+    bins = []
+    for bin_summary in mapping_status.get("binned_summary", []):
+        if not isinstance(bin_summary, dict):
+            continue
+        item = {
+            "index": int(bin_summary.get("index", len(bins))),
+            "sample_count": int(bin_summary.get("sample_count", 0) or 0),
+        }
+        for field_name in MAPPER_FEEDBACK_CONTINUITY_FIELDS:
+            item[f"{field_name}_delta"] = summary_delta(bin_summary, field_name)
+        rendered_delta = item["rendered_preview_count_delta"]
+        pose_delta = item["pose_messages_delta"]
+        pointcloud_delta = item["pointcloud_messages_delta"]
+        item["rendered_per_pose_delta_ratio"] = (
+            float(rendered_delta) / float(pose_delta) if pose_delta > 0 else 0.0
+        )
+        item["rendered_per_pointcloud_delta_ratio"] = (
+            float(rendered_delta) / float(pointcloud_delta) if pointcloud_delta > 0 else 0.0
+        )
+        bins.append(item)
+
+    if not bins:
+        return {
+            "available": False,
+            "reason": "mapping_status.binned_summary is missing or empty",
+            "bins": [],
+        }
+
+    def min_delta(field_name):
+        return min(item[f"{field_name}_delta"] for item in bins)
+
+    def max_delta(field_name):
+        return max(item[f"{field_name}_delta"] for item in bins)
+
+    worst_render_bins = sorted(
+        bins,
+        key=lambda item: (
+            item["rendered_preview_count_delta"],
+            -item["dropped_pointcloud_messages_delta"] - item["dropped_pose_messages_delta"],
+            item["sample_count"],
+            item["index"],
+        ),
+    )[:3]
+    return {
+        "available": True,
+        "binned_summary_finalized": bool(mapping_status.get("binned_summary_finalized", False)),
+        "bin_count": len(bins),
+        "min_rendered_preview_delta": min_delta("rendered_preview_count"),
+        "min_aligned_frame_delta": min_delta("aligned_frames"),
+        "max_dropped_pointcloud_delta": max_delta("dropped_pointcloud_messages"),
+        "max_dropped_pose_delta": max_delta("dropped_pose_messages"),
+        "max_dropped_image_delta": max_delta("dropped_image_messages"),
+        "max_dropped_depth_delta": max_delta("dropped_depth_messages"),
+        "max_render_error_delta": max_delta("render_error_count"),
+        "worst_render_bins": worst_render_bins,
+        "bins": bins,
+    }
+
+
+mapper_feedback_continuity = build_mapper_feedback_continuity(mapping_status)
 
 if metrics.get("trajectory_poses", 0) < min_poses:
     errors.append(f"trajectory poses {metrics.get('trajectory_poses', 0)} < {min_poses}")
@@ -3148,6 +3234,7 @@ report = {
     "ok": not errors,
     "errors": errors,
     "visual_factor_continuity": visual_factor_continuity,
+    "mapper_feedback_continuity": mapper_feedback_continuity,
     "gate_config": {
         "rendered_image_qos_reliability": os.environ["RENDERED_IMAGE_QOS_RELIABILITY_REPORT"],
         "rendered_image_qos_durability": os.environ["RENDERED_IMAGE_QOS_DURABILITY_REPORT"],
