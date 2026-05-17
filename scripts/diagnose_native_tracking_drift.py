@@ -161,6 +161,10 @@ def write_status_csv(records: list[dict[str, float]], path: Path) -> None:
         "sliding_window_accel_bias_z",
         "sliding_window_gyro_bias_norm",
         "sliding_window_accel_bias_norm",
+        "sliding_window_gyro_bias_random_walk_sqrt_info_mean",
+        "sliding_window_accel_bias_random_walk_sqrt_info_mean",
+        "sliding_window_gyro_bias_random_walk_sqrt_info_max",
+        "sliding_window_accel_bias_random_walk_sqrt_info_max",
         "sliding_window_gyro_bias_observability",
         "sliding_window_accel_bias_observability",
         "sliding_window_imu_factors",
@@ -254,6 +258,22 @@ def write_summary(
         values_between(records, "sliding_window_normal_equation_condition_number", 10.0, 70.0))
     condition_post70 = mean(
         values_between(records, "sliding_window_normal_equation_condition_number", 70.0, 1.0e9))
+    bias_random_walk_sqrt_info = {
+        "gyro_mean_pre70": mean(
+            values_between(
+                records, "sliding_window_gyro_bias_random_walk_sqrt_info_mean", 10.0, 70.0)),
+        "gyro_mean_post70": mean(
+            values_between(
+                records, "sliding_window_gyro_bias_random_walk_sqrt_info_mean", 70.0, 1.0e9)),
+        "gyro_max_end": last("sliding_window_gyro_bias_random_walk_sqrt_info_max"),
+        "accel_mean_pre70": mean(
+            values_between(
+                records, "sliding_window_accel_bias_random_walk_sqrt_info_mean", 10.0, 70.0)),
+        "accel_mean_post70": mean(
+            values_between(
+                records, "sliding_window_accel_bias_random_walk_sqrt_info_mean", 70.0, 1.0e9)),
+        "accel_max_end": last("sliding_window_accel_bias_random_walk_sqrt_info_max"),
+    }
 
     motion_pre70 = [row for row in reference_motion if 10.0 <= row.get("time_s", 0.0) <= 70.0]
     motion_post70 = [row for row in reference_motion if row.get("time_s", 0.0) >= 70.0]
@@ -301,6 +321,7 @@ def write_summary(
         "factor_means_pre70": factor_means_pre70,
         "factor_means_post70": factor_means_post70,
         "factor_drop_ratios_post70_over_pre70": factor_drop_ratios,
+        "bias_random_walk_sqrt_info": bias_random_walk_sqrt_info,
         "lambda_min_mean_pre70": lambda_min_pre70,
         "lambda_min_mean_post70": lambda_min_post70,
         "lambda_min_post70_over_pre70": lambda_collapse_ratio,
