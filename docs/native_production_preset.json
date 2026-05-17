@@ -1,6 +1,6 @@
 {
   "schema": "gaussian_lic_native_production_preset/v1",
-  "updated": "2026-05-16",
+  "updated": "2026-05-17",
   "profile": "fastlivo2",
   "sequence": "CBD_Building_01",
   "production_preset": {
@@ -187,6 +187,13 @@
       "translation_rmse_m": 1.3931810744531736,
       "path_drift": 0.04861846485032347,
       "reason": "current defaults keep the diagnostic quality paths disabled and preserve trajectory-shape drift, but this replay does not reproduce the accepted visual/SE3 drain and reaches only 912/1015 factors"
+    },
+    {
+      "id": "cocolic_raw_bias_random_walk_sigma",
+      "report": "results/fastlivo2/CBD_Building_01_gaussian_feedback_cocolic_bias_sigma_raw_full122_probe/native_tracking_report.json",
+      "translation_rmse_m": 3.0225900861610735,
+      "path_drift": 0.4466017450160848,
+      "reason": "directly applying upstream Coco-LIC gyro/accel random-walk sigmas keeps coverage and factor continuity but over-constrains the ROS2 bias residual units, shortening the current path to 18.46 m vs 33.35 m reference"
     }
   ],
   "forbidden_readme_snippets": [
